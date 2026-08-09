@@ -34,7 +34,7 @@ namespace ONI_Together.DebugTools.UnitTests
 
 				return UnitTestResult.Pass($"Minion '{id.gameObject.name}' anim='{currentAnim}', would detect mismatch");
 			}
-			return UnitTestResult.Fail("No minions with anim controller found");
+			return UnitTestResult.Skip("no minions with an anim controller in the scene");
 		}
 
 		[UnitTest(name: "Anim reconciliation: elapsed time readable", category: "Animation")]
@@ -51,7 +51,7 @@ namespace ONI_Together.DebugTools.UnitTests
 				float elapsed = kbac.GetElapsedTime();
 				return UnitTestResult.Pass($"ElapsedTime={elapsed:F3}s on '{id.gameObject.name}'");
 			}
-			return UnitTestResult.Fail("No minions found");
+			return UnitTestResult.Skip("no minions in the scene");
 		}
 
 		[UnitTest(name: "Anim reconciliation: reflection helper resolves", category: "Animation")]
@@ -69,7 +69,7 @@ namespace ONI_Together.DebugTools.UnitTests
 
 				return UnitTestResult.Pass($"SetElapsedTime resolved. Before={before:F3}, After={after:F3}");
 			}
-			return UnitTestResult.Fail("No anim controllers found");
+			return UnitTestResult.Skip("no anim controllers in the scene");
 		}
 
 		[UnitTest(name: "Anim sync packet: roundtrip", category: "Animation")]
@@ -141,7 +141,7 @@ namespace ONI_Together.DebugTools.UnitTests
 				return UnitTestResult.Pass($"Entity '{id.gameObject.name}' is sync-eligible");
 			}
 
-			return UnitTestResult.Fail("No non-minion animated network entities found");
+			return UnitTestResult.Skip("no non-minion animated network entities in the scene");
 		}
 
 		[UnitTest(name: "Anim resync request packet: roundtrip", category: "Animation")]

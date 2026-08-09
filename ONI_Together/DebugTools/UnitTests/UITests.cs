@@ -15,7 +15,9 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             GameObject chatScreen = GameObject.Find("ChatScreen");
             if(chatScreen == null)
-                return UnitTestResult.Fail("ChatScreen object not found in scene");
+                return Game.Instance == null
+                    ? UnitTestResult.Skip("no game loaded, so no ChatScreen")
+                    : UnitTestResult.Fail("ChatScreen object not found in scene");
 
             bool isActive = chatScreen.activeSelf;
             if (!isActive)
@@ -35,17 +37,31 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult NoGhostCursorsPresent()
         {
             if (!MultiplayerSession.IsHost && !MultiplayerSession.IsClient)
-                return UnitTestResult.Fail("Not connected to a multiplayer session");
+                return UnitTestResult.Skip("not connected to a multiplayer session");
 
-            var clients = NetworkConfig.GetConnectedClients().Count;
+            // Counted from the session rather than the transport. This used to
+            // take NetworkConfig.GetConnectedClients() and subtract one for the
+            // local peer, which holds on the host - its connection list includes
+            // itself - but not on a client, whose list is just the host. A
+            // healthy client therefore reported "cursors (1) exceeds clients (1)"
+            // on every run. One cursor per remote peer is the property either
+            // way, so ask the session who the remote peers are.
+            int remotePeers = 0;
+            foreach (var kvp in MultiplayerSession.ConnectedPlayers)
+            {
+                if (!kvp.Key.Equals(MultiplayerSession.LocalUserID))
+                    remotePeers++;
+            }
+
             var cursors = MultiplayerSession.PlayerCursors.Count;
 
-            // - 1 to remove local client
-            if(cursors > clients - 1)
-                return UnitTestResult.Fail($"Number of player cursors ({cursors}) exceeds number of clients ({clients})");
+            if (cursors > remotePeers)
+                return UnitTestResult.Fail(
+                    $"{cursors} player cursors for {remotePeers} remote peer(s) - a cursor outlived its player");
 
-            if (clients - 1 != cursors)
-                return UnitTestResult.Fail($"Number of player cursors ({cursors}) does not match number of clients ({clients})");
+            if (cursors < remotePeers)
+                return UnitTestResult.Fail(
+                    $"only {cursors} player cursors for {remotePeers} remote peer(s) - a player has no cursor");
 
             bool cursorSyncRunning = CursorManager.Instance != null && Utils.IsInGame() && MultiplayerSession.InSession && MultiplayerSession.LocalUserID.IsValid();
             if(!cursorSyncRunning)

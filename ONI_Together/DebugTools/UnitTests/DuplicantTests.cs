@@ -14,7 +14,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var selected = SelectTool.Instance?.selected;
             if (selected == null)
-                return UnitTestResult.Fail("No object selected");
+                return UnitTestResult.Skip("no duplicant selected");
             var hasDuplicant = selected.TryGetComponent(out MinionIdentity _);
             if (!hasDuplicant)
                 return UnitTestResult.Fail("Selected object is not a duplicant");
@@ -26,7 +26,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var selected = SelectTool.Instance?.selected;
             if (selected == null)
-                return UnitTestResult.Fail("No object selected");
+                return UnitTestResult.Skip("no duplicant selected");
             if (!selected.TryGetComponent(out MinionMultiplayerInitializer _))
                 return UnitTestResult.Fail("MinionMultiplayerInitializer not found on selected duplicant");
             return UnitTestResult.Pass("MinionMultiplayerInitializer is present");
@@ -36,13 +36,13 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult ClientInitDisablesAI()
         {
             if (!MultiplayerSession.InSession)
-                return UnitTestResult.Fail("Not in a multiplayer session");
+                return UnitTestResult.Skip("not in a multiplayer session");
             if (!MultiplayerSession.IsClient)
-                return UnitTestResult.Fail("Not a client");
+                return UnitTestResult.Skip("not a client");
 
             var selected = SelectTool.Instance?.selected;
             if (selected == null)
-                return UnitTestResult.Fail("No object selected");
+                return UnitTestResult.Skip("no duplicant selected");
             if (!selected.TryGetComponent(out MinionMultiplayerInitializer _))
                 return UnitTestResult.Fail("MinionMultiplayerInitializer not found");
 
@@ -64,13 +64,13 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult HostInitAddsSyncComponents()
         {
             if (!MultiplayerSession.InSession)
-                return UnitTestResult.Fail("Not in a multiplayer session");
+                return UnitTestResult.Skip("not in a multiplayer session");
             if (!MultiplayerSession.IsHost)
-                return UnitTestResult.Fail("Not the host");
+                return UnitTestResult.Skip("not the host");
 
             var selected = SelectTool.Instance?.selected;
             if (selected == null)
-                return UnitTestResult.Fail("No object selected");
+                return UnitTestResult.Skip("no duplicant selected");
             if (!selected.TryGetComponent(out MinionMultiplayerInitializer _))
                 return UnitTestResult.Fail("MinionMultiplayerInitializer not found");
 
@@ -87,7 +87,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var selected = SelectTool.Instance?.selected;
             if (selected == null)
-                return UnitTestResult.Fail("No object selected");
+                return UnitTestResult.Skip("no duplicant selected");
 
             var kpref = selected.GetComponent<KPrefabID>();
             if (kpref == null)

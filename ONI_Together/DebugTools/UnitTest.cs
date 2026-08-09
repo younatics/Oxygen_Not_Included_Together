@@ -19,6 +19,7 @@ namespace ONI_Together.DebugTools
 
         public bool IsPassed => State == TestState.Passed;
         public bool IsFailed => State == TestState.Failed;
+        public bool IsSkipped => State == TestState.Skipped;
         public bool IsInProgress => State == TestState.InProgress;
 
         public UnitTest(string name, string category, MethodInfo method)

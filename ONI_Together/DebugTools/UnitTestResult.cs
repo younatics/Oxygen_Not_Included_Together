@@ -9,7 +9,15 @@ namespace ONI_Together.DebugTools
         NotRun,
         InProgress,
         Passed,
-        Failed
+        Failed,
+
+        /// <summary>
+        /// The test could not apply here - no session, not the host, nothing
+        /// selected. Distinct from Failed on purpose: a suite run from the main
+        /// menu used to report six failures that only meant "not in a session",
+        /// and real failures hid among them.
+        /// </summary>
+        Skipped
     }
 
     public class UnitTestResult
@@ -25,5 +33,9 @@ namespace ONI_Together.DebugTools
 
         public static UnitTestResult InProgress(string message = null)
             => new UnitTestResult { State = TestState.InProgress, Message = message };
+
+        /// <summary>Preconditions for this test are not met here; it proves nothing either way.</summary>
+        public static UnitTestResult Skip(string message)
+            => new UnitTestResult { State = TestState.Skipped, Message = message };
     }
 }

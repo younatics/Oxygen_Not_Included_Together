@@ -16,29 +16,31 @@ namespace ONI_Together.DebugTools.UnitTests
         [UnitTest(name: "Server is running", category: "Networking")]
         public static UnitTestResult ServerStarts()
         {
-            if (NetworkConfig.TransportServer == null)
-                return UnitTestResult.Fail("TransportServer is null");
-
             if (!MultiplayerSession.IsHost && !MultiplayerSession.IsClient)
-                return UnitTestResult.Fail("Server not running yet");
+                return UnitTestResult.Skip("not in a session");
+
+            if (NetworkConfig.TransportServer == null)
+                return UnitTestResult.Fail("in a session but TransportServer is null");
 
             return UnitTestResult.Pass("Server is running");
         }
 
-        [UnitTest(name: "Using Steamworks Transport", category: "Networking")]
-        public static UnitTestResult IsSteamTransport()
+        /// <summary>
+        /// Replaces a pair of tests that asserted the transport was Steamworks
+        /// and that it was Riptide. Being mutually exclusive, one always failed,
+        /// so a healthy run never looked healthy.
+        /// </summary>
+        [UnitTest(name: "Active transport matches configuration", category: "Networking")]
+        public static UnitTestResult TransportMatchesConfig()
         {
-            if (NetworkConfig.transport != NetworkConfig.NetworkTransport.STEAMWORKS)
-                return UnitTestResult.Fail("Transport is not Steamworks");
-            return UnitTestResult.Pass("Transport is Steamworks");
-        }
+            if (!MultiplayerSession.IsHost && !MultiplayerSession.IsClient)
+                return UnitTestResult.Skip($"not in a session; transport is {NetworkConfig.transport}");
 
-        [UnitTest(name: "Using Riptide Transport", category: "Networking")]
-        public static UnitTestResult IsRiptideTransport()
-        {
-            if (NetworkConfig.transport != NetworkConfig.NetworkTransport.RIPTIDE)
-                return UnitTestResult.Fail("Transport is not Riptide");
-            return UnitTestResult.Pass("Transport is Riptide");
+            var configured = (NetworkConfig.NetworkTransport)Configuration.Instance.Host.NetworkTransport;
+            if (MultiplayerSession.IsHost && NetworkConfig.transport != configured)
+                return UnitTestResult.Fail($"host is on {NetworkConfig.transport} but configured for {configured}");
+
+            return UnitTestResult.Pass($"running on {NetworkConfig.transport}");
         }
 
         [UnitTest(name: "Check for duplicate network identities", category: "Networking")]
@@ -59,10 +61,10 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult TcpTransferServerReady()
         {
             if (!MultiplayerSession.IsHost)
-                return UnitTestResult.Fail("Not host, TCP transfer server only runs on the host");
+                return UnitTestResult.Skip("only the host runs the TCP transfer server");
 
             if (!NetworkConfig.IsLanConfig())
-                return UnitTestResult.Fail("Not on Riptide/LAN transport");
+                return UnitTestResult.Skip("not on the Riptide/LAN transport");
 
             if (NetworkConfig.TransportServer is not RiptideServer server)
                 return UnitTestResult.Fail("TransportServer is not a RiptideServer");
@@ -156,7 +158,7 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult AllClientsConnected()
         {
             if (!MultiplayerSession.InSession)
-                return UnitTestResult.Fail("Not in a multiplayer session");
+                return UnitTestResult.Skip("not in a multiplayer session");
 
             var transportClients = NetworkConfig.GetConnectedClients();
             if (transportClients.Count == 0)
@@ -179,7 +181,7 @@ namespace ONI_Together.DebugTools.UnitTests
         public static UnitTestResult PacketRouting()
         {
             if (!MultiplayerSession.InSession)
-                return UnitTestResult.Fail("Not in a multiplayer session");
+                return UnitTestResult.Skip("not in a multiplayer session");
 
             if (!MultiplayerSession.HostUserID.IsValid())
                 return UnitTestResult.Fail("HostUserID is not valid");

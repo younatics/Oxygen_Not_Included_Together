@@ -15,7 +15,7 @@ namespace ONI_Together.DebugTools.UnitTests
 		public static UnitTestResult DuplicantPositionsInSync()
 		{
 			if (!MultiplayerSession.InSession)
-				return UnitTestResult.Fail("Not in a multiplayer session");
+				return UnitTestResult.Skip("not in a multiplayer session");
 
 			const float MaxCellDelta = 2f;
 

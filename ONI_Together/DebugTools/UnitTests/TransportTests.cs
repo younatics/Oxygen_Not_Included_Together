@@ -45,7 +45,7 @@ namespace ONI_Together.DebugTools.UnitTests
 		public static UnitTestResult RiptideTimeoutCorrect()
 		{
 			if (!NetworkConfig.IsLanConfig())
-				return UnitTestResult.Fail("Not on Riptide/LAN transport");
+				return UnitTestResult.Skip("not on the Riptide/LAN transport");
 
 			const int ExpectedTimeoutMs = 30000;
 
@@ -84,7 +84,7 @@ namespace ONI_Together.DebugTools.UnitTests
 		public static UnitTestResult ConnectionStable()
 		{
 			if (!MultiplayerSession.InSession)
-				return UnitTestResult.Fail("Not in a multiplayer session");
+				return UnitTestResult.Skip("not in a multiplayer session");
 
 			if (!NetworkConfig.IsLanConfig())
 				return UnitTestResult.Fail("Stability check only implemented for Riptide transport");

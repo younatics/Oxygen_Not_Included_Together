@@ -70,7 +70,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var entries = Collect();
             if (entries.Count == 0)
-                return UnitTestResult.Fail("registry is empty - load a colony first");
+                return UnitTestResult.Skip("registry is empty - no colony loaded");
 
             // Sorted so two dumps line up without the comparer having to sort.
             foreach (var e in entries.OrderBy(e => e.Kind).ThenBy(e => e.Prefab).ThenBy(e => e.Cell))
@@ -84,7 +84,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var entries = Collect();
             if (entries.Count == 0)
-                return UnitTestResult.Fail("registry is empty - load a colony first");
+                return UnitTestResult.Skip("registry is empty - no colony loaded");
 
             // The same physical object reachable under two addresses means
             // anything sent under the stale one lands nowhere.
@@ -105,7 +105,7 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             var entries = Collect();
             if (entries.Count == 0)
-                return UnitTestResult.Fail("registry is empty - load a colony first");
+                return UnitTestResult.Skip("registry is empty - no colony loaded");
 
             // RegisterExisting silently skips an id that is already taken, so the
             // loser keeps a NetId that resolves to somebody else's object.
@@ -127,6 +127,9 @@ namespace ONI_Together.DebugTools.UnitTests
         {
             // Downstream symptom, and the cheapest divergence signal there is:
             // a packet arrived for a NetId this peer never registered.
+            if (NetworkIdentityRegistry.Count == 0)
+                return UnitTestResult.Skip("registry is empty - no colony loaded");
+
             int fails = NetworkIdentityRegistry.LookupFailCount;
             if (fails > 0)
                 return UnitTestResult.Fail(

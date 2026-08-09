@@ -97,6 +97,7 @@ namespace ONI_Together.DebugTools
                 {
                     TestState.Passed => "PASS",
                     TestState.Failed => "FAIL",
+                    TestState.Skipped => "SKIP",
                     _ => "NOTRUN"
                 };
                 DebugConsole.Log(
@@ -106,9 +107,11 @@ namespace ONI_Together.DebugTools
 
             int passed = tests.Count(t => t.IsPassed);
             int failed = tests.Count(t => t.IsFailed);
-            int notrun = tests.Count - passed - failed;
+            int skipped = tests.Count(t => t.IsSkipped);
+            int notrun = tests.Count - passed - failed - skipped;
 
-            DebugConsole.Log($"{Tag} END run={run} passed={passed} failed={failed} notrun={notrun}");
+            DebugConsole.Log(
+                $"{Tag} END run={run} passed={passed} failed={failed} skipped={skipped} notrun={notrun}");
         }
 
         private static string DescribeContext()

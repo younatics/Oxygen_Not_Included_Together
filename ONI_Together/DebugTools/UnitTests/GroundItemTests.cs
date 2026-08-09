@@ -47,7 +47,9 @@ namespace ONI_Together.DebugTools.UnitTests
 		public static UnitTestResult ClearToolAccessible()
 		{
 			if (ClearTool.Instance == null)
-				return UnitTestResult.Fail("ClearTool.Instance is null");
+				return Game.Instance == null
+					? UnitTestResult.Skip("no game loaded, so no ClearTool")
+					: UnitTestResult.Fail("ClearTool.Instance is null");
 			return UnitTestResult.Pass("ClearTool.Instance accessible");
 		}
 
