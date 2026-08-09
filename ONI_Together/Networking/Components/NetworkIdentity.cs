@@ -152,14 +152,85 @@ namespace ONI_Together.Networking.Components
 				NetId = NetworkIdentityRegistry.Register(this);
 				//DebugConsole.Log($"[NetworkIdentity] Generated Random NetId {NetId} for {gameObject.name}");
 			}
-			else
+			else if (!NetworkIdentityRegistry.RegisterExisting(this, NetId))
 			{
-				NetworkIdentityRegistry.RegisterExisting(this, NetId);
-				// DebugConsole.Log($"[NetworkIdentity] Registered Existing NetId {NetId} for {gameObject.name}");
+				// Somebody else holds this id. Leaving it here is what made the
+				// damage permanent: the object kept an id that resolves to
+				// another object, was marked registered anyway, and then got
+				// SAVED that way - so the duplicate came back on every load and
+				// the loser never appeared in the registry at all. Two
+				// hydroponic farms, two swamp lilies and three hatches were in
+				// exactly that state in a live colony, and nothing addressed to
+				// them could ever arrive.
+				//
+				// NetId is [Serialize]d, so repairing it here also repairs the
+				// save the next time the world is written.
+				if (!TryRehouse())
+					return;
 			}
 			IsRegistered = true;
 
 			AnnounceSpawnIfHost();
+		}
+
+		/// <summary>
+		/// Find this object a free id after its own turned out to be taken.
+		///
+		/// The replacement is derived, not allocated: recomputing the
+		/// deterministic id gives a value that is a pure function of what this
+		/// object is and where it is, so two peers loading the same save reach
+		/// the same answer without talking. Only if that is taken too does it
+		/// walk upward, and a host that is in session announces the result so a
+		/// client cannot be left guessing.
+		///
+		/// Returns false if no id could be found at all, in which case the
+		/// object stays unregistered and unmarked - it will try again the next
+		/// time RegisterIdentity runs, rather than pretending it succeeded.
+		/// </summary>
+		private bool TryRehouse()
+		{
+			using var _ = Profiler.Scope();
+
+			int taken = NetId;
+			int candidate = ComputeDeterministicId();
+
+			// The saved id may itself be the deterministic one, in which case
+			// recomputing changes nothing and the walk below does the work.
+			if (candidate == 0 || candidate == taken || NetworkIdentityRegistry.Exists(candidate))
+				candidate = NetworkIdentityRegistry.FindFreeId(candidate != 0 ? candidate : taken + 1);
+
+			if (candidate == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[NetworkIdentity] '{gameObject.name}' could not be rehoused off NetId {taken}; " +
+					"it stays unregistered and will retry");
+				return false;
+			}
+
+			NetId = candidate;
+			if (!NetworkIdentityRegistry.RegisterExisting(this, NetId))
+			{
+				NetId = taken;
+				return false;
+			}
+
+			DebugConsole.Log(
+				$"[NetworkIdentity] '{gameObject.name}' rehoused from duplicate NetId {taken} to {NetId}");
+			return true;
+		}
+
+		/// <summary>
+		/// The id this object would be given if it had none, by the same branch
+		/// order RegisterIdentity uses. Kept as one method so the repair path
+		/// and the first-registration path cannot drift apart.
+		/// </summary>
+		private int ComputeDeterministicId()
+		{
+			if (TryGetComponent<Building>(out _))
+				return NetIdHelper.GetDeterministicBuildingId(gameObject);
+			if (TryGetComponent<Workable>(out _))
+				return NetIdHelper.GetDeterministicWorkableId(gameObject);
+			return NetIdHelper.GetDeterministicEntityId(gameObject);
 		}
 
 		/// <summary>

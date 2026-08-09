@@ -1,4 +1,4 @@
-using ONI_Together.Networking;
+﻿using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
 using UnityEngine;
 
@@ -119,6 +119,83 @@ namespace ONI_Together.DebugTools.UnitTests
                 NetworkIdentityRegistry.Unregister(id, first);
                 Destroy(first);
                 Destroy(second);
+            }
+        }
+
+        [UnitTest(name: "A refused registration reports failure to its caller", category: "Registry")]
+        public static UnitTestResult RefusedRegistrationIsVisible()
+        {
+            // RegisterExisting used to return void, so the loser of a collision
+            // could not tell it had lost. NetworkIdentity marked itself
+            // registered anyway and kept an id that resolved to somebody else -
+            // and because NetId is [Serialize]d, that duplicate was written into
+            // the save and came back on every load. A live colony had two
+            // hydroponic farms, two swamp lilies and three hatches in that
+            // state, none of them addressable, on both peers identically.
+            if (!TryFindFreeId(out int id))
+                return UnitTestResult.Skip("no free probe id");
+
+            var holder = NewProbe("registry-refused-holder");
+            var loser = NewProbe("registry-refused-loser");
+            try
+            {
+                if (!NetworkIdentityRegistry.RegisterExisting(holder, id))
+                    return UnitTestResult.Fail("claiming a free id reported failure");
+
+                if (NetworkIdentityRegistry.RegisterExisting(loser, id))
+                    return UnitTestResult.Fail(
+                        "claiming an id another object holds reported success; the loser will believe " +
+                        "it is addressable and will be saved holding a duplicate");
+
+                return UnitTestResult.Pass("a refused registration returns false");
+            }
+            finally
+            {
+                NetworkIdentityRegistry.Unregister(id, holder);
+                Destroy(holder);
+                Destroy(loser);
+            }
+        }
+
+        [UnitTest(name: "A free id can always be found past a taken one", category: "Registry")]
+        public static UnitTestResult FreeIdIsFoundPastCollisions()
+        {
+            if (!TryFindFreeId(out int id))
+                return UnitTestResult.Skip("no free probe id");
+
+            var a = NewProbe("registry-freeid-a");
+            var b = NewProbe("registry-freeid-b");
+            try
+            {
+                NetworkIdentityRegistry.RegisterExisting(a, id);
+
+                int free = NetworkIdentityRegistry.FindFreeId(id);
+                if (free == 0)
+                    return UnitTestResult.Fail("no free id found at all - a duplicate could not be repaired");
+                if (free == id)
+                    return UnitTestResult.Fail($"returned {free}, which is already held");
+                if (NetworkIdentityRegistry.Exists(free))
+                    return UnitTestResult.Fail($"returned {free}, which is occupied");
+
+                // The walk has to depend only on where it started and on what is
+                // occupied. If it depended on arrival order, two peers repairing
+                // the same save would land on different ids and the repair would
+                // trade one disagreement for another.
+                int again = NetworkIdentityRegistry.FindFreeId(id);
+                if (again != free)
+                    return UnitTestResult.Fail($"not deterministic: {free} then {again}");
+
+                // Never zero: zero means "unregistered" everywhere else.
+                if (NetworkIdentityRegistry.FindFreeId(0) == 0)
+                    return UnitTestResult.Fail("returned 0, which is the unregistered sentinel");
+
+                return UnitTestResult.Pass($"{id} is taken, {free} is free, and the answer is stable");
+            }
+            finally
+            {
+                NetworkIdentityRegistry.Unregister(id, a);
+                Destroy(a);
+                Destroy(b);
             }
         }
 

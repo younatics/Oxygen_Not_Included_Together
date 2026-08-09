@@ -19,7 +19,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('ping', 'pull-mod', 'push-log', 'run-tests', 'scenario', 'stop-oni', 'start-oni', 'quit')]
+    [ValidateSet('ping', 'pull-mod', 'push-log', 'why-exit', 'run-tests', 'scenario', 'stop-oni', 'start-oni', 'quit')]
     [string]$Verb,
     [string]$Label,
     [string]$Share = 'C:\ONI_MP_Share',

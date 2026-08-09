@@ -78,6 +78,65 @@ function Invoke-PullMod {
     @{ sha256 = $dstHash; path = $localMod }
 }
 
+# Why the game is not running any more, asked of Windows rather than of the
+# game. A client that logs Game.OnApplicationQuit() and then a clean disconnect
+# left through an orderly shutdown path - no exception, no truncated log - and
+# nothing inside the game can distinguish "the user closed it", "Steam closed
+# it", "it ran out of memory" and "it hit an unhandled native fault". The OS
+# recorded all four differently.
+function Invoke-WhyExit {
+    $since = (Get-Date).AddHours(-6)
+    $events = @()
+    foreach ($logName in @('Application', 'System')) {
+        try {
+            $events += Get-WinEvent -FilterHashtable @{
+                LogName   = $logName
+                StartTime = $since
+                Level     = 1, 2, 3    # critical, error, warning
+            } -MaxEvents 400 -ErrorAction Stop |
+            Where-Object {
+                $_.Message -match 'Oxygen|OxygenNotIncluded|Unity|steam' -or
+                $_.ProviderName -match 'Application Error|Windows Error Reporting|Application Hang|Kernel-Power|Resource-Exhaustion'
+            } |
+            Select-Object -First 25 |
+            ForEach-Object {
+                [ordered]@{
+                    log      = $logName
+                    time     = $_.TimeCreated.ToUniversalTime().ToString('o')
+                    level    = $_.LevelDisplayName
+                    provider = $_.ProviderName
+                    id       = $_.Id
+                    # Trimmed: full WER payloads run to kilobytes and the useful
+                    # part - faulting module, exception code - is at the front.
+                    message  = ($_.Message -replace '\s+', ' ').Substring(0, [Math]::Min(400, ($_.Message -replace '\s+', ' ').Length))
+                }
+            }
+        } catch { }
+    }
+
+    # Klei drops crash dumps and its own error reports next to the log.
+    $logDir = Split-Path $playerLog
+    $recent = @()
+    if (Test-Path $logDir) {
+        $recent = Get-ChildItem $logDir -File -ErrorAction SilentlyContinue |
+                  Where-Object { $_.LastWriteTime -gt $since } |
+                  Sort-Object LastWriteTime -Descending |
+                  Select-Object -First 15 |
+                  ForEach-Object { [ordered]@{ name = $_.Name; kb = [math]::Round($_.Length / 1KB, 1); utc = $_.LastWriteTimeUtc.ToString('o') } }
+    }
+
+    $p = Get-OniProcess
+    @{
+        oniRunning  = [bool]$p
+        events      = $events
+        logDirFiles = $recent
+        # A restart resets this, so it says how long the current run has lasted -
+        # a session that quits at the same age every time is a different story
+        # from one that quits at random.
+        oniStartedUtc = if ($p) { $p.StartTime.ToUniversalTime().ToString('o') } else { $null }
+    }
+}
+
 function Invoke-PushLog($label) {
     if (-not $label) { throw 'push-log needs a label' }
     if (-not (Test-Path $playerLog)) { throw "no Player.log at $playerLog" }
@@ -158,6 +217,7 @@ while ($running) {
                     }
                     'pull-mod'  { $reply.result = Invoke-PullMod }
                     'push-log'  { $reply.result = Invoke-PushLog $req.label }
+                    'why-exit'  { $reply.result = Invoke-WhyExit }
                     'run-tests' {
                         # UnitTestRunner.Tick polls this path from Game.Update,
                         # so the game must have a colony loaded for it to fire.

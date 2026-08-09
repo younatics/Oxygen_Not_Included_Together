@@ -69,18 +69,26 @@ namespace ONI_Together.Networking
 		}
 
 
-		public static void RegisterExisting(NetworkIdentity entity, int netId)
+		/// <summary>
+		/// Claim <paramref name="netId"/> for <paramref name="entity"/>.
+		/// Returns false if a different object already holds it.
+		///
+		/// The caller has to act on false. It used to be void, so a refused
+		/// registration looked exactly like a successful one and the loser went
+		/// on believing it was addressable.
+		/// </summary>
+		public static bool RegisterExisting(NetworkIdentity entity, int netId)
 		{
 			using var _ = Profiler.Scope();
 
 			if (!identities.ContainsKey(netId))
 			{
 				identities[netId] = entity;
-				return;
+				return true;
 			}
 
 			if (ReferenceEquals(identities[netId], entity))
-				return;
+				return true;
 
 			// This warning was commented out, so a collision was invisible. The
 			// loser keeps its NetId and is simply not in the registry, which
@@ -95,9 +103,34 @@ namespace ONI_Together.Networking
 			{
 				DebugConsole.LogWarning(
 					$"[NetEntityRegistry] NetId {netId} already held by " +
-					$"'{identities[netId]?.name ?? "null"}'; '{entity?.name ?? "null"}' is left unregistered " +
+					$"'{identities[netId]?.name ?? "null"}'; '{entity?.name ?? "null"}' must be renamed " +
 					$"({_collisionCount} collisions so far)");
 			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// The first free id at or after <paramref name="from"/>.
+		///
+		/// Used to rehouse an object whose id is already taken. It walks upward
+		/// so the result depends only on the starting point and on which ids are
+		/// occupied - not on the order objects happened to arrive in.
+		/// </summary>
+		public static int FindFreeId(int from)
+		{
+			using var _ = Profiler.Scope();
+
+			if (from == 0) from = 1;
+
+			int id = from;
+			for (int i = 0; i < 4096; i++)
+			{
+				if (id != 0 && !identities.ContainsKey(id))
+					return id;
+				id++;
+			}
+			return 0;
 		}
 
 		public static void RegisterOverride(NetworkIdentity entity, int netId)
