@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Run a whole two-box scenario with nobody at either keyboard.
 
@@ -148,13 +148,19 @@ Start-Sleep -Seconds $SettleSeconds
 # The run used to be called a success once the dig order was placed. Placing an
 # order proves nothing: every scenario so far reported OK while paused, with
 # nothing mined. Ore spawning is what says a duplicant actually finished a dig.
+# Asked of the peer, not of this box. WorldDamageSpawnResourcePacket is logged
+# by whoever receives it, and the host is the one sending - so looking here
+# reported "no mining observed" for a run that mined 26 ore, every time.
 Step 'checking that mining actually happened'
-$mined = Wait-HostLog 'WorldDamageSpawnResourcePacket|\[WorldDamage\]' 5 $mark
-if (-not $mined) {
-    Write-Host "    WARN no mining observed in the last ${SettleSeconds}s - the dig cells may be unreachable" -ForegroundColor Yellow
-    Write-Host "         the replication results below still stand, but nothing about ore, chores or pathing does" -ForegroundColor Yellow
+& $peerCmd -Verb push-log -Label "$Label-mining" -Share $Share -TimeoutSeconds 120 | Out-Null
+$peerLog = Join-Path $Share "drop\$Label-mining\client.log"
+$mined = (Select-String -Path $peerLog -Pattern 'WorldDamageSpawnResourcePacket' -ErrorAction SilentlyContinue |
+          Measure-Object).Count
+if ($mined -le 1) {
+    Write-Host "    WARN no ore reached the peer in the last ${SettleSeconds}s - the dig cells may be unreachable" -ForegroundColor Yellow
+    Write-Host "         replication results below still stand; nothing about ore, chores or pathing does" -ForegroundColor Yellow
 } else {
-    Ok 'ore spawned - duplicants completed digs'
+    Ok "ore spawned and replicated ($mined notices on the peer)"
 }
 
 Step 'analysing'

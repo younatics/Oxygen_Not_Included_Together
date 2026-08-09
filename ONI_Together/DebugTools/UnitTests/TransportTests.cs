@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Transport.Lan;
 using ONI_Together.Networking.Transport.Steam;
@@ -41,13 +41,19 @@ namespace ONI_Together.DebugTools.UnitTests
 			}
 		}
 
-		[UnitTest(name: "Riptide timeout is 30000 ms", category: "Transport")]
+		[UnitTest(name: "Riptide timeout matches configuration", category: "Transport")]
 		public static UnitTestResult RiptideTimeoutCorrect()
 		{
 			if (!NetworkConfig.IsLanConfig())
 				return UnitTestResult.Skip("not on the Riptide/LAN transport");
 
-			const int ExpectedTimeoutMs = 30000;
+			// Read from configuration rather than pinned to 30000. The value is
+			// a setting - the baseline runs it at 120 s on purpose - so a fixed
+			// constant reported a deliberate choice as a failure in every single
+			// run and trained the eye to skip over it.
+			int ExpectedTimeoutMs = (MultiplayerSession.IsHost
+				? Configuration.Instance.Host.TimeoutSeconds
+				: Configuration.Instance.Client.TimeoutSeconds) * 1000;
 
 			Connection connection;
 			if (MultiplayerSession.IsHost)

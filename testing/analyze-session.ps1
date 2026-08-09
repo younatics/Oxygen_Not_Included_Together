@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One command to read a live two-box session, or to close one out.
 
@@ -61,8 +61,10 @@ function Say($line) { Write-Host $line; $verdict.Add($line) | Out-Null }
 # --- 1. run the suite on both peers ----------------------------------------
 if ($Mode -eq 'final') {
     Head 'running the in-game suite on both peers'
-    Set-Content (Join-Path $env:TEMP 'oni_together_cmd') 'runtests' -Encoding UTF8
-    try { & $peerCmd -Verb scenario -Label 'runtests' -Share $Share -TimeoutSeconds 60 | Out-Null; Ok 'PC-B suite triggered' }
+    # Counters as well as tests. Reading packet flow from log greps was wrong
+    # twice; the tracker's own numbers are the only reliable source.
+    Set-Content (Join-Path $env:TEMP 'oni_together_cmd') "runtests`npackets" -Encoding UTF8
+    try { & $peerCmd -Verb scenario -Label 'runtests;packets' -Share $Share -TimeoutSeconds 60 | Out-Null; Ok 'PC-B suite triggered' }
     catch { Warn "could not trigger the suite on PC-B: $($_.Exception.Message)" }
     Info "waiting ${TestWaitSeconds}s for both suites"
     Start-Sleep -Seconds $TestWaitSeconds
