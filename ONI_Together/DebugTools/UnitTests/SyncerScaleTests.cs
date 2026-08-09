@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Packets.Architecture;
@@ -63,7 +63,8 @@ namespace ONI_Together.DebugTools.UnitTests
         private static DiggingStatePacket DigCells(int n)
         {
             var packet = new DiggingStatePacket();
-            for (int i = 0; i < n; i++) packet.DigCells.Add(100000 + i);
+            for (int i = 0; i < n; i++)
+                packet.Digs.Add(new DigEntry { Cell = 100000 + i, NetId = int.MinValue + i });
             return packet;
         }
 

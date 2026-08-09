@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Trackers;
 using ONI_Together.Networking.Transport;
@@ -37,7 +37,7 @@ namespace ONI_Together.Networking.Components
 
 		// A dig snapshot is split across packets when it is large; these carry it.
 		private int _digSweepId;
-		private readonly SweepAssembler<int> _digSweep = new SweepAssembler<int>("Digging");
+		private readonly SweepAssembler<DigEntry> _digSweep = new SweepAssembler<DigEntry>("Digging");
 
 		// Rotating background scan - covers off-screen areas
 		private const int BG_SCAN_CHUNK_SIZE = 32;
@@ -252,13 +252,18 @@ namespace ONI_Together.Networking.Components
 				// reconciles only once the sweep is complete - a snapshot that is
 				// applied in pieces deletes the cells belonging to the pieces that
 				// have not arrived yet.
-				var cells = new List<int>();
+				// The id travels with the cell. A client draws its own marker for
+				// responsiveness but no longer mints an id, so this is the only way
+				// it learns the host's name for that marker.
+				var cells = new List<DigEntry>();
 				foreach (var diggable in global::Components.Diggables.Items)
 				{
 					if (diggable == null) continue;
 					int cell = Grid.PosToCell(diggable);
-					if (Grid.IsValidCell(cell))
-						cells.Add(cell);
+					if (!Grid.IsValidCell(cell)) continue;
+
+					int netId = diggable.TryGetComponent<NetworkIdentity>(out var identity) ? identity.NetId : 0;
+					cells.Add(new DigEntry { Cell = cell, NetId = netId });
 				}
 
 				int perBatch = DiggingStatePacket.MaxCellsFor(
@@ -277,7 +282,7 @@ namespace ONI_Together.Networking.Components
 					int start = b * perBatch;
 					int end = System.Math.Min(start + perBatch, cells.Count);
 					for (int i = start; i < end; i++)
-						digPacket.DigCells.Add(cells[i]);
+						digPacket.Digs.Add(cells[i]);
 
 					PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
 				}
@@ -298,13 +303,13 @@ namespace ONI_Together.Networking.Components
 			// Hold batches until the whole sweep is here. Reconciling on a
 			// partial snapshot would delete every dig that happens to live in a
 			// batch that has not arrived.
-			if (!_digSweep.Accept(packet.SweepId, packet.BatchIndex, packet.BatchCount, packet.DigCells, out var cells))
+			if (!_digSweep.Accept(packet.SweepId, packet.BatchIndex, packet.BatchCount, packet.Digs, out var cells))
 				return;
 
 			ApplyDiggingState(cells);
 		}
 
-		private void ApplyDiggingState(List<int> sweepCells)
+		private void ApplyDiggingState(List<DigEntry> sweepCells)
 		{
 			using var _ = Profiler.Scope();
 
@@ -317,14 +322,15 @@ namespace ONI_Together.Networking.Components
 			{
 				// Membership is checked once per local diggable, so a list scan
 				// would be quadratic on a big dig order.
-				var remote = new HashSet<int>(sweepCells);
-				var localDigs = new HashSet<int>();
+				var remote = new HashSet<int>();
+				foreach (var e in sweepCells) remote.Add(e.Cell);
+				var localDigs = new Dictionary<int, Diggable>();
 				var toRemove = new List<Diggable>();
 
 				foreach (var diggable in global::Components.Diggables.Items)
 				{
 					int cell = Grid.PosToCell(diggable);
-					localDigs.Add(cell);
+					localDigs[cell] = diggable;
 					if (!remote.Contains(cell))
 					{
 						toRemove.Add(diggable);
@@ -338,10 +344,26 @@ namespace ONI_Together.Networking.Components
 					d.gameObject.DeleteObject();
 				}
 
-				// Add Missing
-				foreach (var cell in sweepCells)
+				// Add Missing, or adopt what is already there.
+				foreach (var entry in sweepCells)
 				{
-					if (!localDigs.Contains(cell))
+					int cell = entry.Cell;
+
+					// Adopt once. A marker the client drew for itself has no id
+					// until the host names it. Re-overriding an object that
+					// already has one churns the registry on every sweep, which
+					// is what broke the first attempt at this.
+					if (localDigs.TryGetValue(cell, out var existing))
+					{
+						if (entry.NetId != 0
+							&& existing.TryGetComponent<NetworkIdentity>(out var have)
+							&& (have.IsClientPreview || have.NetId == 0))
+						{
+							have.OverrideNetId(entry.NetId);
+						}
+						continue;
+					}
+
 					{
 						//DebugConsole.Log($"[WorldStateSyncer] Adding missing dig at {cell}");
 						// Use DigTool logic without sending a packet back!
@@ -356,6 +378,9 @@ namespace ONI_Together.Networking.Components
 								Vector3 pos = Grid.CellToPosCBC(cell, Grid.SceneLayer.Move);
 								GameObject go = Util.KInstantiate(prefab, pos);
 								go.SetActive(true);
+
+								if (entry.NetId != 0 && go.TryGetComponent<NetworkIdentity>(out var fresh))
+									fresh.OverrideNetId(entry.NetId);
 							}
 						}
 					}

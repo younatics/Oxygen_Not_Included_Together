@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Components;
+﻿using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
@@ -6,9 +6,24 @@ using Shared.Profiling;
 
 namespace ONI_Together.Networking.Packets.World
 {
+	/// <summary>
+	/// A dig order and the id the host gave it.
+	///
+	/// The sweep carried cells alone, so a client that had drawn its own marker
+	/// had no way to learn the host's name for it. Since clients stopped minting
+	/// ids, that left every client-initiated marker unaddressable - which is why
+	/// a run where both peers dig showed six times the failed lookups of a
+	/// host-only one.
+	/// </summary>
+	public struct DigEntry
+	{
+		public int Cell;
+		public int NetId;
+	}
+
 	public class DiggingStatePacket : IPacket
 	{
-		public List<int> DigCells = new List<int>();
+		public List<DigEntry> Digs = new List<DigEntry>();
 
 		/// <summary>
 		/// Which snapshot this batch belongs to, and where it sits in it.
@@ -25,7 +40,8 @@ namespace ONI_Together.Networking.Packets.World
 		/// <summary>Counts, sweep header, and the packet type the sender frames with.</summary>
 		public const int HeaderBytes = 20;
 
-		public const int BytesPerCell = 4;
+		/// <summary>Cell 4 + NetId 4.</summary>
+		public const int BytesPerCell = 8;
 
 		/// <summary>How many cells fit in one indivisible payload of the given size.</summary>
 		public static int MaxCellsFor(int payloadLimitBytes)
@@ -41,10 +57,11 @@ namespace ONI_Together.Networking.Packets.World
 			writer.Write(SweepId);
 			writer.Write(BatchIndex);
 			writer.Write(BatchCount);
-			writer.Write(DigCells.Count);
-			foreach (var cell in DigCells)
+			writer.Write(Digs.Count);
+			foreach (var d in Digs)
 			{
-				writer.Write(cell);
+				writer.Write(d.Cell);
+				writer.Write(d.NetId);
 			}
 		}
 
@@ -56,10 +73,10 @@ namespace ONI_Together.Networking.Packets.World
 			BatchIndex = reader.ReadInt32();
 			BatchCount = reader.ReadInt32();
 			int count = reader.ReadInt32();
-			DigCells = new List<int>(count);
+			Digs = new List<DigEntry>(count);
 			for (int i = 0; i < count; i++)
 			{
-				DigCells.Add(reader.ReadInt32());
+				Digs.Add(new DigEntry { Cell = reader.ReadInt32(), NetId = reader.ReadInt32() });
 			}
 		}
 
