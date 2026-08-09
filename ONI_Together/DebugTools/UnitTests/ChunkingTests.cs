@@ -28,9 +28,13 @@ namespace ONI_Together.DebugTools.UnitTests
         private static byte[] SerializedTestPacket()
             => PacketSender.SerializePacketForSending(new Tests.TestPacket { ClientID = Marker });
 
-        private static ChunkedPacket Chunk(int sequence, int index, int total, byte[] data)
+        private const ulong SenderA = 0x1111_1111_1111_1111UL;
+        private const ulong SenderB = 0x2222_2222_2222_2222UL;
+
+        private static ChunkedPacket Chunk(int sequence, int index, int total, byte[] data, ulong sender = SenderA)
             => new ChunkedPacket
             {
+                SenderId = sender,
                 SequenceId = sequence,
                 ChunkIndex = index,
                 TotalChunks = total,
@@ -121,9 +125,9 @@ namespace ONI_Together.DebugTools.UnitTests
                 var b = Split(SerializedTestPacket(), 3);
                 const int seq = 90003;
 
-                Chunk(seq, 0, 3, a[0]).OnDispatched();
-                Chunk(seq, 1, 3, a[1]).OnDispatched();
-                Chunk(seq, 0, 3, b[0]).OnDispatched();      // different sender, same sequence
+                Chunk(seq, 0, 3, a[0], SenderA).OnDispatched();
+                Chunk(seq, 1, 3, a[1], SenderA).OnDispatched();
+                Chunk(seq, 0, 3, b[0], SenderB).OnDispatched();   // different sender, same sequence
 
                 int pending = ChunkedPacket.PendingSetCount;
                 if (pending < 2)

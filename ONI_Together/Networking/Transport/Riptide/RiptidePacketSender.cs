@@ -84,6 +84,7 @@ namespace ONI_Together.Networking.Transport.Lan
 
                 var chunk = new ChunkedPacket
                 {
+                    SenderId = ChunkedPacket.LocalSenderId,
                     SequenceId = sequenceId,
                     ChunkIndex = i,
                     TotalChunks = totalChunks,
