@@ -189,7 +189,12 @@ namespace ONI_Together.Misc
                 var go = items[slot];
                 if (go == null) return false;
                 if (!go.TryGetComponent<PrimaryElement>(out var pe)) return false;
-                if (go.GetComponent<KPrefabID>()?.PrefabTag.GetHash() != _incoming[i].Hash) return false;
+                // The same accessor the encoder used. Tag exposes GetHash() and
+                // GetHashCode() and they are not the same number, so comparing
+                // one against the other never matched and the storage was torn
+                // down and rebuilt on every packet regardless.
+                if (!go.TryGetComponent<KPrefabID>(out var storedPrefab)) return false;
+                if (storedPrefab.PrefabTag.GetHashCode() != _incoming[i].Hash) return false;
 
                 pe.Mass = _incoming[i].Mass;
                 pe.Temperature = _incoming[i].Temperature;

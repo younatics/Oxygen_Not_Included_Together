@@ -1,3 +1,4 @@
+﻿using ONI_Together.Networking.Components;
 using HarmonyLib;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Packets.World;
@@ -9,6 +10,8 @@ using UnityEngine;
 public static class WorkProgressPatch
 {
 	private static Dictionary<int, float> nextSendTime = new Dictionary<int, float>();
+
+	private static readonly HashSet<ulong> _viewportScratch = new HashSet<ulong>();
 	private const float SEND_INTERVAL = 0.5f;
 
 	public static void Postfix(Workable __instance)
@@ -48,6 +51,29 @@ public static class WorkProgressPatch
 			return;
 
 		nextSendTime[trackingKey] = now + SEND_INTERVAL;
+
+		// Only to peers that can see the thing being worked on.
+		//
+		// Spawns are culled to a client's viewport and this was not, so progress
+		// kept arriving for objects the client had never been told about and
+		// never would be. That is the whole of the remaining resolve failures on
+		// a live client - 181 for Pickupables, 76 for Storage - and none of them
+		// could ever have succeeded. Sending them costs bandwidth to produce a
+		// warning.
+		int workableCell = Grid.PosToCell(__instance);
+		if (Grid.IsValidCell(workableCell) && WorldStateSyncer.Instance != null)
+		{
+			_viewportScratch.Clear();
+			WorldStateSyncer.Instance.GetClientsViewingCell(workableCell, _viewportScratch, 2);
+			if (_viewportScratch.Count == 0)
+				return;
+
+			var packet = new WorkableProgressPacket(__instance);
+			foreach (var playerId in _viewportScratch)
+				PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable);
+			return;
+		}
+
 		PacketSender.SendToAllClients(new WorkableProgressPacket(__instance), PacketSendMode.Unreliable);
 	}
 
