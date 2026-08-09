@@ -17,6 +17,14 @@ namespace ONI_Together.Misc.World
 			using var _ = Profiler.Scope();
 
 			queue.Add(entry);
+
+			// Sent as it happens. Batching over two seconds left the client
+			// without the object, or holding an unnamed copy, for that whole
+			// window. Waiting was only tolerable while naming depended on
+			// arrival order; now that packets carry a sequence and a stale
+			// naming is refused, the delay buys nothing.
+			Flush();
+			timeSinceLastFlush = 0f;
 		}
 
 		public static void Update()
