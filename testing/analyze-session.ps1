@@ -134,7 +134,14 @@ Head 'packet parity (host vs client)'
 $signals = @(
     'WorldDamageSpawnResource', 'DigCompletePacket', 'DeconstructComplete', 'DeconstructPacket',
     'BuildingActionPacket', 'GroundItemPickedUp', 'Registered workable', 'Registered entity',
-    'Lookup failed', 'Overwriting existing entity', 'Failed to handle packet'
+    'Lookup failed', 'Overwriting existing entity', 'Failed to handle packet',
+    # Ore the client builds from the host's spawn packet and destroys in the same
+    # breath, because a pickup notice for it had already arrived. The object then
+    # exists on the host and not on the client - which is what host-only
+    # Pickupables in netid_compare are. Counted because the packet header has no
+    # sequence or tick, so the receiver cannot tell that ordering apart.
+    'Consumed pending ground-item pickup', 'not yet registered; queued pending removal',
+    'already held by'
 )
 Say ("  {0,-32} {1,8} {2,8}" -f 'signal', 'host', 'client')
 Say ("  {0,-32} {1,8} {2,8}" -f ('-' * 32), '--------', '--------')

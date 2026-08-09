@@ -441,8 +441,16 @@ namespace ONI_Together.Networking.Transport.Lan
                     _client.ClientConnected -= OnOtherClientConnected;
                     _client.ClientDisconnected -= OnOtherClientDisconnected;
 
-                    MultiplayerSession.ServerIp = "127.0.0.1";
-                    MultiplayerSession.ServerPort = 7777;
+                    // The server address is deliberately left alone. This used to
+                    // reset it to 127.0.0.1:7777 on every disconnect, and
+                    // ReconnectToSession reads exactly these fields - so every
+                    // reconnect dialled localhost on a port nothing listens on
+                    // and could never succeed. The address of the server we were
+                    // just talking to is the one piece of state a reconnect
+                    // needs; cleaning it up is what broke reconnect.
+                    //
+                    // 7777 is not the LAN default either; LanSettings.Port is
+                    // 8080, so even a local host would have been the wrong port.
                 }
                 catch (Exception ex)
                 {
