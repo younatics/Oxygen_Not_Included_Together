@@ -124,6 +124,29 @@ foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
     } else { Say ("  {0,-7} no [TEST] records in this log" -f $name) }
 }
 
+Head 'packet parity (host vs client)'
+# Counted on both sides and shown side by side, because judging a run from one
+# log has been wrong three times now: a dig order counted as mining, a paused
+# run counted as a session, and "no mining observed" reported for a run that
+# mined 26 ore because the packet is only logged on the receiving side. A
+# replicated event should leave a trace on both. A row that is busy on one side
+# and silent on the other is the finding.
+$signals = @(
+    'WorldDamageSpawnResource', 'DigCompletePacket', 'DeconstructComplete', 'DeconstructPacket',
+    'BuildingActionPacket', 'GroundItemPickedUp', 'Registered workable', 'Registered entity',
+    'Lookup failed', 'Overwriting existing entity', 'Failed to handle packet'
+)
+Say ("  {0,-32} {1,8} {2,8}" -f 'signal', 'host', 'client')
+Say ("  {0,-32} {1,8} {2,8}" -f ('-' * 32), '--------', '--------')
+foreach ($s in $signals) {
+    $hc = (Select-String -Path $hostLog   -Pattern ([regex]::Escape($s)) -ErrorAction SilentlyContinue | Measure-Object).Count
+    $cc = (Select-String -Path $clientLog -Pattern ([regex]::Escape($s)) -ErrorAction SilentlyContinue | Measure-Object).Count
+    $flag = ''
+    if (($hc -eq 0) -ne ($cc -eq 0)) { $flag = '  <-- one side only' }
+    elseif ($hc -gt 0 -and $cc -gt 0 -and ([math]::Max($hc, $cc) / [math]::Max(1, [math]::Min($hc, $cc))) -ge 5) { $flag = '  <-- lopsided' }
+    Say ("  {0,-32} {1,8} {2,8}{3}" -f $s, $hc, $cc, $flag)
+}
+
 Head 'two-box divergence (diff_logs.py)'
 & $Python (Join-Path $root 'diff_logs.py') $hostLog $clientLog --json (Join-Path $dest 'diff.json')
 $diffCode = $LASTEXITCODE
