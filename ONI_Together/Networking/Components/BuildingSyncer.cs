@@ -1,5 +1,6 @@
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
+using ONI_Together.Networking.Transport;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,17 @@ namespace ONI_Together.Networking.Components
         private bool _initialized = false;
         private float _initializationTime;
         private const float INITIAL_DELAY = 5f;
+
+        private int _sweepId;
+        private readonly SweepAssembler<BuildingState> _assembler = new SweepAssembler<BuildingState>("BuildingSyncer");
+
+        /// <summary>
+        /// The reconcile in flight. A sweep every 30 s can outrun a coroutine
+        /// that yields once per spawned building, and two of them running
+        /// together would each spawn from a stale local set - the second would
+        /// re-spawn what the first had just placed.
+        /// </summary>
+        private Coroutine _reconciling;
 
         private void Awake()
         {
@@ -78,12 +90,29 @@ namespace ONI_Together.Networking.Components
                 });
             }
 
-            var packet = new BuildingStatePacket
-            {
-                Buildings = stateList
-            };
+            // Split on accumulated bytes, not on a count. This packet carries
+            // every completed building in the colony, and a mature one has
+            // thousands - a single packet ran to tens of kilobytes against a
+            // 1000 byte payload limit, so the transport cut it into a hundred
+            // chunks every 30 s. That cost is invisible from here because
+            // SendChunked always sends Reliable, so an oversize packet does not
+            // just fragment, it turns into a reliable burst.
+            var batches = SweepBatcher.Split(
+                stateList,
+                BuildingStatePacket.HeaderBytes,
+                b => BuildingStatePacket.EntryBytes(b));
 
-            PacketSender.SendToAllClients(packet, PacketSendMode.Reliable);
+            int sweepId = ++_sweepId;
+            for (int i = 0; i < batches.Count; i++)
+            {
+                PacketSender.SendToAllClients(new BuildingStatePacket
+                {
+                    SweepId = sweepId,
+                    BatchIndex = i,
+                    BatchCount = batches.Count,
+                    Buildings = batches[i]
+                }, PacketSendMode.Reliable);
+            }
         }
 
         public void OnPacketReceived(BuildingStatePacket packet)
@@ -93,7 +122,19 @@ namespace ONI_Together.Networking.Components
             if (MultiplayerSession.IsHost) return;
             if (Grid.WidthInCells == 0) return;
 
-            StartCoroutine(Reconcile(packet.Buildings));
+            // Held until the sweep is whole. Absence is a no-op here, so a
+            // partial sweep would not delete anything - but Reconcile walks
+            // every local building twice and starts a coroutine each time, so
+            // running it once per batch would multiply the colony-wide pass by
+            // the batch count. Assembling first keeps it at one pass per sweep,
+            // which is what it was before the split.
+            if (!_assembler.Accept(packet.SweepId, packet.BatchIndex, packet.BatchCount,
+                                   packet.Buildings, out var complete))
+                return;
+
+            if (_reconciling != null)
+                StopCoroutine(_reconciling);
+            _reconciling = StartCoroutine(Reconcile(complete));
         }
 
         private IEnumerator Reconcile(List<BuildingState> remoteBuildings)

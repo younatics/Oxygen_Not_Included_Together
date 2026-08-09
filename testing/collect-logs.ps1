@@ -50,9 +50,15 @@ if ($modLines -eq 0) {
     Write-Host 'WARN zero [ONI_Together] lines - the mod did not load. Check the Mods menu.' -ForegroundColor Yellow
 }
 
-if ($IncludePrevious -and (Test-Path $prev)) {
+# Always, not on request. ONI rotates Player.log to Player-prev.log at startup,
+# so a peer that crashed and was restarted keeps the entire crash in the
+# previous file. Making that opt-in meant it was never opted into: the last
+# crash investigation opened a client log of 0.03 MB and found nothing, because
+# the session it wanted had already been rotated away. It costs a file copy.
+if (Test-Path $prev) {
     Copy-Item -Path $prev -Destination (Join-Path $dest "$Role-prev.log") -Force
-    Write-Host "OK  also copied Player-prev.log" -ForegroundColor Green
+    $prevSize = [math]::Round((Get-Item $prev).Length / 1MB, 2)
+    Write-Host "OK  also copied Player-prev.log (${prevSize} MB - the session before this one)" -ForegroundColor Green
 }
 
 # Environment fingerprint - makes a run reproducible after the fact.

@@ -80,6 +80,8 @@ try {
     & $peerCmd -Verb push-log -Label $Label -Share $Share -TimeoutSeconds 180 | Out-Null
     Copy-Item (Join-Path $Share "drop\$Label\client.log")       (Join-Path $dest 'client.log')       -Force
     Copy-Item (Join-Path $Share "drop\$Label\client.meta.json") (Join-Path $dest 'client.meta.json') -Force
+    $prevSrc = Join-Path $Share "drop\$Label\client-prev.log"
+    if (Test-Path $prevSrc) { Copy-Item $prevSrc (Join-Path $dest 'client-prev.log') -Force }
     Ok 'client snapshot'
 } catch {
     Bad "could not collect from PC-B: $($_.Exception.Message)"
@@ -108,6 +110,28 @@ if ($hostMeta.modDllSha256 -and $clientMeta.modDllSha256) {
         Ok "same binary on both boxes ($($hostMeta.modDllSha256.Substring(0,16))...)"
     }
 } else { Warn 'one side reported no dll hash - the pair cannot be verified' }
+
+# A restarted peer has a nearly empty Player.log, and every signal below it
+# counts as zero. That reads exactly like a clean run. It is not one - the
+# session worth reading was rotated into Player-prev.log - so say so before the
+# parity table, not after someone has believed it.
+$hostLines   = [int]$hostMeta.modLogLines
+$clientLines = [int]$clientMeta.modLogLines
+$lo = [math]::Min($hostLines, $clientLines)
+$hi = [math]::Max($hostLines, $clientLines)
+if ($lo -lt 500 -and $hi -ge 500) {
+    $thin = if ($hostLines -lt $clientLines) { 'host' } else { 'client' }
+    Bad "THE $($thin.ToUpper()) LOG IS NEARLY EMPTY ($lo mod lines vs $hi on the other side)"
+    Bad '  That peer was restarted, so this run covers only the time since. Every'
+    Bad '  signal counted for it below will read zero, which looks identical to clean.'
+    $prevFile = Join-Path $dest "$thin-prev.log"
+    if (Test-Path $prevFile) {
+        $prevLines = (Select-String -Path $prevFile -Pattern '\[ONI_Together\]' -AllMatches | Measure-Object).Count
+        Bad "  The session you want is in $thin-prev.log ($prevLines mod lines)."
+    } else {
+        Bad "  No $thin-prev.log was collected either - that session is gone."
+    }
+}
 
 # --- 4. analysers -----------------------------------------------------------
 $hostLog   = Join-Path $dest 'host.log'

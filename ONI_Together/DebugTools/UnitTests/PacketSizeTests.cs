@@ -108,6 +108,89 @@ namespace ONI_Together.DebugTools.UnitTests
                 $"cap {ConduitFlowSyncer.MAX_UPDATES_PER_PACKET} <= {fits} that fit in {limit} B");
         }
 
+        /// <summary>
+        /// A colony's worth of buildings, with names long enough to be honest
+        /// about the cost. The prefab name is most of an entry, so a batch cap
+        /// expressed as a count is wrong for whatever happens to be built.
+        /// </summary>
+        private static List<BuildingState> BuildBuildingStates(int count)
+        {
+            var list = new List<BuildingState>(count);
+            for (int i = 0; i < count; i++)
+            {
+                list.Add(new BuildingState
+                {
+                    Cell = 100000 + i,
+                    // A real prefab name from the long end of the range - the
+                    // batcher has to hold for these, not for "Tile".
+                    PrefabName = (i % 3 == 0) ? "Tile"
+                               : (i % 3 == 1) ? "LiquidConditionerComplete"
+                                              : "SuperInsulatedLiquidConduitBridge"
+                });
+            }
+            return list;
+        }
+
+        [UnitTest(name: "Every building batch fits every transport", category: "PacketSize")]
+        public static UnitTestResult BuildingBatchesFit()
+        {
+            // 4000 completed buildings is an ordinary mature colony, and this
+            // packet used to carry all of them in one message every 30 s. It ran
+            // to tens of kilobytes against a 1000 B payload, and because
+            // SendChunked always sends Reliable, the result was not a fragmented
+            // unreliable packet but a reliable burst of a hundred-odd chunks.
+            var all = BuildBuildingStates(4000);
+            var batches = SweepBatcher.Split(all, BuildingStatePacket.HeaderBytes,
+                                             b => BuildingStatePacket.EntryBytes(b));
+
+            int limit = TransportPacketSender.StrictestUnfragmentedPayloadBytes;
+            int total = 0;
+            for (int i = 0; i < batches.Count; i++)
+            {
+                int size = SerializedSize(new BuildingStatePacket
+                {
+                    SweepId = 7,
+                    BatchIndex = i,
+                    BatchCount = batches.Count,
+                    Buildings = batches[i]
+                });
+                total += batches[i].Count;
+
+                if (size > limit)
+                {
+                    return UnitTestResult.Fail(
+                        $"batch {i} of {batches.Count} holds {batches[i].Count} buildings and serializes to " +
+                        $"{LimitTable(size)}. The byte budget is understated - check " +
+                        "BuildingStatePacket.HeaderBytes against the sweep fields and the sender's framing.");
+                }
+            }
+
+            // Splitting must not lose anyone. The receiver treats absence as a
+            // no-op, so a dropped entry would not delete a building - it would
+            // just never spawn one the host has, which is silent.
+            if (total != all.Count)
+                return UnitTestResult.Fail($"split {all.Count} buildings into batches holding {total}");
+
+            return UnitTestResult.Pass(
+                $"{all.Count} buildings -> {batches.Count} batches, each within {limit} B");
+        }
+
+        [UnitTest(name: "An empty sweep still produces one batch", category: "PacketSize")]
+        public static UnitTestResult EmptySweepIsStillSent()
+        {
+            // A receiver that reconciles by absence needs to hear "nothing", and
+            // a batcher that returned no batches for an empty snapshot would
+            // leave the previous one standing forever.
+            var batches = SweepBatcher.Split(new List<BuildingState>(),
+                                             BuildingStatePacket.HeaderBytes,
+                                             b => BuildingStatePacket.EntryBytes(b));
+
+            if (batches.Count != 1 || batches[0].Count != 0)
+                return UnitTestResult.Fail($"empty snapshot produced {batches.Count} batches");
+
+            return UnitTestResult.Pass("an empty snapshot is one empty batch");
+        }
+
         [UnitTest(name: "Anim resync request fits every transport", category: "PacketSize")]
         public static UnitTestResult AnimResyncRequestFits()
         {

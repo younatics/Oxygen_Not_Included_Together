@@ -89,6 +89,19 @@ function Invoke-PushLog($label) {
     Copy-Item $playerLog $tmp -Force
     Copy-Item $tmp (Join-Path $dest 'client.log') -Force
 
+    # The session before this one, always. ONI rotates Player.log to
+    # Player-prev.log at startup, so a client that crashed and was restarted
+    # has its whole crash in the previous file and a nearly empty current one.
+    # That is exactly the session worth reading, and collecting only Player.log
+    # threw it away every time: the last crash investigation opened a 0.03 MB
+    # client log and had nothing in it.
+    $prevLog = Join-Path (Split-Path $playerLog) 'Player-prev.log'
+    if (Test-Path $prevLog) {
+        $tmpPrev = Join-Path $env:TEMP "oni-together-client-prev-$PID.log"
+        Copy-Item $prevLog $tmpPrev -Force
+        Copy-Item $tmpPrev (Join-Path $dest 'client-prev.log') -Force
+    }
+
     $size     = [math]::Round((Get-Item $tmp).Length / 1MB, 2)
     $modLines = (Select-String -Path $tmp -Pattern '\[ONI_Together\]' -AllMatches | Measure-Object).Count
     $meta = [ordered]@{
@@ -101,6 +114,7 @@ function Invoke-PushLog($label) {
                                          $_.IPAddress -notlike '169.254.*' }).IPAddress)
         playerLogMB  = $size
         modLogLines  = $modLines
+        hasPrevLog   = (Test-Path (Join-Path $dest 'client-prev.log'))
     }
     $dll = Join-Path $localMod 'ONI_Together.dll'
     if (Test-Path $dll) {
