@@ -151,9 +151,11 @@ namespace ONI_Together.DebugTools.UnitTests
             {
                 return UnitTestResult.Fail(
                     $"{string.Join(", ", over)} exceed Steam's {SteamworksPacketSender.STEAM_MAX_MESSAGE_BYTES / 1024} KB " +
-                    "message limit. Over Steam the send returns k_EResultLimitExceeded and the error log in " +
-                    "SteamworksPacketSender is commented out, so the packet vanishes with no trace. The same " +
-                    "packet over Riptide is chunked instead - one packet, two transports, two different failures.");
+                    "message limit. Riptide splits a payload this large and delivers it; Steam cannot send it at " +
+                    "all. The sender now refuses it with an error instead of dropping it silently, so the failure " +
+                    "is at least visible - but the packet still does not arrive. Closing this means chunking " +
+                    "in the shared sender rather than only in the Riptide one, so both transports carry the same " +
+                    "payload the same way.");
             }
 
             return UnitTestResult.Pass("declared ceilings fit Steam's message limit");

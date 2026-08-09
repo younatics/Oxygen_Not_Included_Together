@@ -36,6 +36,29 @@ namespace ONI_Together.Networking.Transport.Steam
             HSteamNetConnection s_conn = (HSteamNetConnection)conn;
 
             var bytes = PacketSender.SerializePacketForSending(packet);
+
+            // Refuse before Steam does, and say so. Riptide splits an oversized
+            // payload; Steam returns k_EResultLimitExceeded and, with the log
+            // below commented out, the packet used to vanish with no trace at
+            // all - the same packet quietly working on one transport and
+            // silently disappearing on the other.
+            if (bytes.Length > MaxMessageBytes)
+            {
+                DebugConsole.LogError(
+                    $"[Sockets] refusing {packet.GetType().Name}: {bytes.Length} B exceeds Steam's " +
+                    $"{MaxMessageBytes} B message limit. This payload is chunked over Riptide and cannot " +
+                    "be sent at all over Steam.", false);
+                return false;
+            }
+
+            if (bytes.Length > MaxUnfragmentedPayloadBytes && (sendType & PacketSendMode.Reliable) == 0)
+            {
+                // Steam fragments this internally and drops the whole message if
+                // any fragment is lost. Reliable sends are fine; unreliable ones
+                // are a silent, permanent hole.
+                WarnOversizedUnreliable(packet, bytes.Length);
+            }
+
             var _sendType = ConvertSendType(sendType); //(int)sendType;
 
             IntPtr unmanagedPointer = Marshal.AllocHGlobal(bytes.Length);
@@ -49,7 +72,11 @@ namespace ONI_Together.Networking.Transport.Steam
 
                 if (!sent)
                 {
-                    // DebugConsole.LogError($"[Sockets] Failed to send {packet.Type} to conn {conn} ({Utils.FormatBytes(bytes.Length)} | result: {result})", false);
+                    // Was commented out, so every rejected send was invisible.
+                    // Rate-limited per packet type rather than silenced: a
+                    // failing syncer would otherwise flood the log at its own
+                    // tick rate and drown everything else.
+                    WarnSendFailed(packet, bytes.Length, result);
                 }
                 else
                 {
@@ -66,6 +93,34 @@ namespace ONI_Together.Networking.Transport.Steam
             {
                 Marshal.FreeHGlobal(unmanagedPointer);
             }
+        }
+
+        private static readonly Dictionary<string, int> _failuresByType = new Dictionary<string, int>();
+        private static readonly HashSet<string> _oversizeWarned = new HashSet<string>();
+
+        /// <summary>First failure of a type is logged, then every 100th.</summary>
+        private static void WarnSendFailed(IPacket packet, int bytes, EResult result)
+        {
+            string name = packet.GetType().Name;
+            _failuresByType.TryGetValue(name, out int count);
+            _failuresByType[name] = ++count;
+
+            if (count == 1 || count % 100 == 0)
+            {
+                DebugConsole.LogError(
+                    $"[Sockets] failed to send {name} ({bytes} B, result {result}) - {count} failure(s) of this type",
+                    false);
+            }
+        }
+
+        private static void WarnOversizedUnreliable(IPacket packet, int bytes)
+        {
+            string name = packet.GetType().Name;
+            if (!_oversizeWarned.Add(name)) return;
+
+            DebugConsole.LogWarning(
+                $"[Sockets] {name} is {bytes} B sent unreliably, over the {STEAM_UNRELIABLE_MTU_BYTES} B " +
+                "unfragmented limit. Steam splits it and discards the whole message if any fragment is lost.");
         }
 
         public int ConvertSendType(PacketSendMode mode)
