@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using HarmonyLib;
+using ONI_Together.DebugTools;
 using ONI_Together.Misc;
 using ONI_Together.Networking.Packets.World;
 using UnityEngine;
@@ -16,6 +17,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         private Storage storage;
         private ConduitConsumer conduitConsumer;
         private KPrefabID prefabID;
+        private BuildingHP buildingHP;
 
         protected override void Initialize()
         {
@@ -24,6 +26,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             storage = GetComponent<Storage>();
             conduitConsumer = GetComponent<ConduitConsumer>();
             prefabID = GetComponent<KPrefabID>();
+            buildingHP = GetComponent<BuildingHP>();
         }
 
         protected override void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues)
@@ -32,6 +35,15 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             optionalValues = new Dictionary<string, Variant>();
             BuildingUtils.EncodeStorageContents(storage, optionalValues);
             optionalValues["is_operational"] = operational?.IsOperational ?? true;
+
+            // Damage is not replicated anywhere in the mod - no code touches
+            // BuildingHP, Damaged or Repairable - so each peer decided for
+            // itself whether a building was broken, and they disagreed. A
+            // toilet showed as needing repair on the client while the host saw
+            // it working. is_operational is a different thing and does not
+            // cover it.
+            if (buildingHP != null)
+                optionalValues["hit_points"] = buildingHP.HitPoints;
             if (flushToilet != null)
             {
                 value = storage?.MassStored() ?? 0f;
@@ -55,6 +67,24 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             if (storage == null) return;
             BuildingUtils.RebuildStorageFromData(storage, packet.OptionalValues);
             SyncToilet(packet);
+
+            // Reported, not corrected. BuildingHP.HitPoints has no setter, so
+            // forcing the client to match needs the game's own damage/repair
+            // call rather than an assignment - and which one is right has to be
+            // seen in a session before it is guessed at. The measurement is
+            // what was missing: nothing in the mod touched BuildingHP at all,
+            // so a toilet reading as broken on one peer and fine on the other
+            // left no trace anywhere.
+            if (buildingHP != null && packet.OptionalValues.TryGetValue("hit_points", out var hp))
+            {
+                int hostHp = (int)hp.Float;
+                if (buildingHP.HitPoints != hostHp)
+                {
+                    DebugConsole.LogWarning(
+                        $"[StructureState] {gameObject.GetProperName()} hit points differ: " +
+                        $"host {hostHp}, here {buildingHP.HitPoints} - damage is not replicated");
+                }
+            }
 
             if (packet.OptionalValues.TryGetValue("is_operational", out var isOp))
             {

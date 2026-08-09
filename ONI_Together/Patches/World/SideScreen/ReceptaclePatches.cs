@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
@@ -42,7 +42,21 @@ namespace ONI_Together.Patches.World.SideScreen
 
             var identity = __instance.gameObject.GetComponent<NetworkIdentity>();
 			if (!identity)
+			{
+				// Silently dropped the request. A client planting into a
+				// receptacle with no NetworkIdentity told the host nothing at
+				// all, so the plant appeared locally and never on the host - the
+				// Prefix suppresses the local preview, the Postfix is the only
+				// thing that reports it, and this is the exit that skipped it.
+				DebugConsole.LogWarning(
+					$"[Receptacle] {__instance.gameObject.GetProperName()} has no NetworkIdentity; " +
+					$"planting order for {entityTag.Name} cannot be sent to the host");
 				return;
+			}
+
+			DebugConsole.Log(
+				$"[Receptacle] {(MultiplayerSession.IsHost ? "host" : "client")} order: " +
+				$"{entityTag.Name} into netId {identity.NetId}");
 
             var packetEntity = new BuildingConfigPacket
 			{
