@@ -139,7 +139,15 @@ namespace ONI_Together.Networking.Packets.World
             if(!DoDiseaseTransfer) return;
             if (go == null || storage == null) return;
 
+            // Both of these can be absent. The storage's own PrimaryElement is
+            // null for containers that are not made of anything the sim tracks,
+            // and it was dereferenced four lines later without a check - a
+            // client threw nine of these out of a packet handler in five
+            // minutes.
             PrimaryElement primaryElement = storage.primaryElement;
+            if (primaryElement == null)
+                return;
+
             PrimaryElement component = go.GetComponent<PrimaryElement>();
             if(!(component == null))
             {
