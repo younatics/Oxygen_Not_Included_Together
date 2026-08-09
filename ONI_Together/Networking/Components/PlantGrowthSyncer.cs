@@ -1,6 +1,7 @@
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Trackers;
+using ONI_Together.Networking.Transport;
 using Shared.Profiling;
 using System.Collections.Generic;
 using UnityEngine;
@@ -145,7 +146,31 @@ namespace ONI_Together.Networking.Components
 			using var _ = Profiler.Scope();
 
 			var sw = System.Diagnostics.Stopwatch.StartNew();
+
+			// Batched on accumulated bytes rather than sent as one packet.
+			//
+			// This used to put every plant in the colony into a single Unreliable
+			// packet, so its size tracked the colony: 200 plants is 8608 B against
+			// a 1000 B indivisible payload, and only 23 fit. Past that the packet
+			// is split, and a split payload leaves the regime this syncer is built
+			// on - Unreliable is only safe while a loss costs exactly one packet
+			// and the next force-refresh repairs it. The audit's 25-plant cliff is
+			// this arithmetic.
+			int limit = TransportPacketSender.StrictestUnfragmentedPayloadBytes;
 			var packet = new PlantGrowthStatePacket();
+			int bytes = PlantGrowthStatePacket.HeaderBytes;
+			int totalPlants = 0;
+			int packets = 0;
+
+			void Flush()
+			{
+				if (packet.Plants.Count == 0) return;
+				PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+				totalPlants += packet.Plants.Count;
+				packets++;
+				packet = new PlantGrowthStatePacket();
+				bytes = PlantGrowthStatePacket.HeaderBytes;
+			}
 
 			lock (PlantTracker.AllPlants)
 			{
@@ -154,14 +179,21 @@ namespace ONI_Together.Networking.Components
 					if (!TryBuildPlantData(growing, out var data))
 						continue;
 
+					int cost = PlantGrowthStatePacket.EntryBytes(data);
+
+					// A single entry larger than the limit cannot be helped by
+					// splitting; send it alone and let the transport chunk it.
+					if (packet.Plants.Count > 0 && bytes + cost > limit)
+						Flush();
+
 					packet.Plants.Add(data);
+					bytes += cost;
 				}
 			}
-
-			PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+			Flush();
 
 			sw.Stop();
-			SyncStats.RecordSync(SyncStats.Plants, packet.Plants.Count, packet.Plants.Count * 48, sw.ElapsedMilliseconds);
+			SyncStats.RecordSync(SyncStats.Plants, totalPlants, totalPlants * 43, sw.ElapsedMilliseconds);
 		}
 
 		public bool OnPlantLifecycleReceived(PlantLifecyclePacket packet)

@@ -1,6 +1,7 @@
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Trackers;
+using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Steamworks;
 using System.Collections.Generic;
 using Shared.Profiling;
@@ -243,6 +244,14 @@ namespace ONI_Together.Networking.Components
 
 			try
 			{
+				// Batched so each packet stays one indivisible payload. Every
+				// outstanding dig used to go in a single Unreliable packet, so a
+				// large dig order split every tick - 1000 cells is 4008 B against
+				// a 1000 B limit, and only 248 fit.
+				int maxCells = DiggingStatePacket.MaxCellsFor(
+					TransportPacketSender.StrictestUnfragmentedPayloadBytes);
+				int totalCells = 0;
+
 				foreach (var diggable in global::Components.Diggables.Items)
 				{
 					if (diggable == null) continue;
@@ -250,13 +259,23 @@ namespace ONI_Together.Networking.Components
 					if (Grid.IsValidCell(cell))
 					{
 						digPacket.DigCells.Add(cell);
+						if (digPacket.DigCells.Count >= maxCells)
+						{
+							PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
+							totalCells += digPacket.DigCells.Count;
+							digPacket = new DiggingStatePacket();
+						}
 					}
 				}
 
-				PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
+				if (digPacket.DigCells.Count > 0)
+				{
+					PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
+					totalCells += digPacket.DigCells.Count;
+				}
 
 				sw.Stop();
-				SyncStats.RecordSync(SyncStats.Digging, digPacket.DigCells.Count, digPacket.DigCells.Count * 4, sw.ElapsedMilliseconds);
+				SyncStats.RecordSync(SyncStats.Digging, totalCells, totalCells * DiggingStatePacket.BytesPerCell, sw.ElapsedMilliseconds);
 			}
 			catch (System.Exception ex)
 			{
