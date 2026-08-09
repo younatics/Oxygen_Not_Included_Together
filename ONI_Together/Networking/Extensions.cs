@@ -48,7 +48,17 @@ namespace ONI_Together.Networking
 			// count wants attaching at spawn on both peers instead, the way
 			// BuildingSpawnPatch does it.
 			NetworkIdentity.NoteLazyIdentity(go);
-			return go.AddComponent<NetworkIdentity>();
+
+			// Registered here, because nothing else will. A component added to
+			// an object that has already spawned never receives OnSpawn, so the
+			// identity sat there with NetId 0 forever - and every caller that
+			// asked for an id got zero and gave up. That is where "no netId
+			// found on" came from: a host logged 140 of them for pokeshells,
+			// hatches and their young, all of which had an identity by then, all
+			// of it unusable.
+			var attached = go.AddComponent<NetworkIdentity>();
+			attached.RegisterIdentity();
+			return attached;
 		}
 
 		public static bool TryGetNetIdentity(this GameObject go, out NetworkIdentity identity)
