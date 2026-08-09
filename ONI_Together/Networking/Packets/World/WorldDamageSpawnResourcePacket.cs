@@ -77,9 +77,16 @@ namespace ONI_Together.Networking.Packets.World
 			if (dropMass <= 0f)
 				return;
 
+			// Claim the id before the object exists. SpawnResource returns an
+			// active object, so OnSpawn has already run by the time we get it -
+			// and without this it will have minted an id of its own and taken a
+			// registry slot that belongs to somebody else.
+			NetworkIdentity.ReserveNextNetId(NetId);
+
 			GameObject dropped = element.substance.SpawnResource(Position, dropMass, Temperature, DiseaseIndex, DiseaseCount);
 			NetworkIdentity identity = dropped.GetComponent<NetworkIdentity>();
-			identity.OverrideNetId(NetId);
+			if (identity.NetId != NetId)
+				identity.OverrideNetId(NetId);
 			DebugConsole.Log("[WorldDamageSpawnResourcePacket] Synchronized Network ID");
 
 			// First check GroundItemPickedUp, then PickupItem then StoreItem, TODO: Rope into 1 list

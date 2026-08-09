@@ -39,6 +39,20 @@ namespace ONI_Together.Networking.Components
 		/// </summary>
 		private static readonly Dictionary<string, int> _previewsByPrefab = new();
 
+		/// <summary>
+		/// Id reserved for the very next NetworkIdentity to spawn.
+		///
+		/// A handler that creates an object the host has already named used to
+		/// let it mint its own id first and replace it a moment later. For that
+		/// moment the object sat in the registry under a foreign id, which is a
+		/// breakoff slot every other object in that cell then had to step over -
+		/// an Iron pile came out differing from the host's by exactly 2. Claiming
+		/// the id up front means it is registered once, under the right name.
+		/// </summary>
+		private static int _reservedNetId;
+
+		public static void ReserveNextNetId(int netId) => _reservedNetId = netId;
+
 		public static void ResetPreviewCounters()
 		{
 			PreviewsCreated = 0;
@@ -61,6 +75,12 @@ namespace ONI_Together.Networking.Components
 			// Read here rather than in the patch: OnSpawn runs inside the
 			// KInstantiate call that set it, and only objects that carry a
 			// NetworkIdentity care.
+			if (_reservedNetId != 0)
+			{
+				NetId = _reservedNetId;
+				_reservedNetId = 0;
+			}
+
 			if (KInstantiatePatch.ConsumeClientPreviewFlag())
 			{
 				IsClientPreview = true;
