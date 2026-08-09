@@ -17,6 +17,16 @@ namespace ONI_Together.Networking.Packets
 
 		public struct InstantiationEntry
 		{
+			/// <summary>
+			/// The id the host gave this object.
+			///
+			/// Without it the client instantiates the object and then names it
+			/// itself, which is the divergence this packet exists to prevent -
+			/// and is very likely why announcing spawns was left commented out:
+			/// it could not have worked.
+			/// </summary>
+			public int NetId;
+
 			public string PrefabName;
 			public Vector3 Position;
 			public Quaternion Rotation;
@@ -38,6 +48,7 @@ namespace ONI_Together.Networking.Packets
 						tempWriter.Write(Entries.Count);
 						foreach (var e in Entries)
 						{
+							tempWriter.Write(e.NetId);
 							tempWriter.Write(e.PrefabName ?? "");
 							tempWriter.Write(e.Position.x); tempWriter.Write(e.Position.y); tempWriter.Write(e.Position.z);
 							tempWriter.Write(e.Rotation.x); tempWriter.Write(e.Rotation.y); tempWriter.Write(e.Rotation.z); tempWriter.Write(e.Rotation.w);
@@ -86,6 +97,7 @@ namespace ONI_Together.Networking.Packets
 						{
 							Entries.Add(new InstantiationEntry
 							{
+								NetId = tempReader.ReadInt32(),
 								PrefabName = tempReader.ReadString(),
 								Position = new Vector3(tempReader.ReadSingle(), tempReader.ReadSingle(), tempReader.ReadSingle()),
 								Rotation = new Quaternion(tempReader.ReadSingle(), tempReader.ReadSingle(), tempReader.ReadSingle(), tempReader.ReadSingle()),
@@ -152,6 +164,12 @@ namespace ONI_Together.Networking.Packets
 
 				id.RunInstantiateFn();
 			}
+
+			// Take the host's name for it. Instantiating without this leaves the
+			// client holding an object the host cannot address, which is the
+			// divergence this packet is meant to close rather than widen.
+			if (e.NetId != 0 && obj.TryGetComponent<Components.NetworkIdentity>(out var identity))
+				identity.OverrideNetId(e.NetId);
 
 			obj.SetActive(true);
 		}

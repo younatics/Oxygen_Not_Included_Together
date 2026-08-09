@@ -44,7 +44,11 @@ namespace ONI_Together.Misc.World
 				Entries = new List<InstantiationsPacket.InstantiationEntry>(queue)
 			};
 
-			PacketSender.SendToAll(packet, sendType: PacketSendMode.Unreliable);
+			// Reliable, not Unreliable. A lost spawn notice is not a frame of
+			// staleness that the next tick repairs - the client simply never
+			// learns the object exists, and every packet about it afterwards is
+			// a failed lookup. There is no periodic resend behind this.
+			PacketSender.SendToAllClients(packet, PacketSendMode.Reliable);
 			queue.Clear();
 		}
 	}
