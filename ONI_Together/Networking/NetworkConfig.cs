@@ -100,6 +100,13 @@ namespace ONI_Together.Networking
         {
             GameClient.IsHardSyncInProgress = false;
 
+            // Chunk reassembly state is static and used to outlive a session, so
+            // a set left half-received when this one drops would still be there
+            // for the next, and the sequence counter would carry on from where
+            // it stopped - a new session's sequence could land on a stale entry
+            // and inherit its chunks.
+            Packets.Core.ChunkedPacket.ResetSession();
+
             switch(transport)
             {
                 case NetworkTransport.STEAMWORKS:

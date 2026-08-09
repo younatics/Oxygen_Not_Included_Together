@@ -204,13 +204,28 @@ namespace ONI_Together.Networking.Packets.Core
 		/// </summary>
 		internal static int PendingSetCount => _pendingChunks.Count;
 
-		/// <summary>
-		/// Drop all partial state. Used by tests to isolate cases, and on session
-		/// teardown so a stale set cannot collide with a new session's sequences.
-		/// </summary>
+		/// <summary>Drop all partial state. Used by tests to isolate cases.</summary>
 		internal static void ResetPending()
 		{
 			_pendingChunks.Clear();
+		}
+
+		/// <summary>
+		/// Forget everything carried over from a session.
+		///
+		/// Both fields are static and used to survive a session ending, so a set
+		/// left half-received when the last session dropped was still sitting
+		/// there when the next one started, and the sequence counter carried on
+		/// from wherever it had reached. A new session's sequence could land on
+		/// a stale entry and inherit its chunks.
+		/// </summary>
+		public static void ResetSession()
+		{
+			if (_pendingChunks.Count > 0)
+				DebugConsole.Log($"[Chunked] discarding {_pendingChunks.Count} incomplete set(s) from the previous session");
+
+			_pendingChunks.Clear();
+			_nextSequenceId = 0;
 		}
 	}
 }
