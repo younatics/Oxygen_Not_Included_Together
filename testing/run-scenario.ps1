@@ -29,7 +29,8 @@ param(
     [string]$HostIp = '192.168.45.39',
     [int]$Port = 8080,
     [string]$Share = 'C:\ONI_MP_Share',
-    [int]$SettleSeconds = 45
+    [int]$SettleSeconds = 45,
+    [ValidateRange(0, 3)][int]$Speed = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -119,7 +120,17 @@ $dug = Wait-HostLog '\[SCENARIO\] OK dig' 60 $mark
 if (-not $dug) { Die 'dig did not report' }
 Ok $dug.Substring($dug.IndexOf('[SCENARIO]'))
 
-Step "letting it replicate for ${SettleSeconds}s"
+# Without this the run proves only that markers spawn and replicate. Paused,
+# no duplicant moves and nothing is ever mined, so the ore-spawn, chore and
+# pathing paths - where the bugs actually are - go untouched.
+Step "unpausing at speed $Speed"
+$mark = HostLogLines
+Send-Host "play $Speed"
+$played = Wait-HostLog '\[SCENARIO\] OK play' 60 $mark
+if (-not $played) { Die 'play did not report' }
+Ok $played.Substring($played.IndexOf('[SCENARIO]'))
+
+Step "letting duplicants work for ${SettleSeconds}s"
 Start-Sleep -Seconds $SettleSeconds
 
 Step 'analysing'

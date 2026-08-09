@@ -143,6 +143,28 @@ namespace ONI_Together.DebugTools
                     DebugConsole.Log($"{Tag} OK stop-net");
                     break;
 
+                case "play":
+                {
+                    // A scenario that never leaves pause proves only that
+                    // entities spawn and replicate. Nothing is mined, no chore
+                    // runs, no duplicant moves - which is most of what can
+                    // actually desync.
+                    int speed = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+                    if (SpeedControlScreen.Instance == null) throw new InvalidOperationException("no speed control (not in a game?)");
+                    SpeedControlScreen.Instance.SetSpeed(speed);
+                    SpeedControlScreen.Instance.Unpause(false);
+                    DebugConsole.Log($"{Tag} OK play :: speed={speed} paused={SpeedControlScreen.Instance.IsPaused}");
+                    break;
+                }
+
+                case "pause":
+                {
+                    if (SpeedControlScreen.Instance == null) throw new InvalidOperationException("no speed control");
+                    SpeedControlScreen.Instance.Pause(false);
+                    DebugConsole.Log($"{Tag} OK pause :: paused={SpeedControlScreen.Instance.IsPaused}");
+                    break;
+                }
+
                 case "dig":
                 {
                     int count = parts.Length > 1 ? int.Parse(parts[1]) : 6;
@@ -190,29 +212,59 @@ namespace ONI_Together.DebugTools
                 if (d != null) already.Add(Grid.PosToCell(d));
             }
 
-            int placed = 0;
-            int midX = Grid.WidthInCells / 2;
-            int midY = Grid.HeightInCells / 2;
-
-            for (int radius = 0; radius < Grid.HeightInCells && placed < count; radius++)
+            // Start from a duplicant, not the middle of the map. Cells scanned
+            // from the world centre are usually walled off, so the order was
+            // placed somewhere nobody could reach and nothing was ever mined -
+            // the marker replicated and the dig never happened.
+            int origin = -1;
+            foreach (var minion in global::Components.LiveMinionIdentities.Items)
             {
-                for (int dx = -radius; dx <= radius && placed < count; dx++)
+                if (minion == null) continue;
+                int c = Grid.PosToCell(minion);
+                if (Grid.IsValidCell(c)) { origin = c; break; }
+            }
+            if (origin < 0) origin = Grid.XYToCell(Grid.WidthInCells / 2, Grid.HeightInCells / 2);
+
+            Grid.CellToXY(origin, out int ox, out int oy);
+            int placed = 0;
+
+            // Breadth-first over open cells, marking the solid faces they touch.
+            // A solid cell next to open space is one a duplicant can stand beside
+            // and therefore actually dig.
+            var seen = new HashSet<int> { origin };
+            var frontier = new Queue<int>();
+            frontier.Enqueue(origin);
+
+            while (frontier.Count > 0 && placed < count)
+            {
+                int cell = frontier.Dequeue();
+                Grid.CellToXY(cell, out int x, out int y);
+
+                foreach (var n in new[] { Grid.CellLeft(cell), Grid.CellRight(cell), Grid.CellAbove(cell), Grid.CellBelow(cell) })
                 {
-                    int x = midX + dx;
-                    int y = midY - radius;
-                    if (x < 0 || x >= Grid.WidthInCells || y < 0 || y >= Grid.HeightInCells) continue;
+                    if (!Grid.IsValidCell(n) || !seen.Add(n)) continue;
 
-                    int cell = Grid.XYToCell(x, y);
-                    if (!Grid.IsValidCell(cell) || !Grid.Solid[cell]) continue;
-                    if (already.Contains(cell)) continue;
+                    if (Grid.Solid[n])
+                    {
+                        if (already.Contains(n)) continue;
+                        // Skip near-undiggable rock; a duplicant would stand
+                        // beside it forever and the scenario would never mine.
+                        if (Grid.Element[n].hardness >= 150) continue;
 
-                    var go = Util.KInstantiate(prefab, Grid.CellToPosCBC(cell, Grid.SceneLayer.Move));
-                    go.SetActive(true);
-                    already.Add(cell);
-                    placed++;
-                    DebugConsole.Log($"{Tag} dig cell {cell} ({x},{y})");
+                        var go = Util.KInstantiate(prefab, Grid.CellToPosCBC(n, Grid.SceneLayer.Move));
+                        go.SetActive(true);
+                        already.Add(n);
+                        placed++;
+                        if (placed >= count) break;
+                    }
+                    else
+                    {
+                        frontier.Enqueue(n);
+                    }
                 }
             }
+
+            DebugConsole.Log($"{Tag} dig origin cell {origin} ({ox},{oy})");
             return placed;
         }
 

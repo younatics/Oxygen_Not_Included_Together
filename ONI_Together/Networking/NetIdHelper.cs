@@ -106,10 +106,20 @@ namespace ONI_Together.Networking
 			if (!Grid.IsValidCell(cell))
 				return 0;
 
-			int hash = go.PrefabID().GetHashCode();
-			if(useCell)
-				hash = hash ^ cell.GetHashCode();
-			hash = hash ^ go.GetProperName().GetHashCode() ^ primaryElement.ElementID.GetHashCode() ^ primaryElement.Mass.GetHashCode() ^ primaryElement.Temperature.GetHashCode();
+			// Identity only. Mass and Temperature used to be mixed in here, and
+			// both change while the object lives - ore cools, a stack merges -
+			// so the same object hashed differently over time and, worse, two
+			// peers hashed a freshly spawned item differently because their
+			// values had already drifted apart by the time each registered it.
+			// Mined ore is exactly that case: the host spawns it, both sides
+			// register it, and the ids disagree, so every packet addressed to it
+			// is dropped. That showed up as a client-side failed-lookup counter
+			// in the hundreds while the host's stayed at two.
+			int hash = StableHash(go.PrefabID().ToString());
+			if (useCell)
+				hash = Mix(hash, cell);
+			hash = Mix(hash, StableHash(go.GetProperName()));
+			hash = Mix(hash, (int)primaryElement.ElementID);
 
 			int breakoff = 0;
 			if (useBreakOff)
