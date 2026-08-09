@@ -192,6 +192,7 @@ namespace ONI_Together.DebugTools
                 $"|registry={Networking.NetworkIdentityRegistry.Count}" +
                 $"|lookupFails={Networking.NetworkIdentityRegistry.LookupFailCount}" +
                 $"|collisions={Networking.NetworkIdentityRegistry.CollisionCount}");
+            Networking.Components.NetworkIdentity.DumpPreviewBreakdown(tag);
             DebugConsole.Log($"{tag} END");
         }
 

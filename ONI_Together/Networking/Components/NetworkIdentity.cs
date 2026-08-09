@@ -1,5 +1,6 @@
 ﻿using KSerialization;
 using ONI_Together.DebugTools;
+using System.Collections.Generic;
 using System.IO;
 using Shared.Profiling;
 
@@ -30,10 +31,25 @@ namespace ONI_Together.Networking.Components
 		public static int PreviewsCreated { get; private set; }
 		public static int PreviewsAdopted { get; private set; }
 
+		/// <summary>
+		/// Previews broken down by prefab. The totals said 38 previews for 20
+		/// dig orders without saying what the other eighteen were, and the set
+		/// of prefabs that actually need a network identity is what decides how
+		/// expensive host-authoritative spawning would be.
+		/// </summary>
+		private static readonly Dictionary<string, int> _previewsByPrefab = new();
+
 		public static void ResetPreviewCounters()
 		{
 			PreviewsCreated = 0;
 			PreviewsAdopted = 0;
+			_previewsByPrefab.Clear();
+		}
+
+		public static void DumpPreviewBreakdown(string tag)
+		{
+			foreach (var kvp in _previewsByPrefab)
+				DebugConsole.Log($"{tag} preview|{kvp.Key}|{kvp.Value}");
 		}
 
 		public override void OnSpawn()
@@ -49,6 +65,10 @@ namespace ONI_Together.Networking.Components
 			{
 				IsClientPreview = true;
 				PreviewsCreated++;
+
+				string prefab = gameObject.name ?? "?";
+				_previewsByPrefab.TryGetValue(prefab, out int n);
+				_previewsByPrefab[prefab] = n + 1;
 			}
 
 			RegisterIdentity();
