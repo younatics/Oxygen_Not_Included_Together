@@ -37,6 +37,11 @@ namespace ONI_Together.DebugTools
 
         private static ScenarioRunner _instance;
         private float _nextPoll;
+        private int _pendingPlayReport = -1;
+        private int _playAttempts;
+
+        /// <summary>Roughly five seconds at 60 fps - long enough to outlast a join hard sync.</summary>
+        private const int PlayAttemptLimit = 300;
 
         public static string CommandPath => Path.Combine(Path.GetTempPath(), CommandFileName);
 
@@ -52,6 +57,34 @@ namespace ONI_Together.DebugTools
 
         private void Update()
         {
+            // Unpausing does not stick on the first attempt: something re-pauses
+            // right after a client joins - the hard sync on join pauses the host
+            // - so a single Unpause races it and loses. Keep asking for a few
+            // seconds, and report the value a frame after it finally takes.
+            if (_pendingPlayReport >= 0)
+            {
+                var screen = SpeedControlScreen.Instance;
+                bool paused = screen == null || screen.IsPaused;
+
+                if (paused && _playAttempts < PlayAttemptLimit)
+                {
+                    _playAttempts++;
+                    if (screen != null)
+                    {
+                        screen.SetSpeed(_pendingPlayReport);
+                        screen.Unpause(false);
+                    }
+                }
+                else
+                {
+                    DebugConsole.Log(
+                        $"{Tag} {(paused ? "FAIL" : "OK")} play :: speed={_pendingPlayReport} " +
+                        $"paused={paused} attempts={_playAttempts}");
+                    _pendingPlayReport = -1;
+                    _playAttempts = 0;
+                }
+            }
+
             // Twice a second. The commands are human-scale actions, not per-frame work.
             if (Time.unscaledTime < _nextPoll) return;
             _nextPoll = Time.unscaledTime + 0.5f;
@@ -153,7 +186,11 @@ namespace ONI_Together.DebugTools
                     if (SpeedControlScreen.Instance == null) throw new InvalidOperationException("no speed control (not in a game?)");
                     SpeedControlScreen.Instance.SetSpeed(speed);
                     SpeedControlScreen.Instance.Unpause(false);
-                    DebugConsole.Log($"{Tag} OK play :: speed={speed} paused={SpeedControlScreen.Instance.IsPaused}");
+
+                    // IsPaused read in the same frame still returns the old
+                    // value, so this used to report paused=True right after
+                    // unpausing and every run looked like it had never started.
+                    _pendingPlayReport = speed;
                     break;
                 }
 

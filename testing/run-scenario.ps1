@@ -131,7 +131,20 @@ if (-not $played) { Die 'play did not report' }
 Ok $played.Substring($played.IndexOf('[SCENARIO]'))
 
 Step "letting duplicants work for ${SettleSeconds}s"
+$mark = HostLogLines
 Start-Sleep -Seconds $SettleSeconds
+
+# The run used to be called a success once the dig order was placed. Placing an
+# order proves nothing: every scenario so far reported OK while paused, with
+# nothing mined. Ore spawning is what says a duplicant actually finished a dig.
+Step 'checking that mining actually happened'
+$mined = Wait-HostLog 'WorldDamageSpawnResourcePacket|\[WorldDamage\]' 5 $mark
+if (-not $mined) {
+    Write-Host "    WARN no mining observed in the last ${SettleSeconds}s - the dig cells may be unreachable" -ForegroundColor Yellow
+    Write-Host "         the replication results below still stand, but nothing about ore, chores or pathing does" -ForegroundColor Yellow
+} else {
+    Ok 'ore spawned - duplicants completed digs'
+}
 
 Step 'analysing'
 & (Join-Path $root 'analyze-session.ps1') -Label $Label -Share $Share
