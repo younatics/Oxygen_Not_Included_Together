@@ -40,6 +40,62 @@ namespace ONI_Together
         public static int MainThreadId { get; private set; }
         public static SynchronizationContext MainThread { get; private set; }
 
+        /// <summary>
+		/// Apply every patch class on its own, so one that will not apply cannot
+		/// take the rest of the mod with it.
+		///
+		/// Harmony.PatchAll stops at the first class it cannot patch. A single
+		/// bad patch attribute - a __result read from a void method, say - threw
+		/// out of OnLoad, and the whole mod failed to load: no networking, no
+		/// menus, and the game closed itself moments after reaching the main
+		/// menu, on both machines. Compiling is not proof that a patch applies,
+		/// and the cost of finding that out should be one missing feature and a
+		/// named log line, not an unplayable game.
+		/// </summary>
+		private static void PatchEverythingThatWill(Harmony harmony)
+		{
+			int applied = 0;
+			var failed = new List<string>();
+
+			foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+			{
+				// Only classes that actually declare themselves as patches.
+				// Several here carry Prefix/Postfix methods on purpose without
+				// the attribute - DoorPatches says "DO NOT PATCH Door DIRECTLY"
+				// and applies itself by hand later - and Harmony cannot infer a
+				// target for those. Processing them reported thirteen failures
+				// that were not failures at all.
+				if (type.GetCustomAttributes(typeof(HarmonyPatch), true).Length == 0)
+					continue;
+
+				try
+				{
+					var processor = harmony.CreateClassProcessor(type);
+					if (processor == null) continue;
+					var patched = processor.Patch();
+					if (patched != null && patched.Count > 0)
+						applied += patched.Count;
+				}
+				catch (Exception ex)
+				{
+					failed.Add(type.FullName);
+					DebugConsole.LogError(
+						$"[ONI_Together] patch class {type.FullName} could not be applied and was skipped: {ex.Message}");
+				}
+			}
+
+			if (failed.Count > 0)
+			{
+				DebugConsole.LogError(
+					$"[ONI_Together] {failed.Count} patch class(es) did not apply: {string.Join(", ", failed)}. " +
+					"The mod is running without them - expect the matching feature to be missing.");
+			}
+			else
+			{
+				DebugConsole.Log($"[ONI_Together] all patch classes applied ({applied} methods).");
+			}
+		}
+
         public override void OnLoad(Harmony harmony)
 		{
 			using var _ = Profiler.Scope();
@@ -47,7 +103,6 @@ namespace ONI_Together
 			Harmony = harmony;
             PUtil.InitLibrary(false);
             new POptions().RegisterOptions(this, typeof(Configuration));
-            base.OnLoad(harmony);
 
             ModAssets.LoadAssetBundles();
 
@@ -57,6 +112,10 @@ namespace ONI_Together
 			{
 				DebugConsole.Init(); // Init console first to catch logs
 				PacketTracker.Init();
+
+				// After the console, so a patch that will not apply is reported
+				// somewhere it can actually be read.
+				PatchEverythingThatWill(harmony);
 				DebugConsole.Log("[ONI_Together] Loaded Oxygen Not Included Together Multiplayer Mod.");
 
                 // CHECKPOINT 1

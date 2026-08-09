@@ -12,6 +12,50 @@ namespace ONI_Together.Patches.ToolPatches.Build
     [HarmonyPatch(typeof(BuildTool), nameof(BuildTool.TryBuild))]
     public static class BuildToolPatch
     {
+        /// <summary>
+        /// Orders already announced, keyed by what makes an order unique, with
+        /// when they went out.
+        ///
+        /// TryBuild is called for every cell under the cursor on every frame of
+        /// a drag, so without this the same order goes out dozens of times - ten
+        /// insulated tiles produced 181 build packets in one live session, and
+        /// the host carried out every one.
+        ///
+        /// Judged on time rather than on whether the cell changed. The first
+        /// attempt at this compared Grid.Objects before and after the call, and
+        /// the build order does not always appear in that slot by the time the
+        /// Postfix runs - three of twenty one orders were silently never sent.
+        /// A repeat inside this window cannot be a real second order either:
+        /// the first one is still pending in that cell, and the game refuses a
+        /// duplicate there itself.
+        /// </summary>
+        private static readonly Dictionary<string, float> _announced = new Dictionary<string, float>();
+        private const float RepeatWindowSeconds = 1f;
+
+        private static bool AlreadyAnnounced(string key)
+        {
+            float now = Time.unscaledTime;
+
+            if (_announced.TryGetValue(key, out float last) && now - last < RepeatWindowSeconds)
+                return true;
+
+            _announced[key] = now;
+
+            if (_announced.Count > 512)
+            {
+                var stale = new List<string>();
+                foreach (var kvp in _announced)
+                {
+                    if (now - kvp.Value > RepeatWindowSeconds)
+                        stale.Add(kvp.Key);
+                }
+                foreach (var k in stale)
+                    _announced.Remove(k);
+            }
+
+            return false;
+        }
+
         static void Prefix(BuildTool __instance, int cell)
         {
             using var _ = Profiler.Scope();
@@ -20,9 +64,7 @@ namespace ONI_Together.Patches.ToolPatches.Build
             {
                 var def = __instance.def;
                 if (def != null)
-                {
                     DebugConsole.Log($"[BuildTool] Attempting to build: {def.PrefabID} at cell {cell}");
-                }
             }
             catch (Exception ex)
             {
@@ -30,7 +72,7 @@ namespace ONI_Together.Patches.ToolPatches.Build
             }
         }
 
-        static void Postfix(BuildTool __instance, int cell, bool __result)
+        static void Postfix(BuildTool __instance, int cell)
         {
             using var _ = Profiler.Scope();
 
@@ -39,15 +81,6 @@ namespace ONI_Together.Patches.ToolPatches.Build
                 if (!MultiplayerSession.InSession || __instance == null)
                     return;
 
-                // Only tell the other peers about a build that actually
-                // happened here. TryBuild is called for every cell under the
-                // cursor on every frame of a drag and returns false once a cell
-                // already holds an order - this ignored that and sent anyway.
-                // Ten insulated tiles became 181 build packets in one live
-                // session, eighteen orders per cell, all of which the host
-                // dutifully carried out.
-                if (!__result)
-                    return;
 
                 var def = __instance.def;
                 var selectedElements = __instance.selectedElements;
@@ -56,10 +89,13 @@ namespace ONI_Together.Patches.ToolPatches.Build
                 if (def == null || selectedElements == null)
                     return;
 
-                // Reports what this call did, not what happens to be in the
-                // cell. Reading Grid.Objects said "successfully placed" for
+                if (AlreadyAnnounced($"{cell}|{def.PrefabID}|{(int)orientation}"))
+                    return;
+
+                // Says what this call announced, not what happens to sit in the
+                // cell. Reading Grid.Objects reported "successfully placed" for
                 // every repeat of a drag, because the first order had already
-                // put something there - so the log agreed with itself 181 times
+                // put something there - the log agreed with itself 181 times
                 // about ten tiles and hid the duplication completely.
                 GameObject obj = Grid.Objects[cell, (int) def.ObjectLayer];
                 DebugConsole.Log(obj != null
