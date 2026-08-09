@@ -17,7 +17,7 @@ namespace ONI_Together.Networking.Transport.Lan
         // is no hard ceiling here - only the chunk count grows.
         public override int MaxMessageBytes => int.MaxValue;
 
-        public override bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate)
+        protected override bool SendSerialized(object conn, byte[] bytes, IPacket packet, PacketSendMode sendType)
         {
             using var _ = Profiler.Scope();
 
@@ -26,13 +26,6 @@ namespace ONI_Together.Networking.Transport.Lan
 
             if (!connection.IsConnected)
                 return false;
-
-            byte[] bytes = PacketSender.SerializePacketForSending(packet);
-
-            if (bytes.Length > MAX_PAYLOAD_BYTES && packet is not ChunkedPacket)
-            {
-                return SendChunked(connection, bytes, sendType);
-            }
 
             return SendRaw(connection, bytes, packet, sendType);
         }
@@ -66,35 +59,6 @@ namespace ONI_Together.Networking.Transport.Lan
                 packet = packet,
                 size = bytes.Length
             });
-            return true;
-        }
-
-        private bool SendChunked(Connection connection, byte[] fullData, PacketSendMode sendType)
-        {
-            int chunkDataSize = MAX_PAYLOAD_BYTES - 20; // overhead for ChunkedPacket header
-            int totalChunks = (fullData.Length + chunkDataSize - 1) / chunkDataSize;
-            int sequenceId = ChunkedPacket.GetNextSequenceId();
-
-            for (int i = 0; i < totalChunks; i++)
-            {
-                int offset = i * chunkDataSize;
-                int length = Math.Min(chunkDataSize, fullData.Length - offset);
-                byte[] chunkData = new byte[length];
-                Array.Copy(fullData, offset, chunkData, 0, length);
-
-                var chunk = new ChunkedPacket
-                {
-                    SenderId = ChunkedPacket.LocalSenderId,
-                    SequenceId = sequenceId,
-                    ChunkIndex = i,
-                    TotalChunks = totalChunks,
-                    ChunkData = chunkData
-                };
-
-                byte[] chunkBytes = PacketSender.SerializePacketForSending(chunk);
-                SendRaw(connection, chunkBytes, chunk, sendType);
-            }
-
             return true;
         }
 

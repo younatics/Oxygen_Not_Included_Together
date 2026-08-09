@@ -26,7 +26,7 @@ namespace ONI_Together.Networking.Transport.Steam
 
         public override int MaxMessageBytes => STEAM_MAX_MESSAGE_BYTES;
 
-        public override bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate)
+        protected override bool SendSerialized(object conn, byte[] bytes, IPacket packet, PacketSendMode sendType)
         {
             using var _ = Profiler.Scope();
 
@@ -35,28 +35,17 @@ namespace ONI_Together.Networking.Transport.Steam
 
             HSteamNetConnection s_conn = (HSteamNetConnection)conn;
 
-            var bytes = PacketSender.SerializePacketForSending(packet);
-
-            // Refuse before Steam does, and say so. Riptide splits an oversized
-            // payload; Steam returns k_EResultLimitExceeded and, with the log
-            // below commented out, the packet used to vanish with no trace at
-            // all - the same packet quietly working on one transport and
-            // silently disappearing on the other.
+            // The shared sender splits anything over MaxUnfragmentedPayloadBytes,
+            // so reaching this with an oversized payload means a single packet
+            // genuinely cannot be carried. Steam would answer
+            // k_EResultLimitExceeded and, with the log below commented out, the
+            // packet used to vanish with no trace at all.
             if (bytes.Length > MaxMessageBytes)
             {
                 DebugConsole.LogError(
                     $"[Sockets] refusing {packet.GetType().Name}: {bytes.Length} B exceeds Steam's " +
-                    $"{MaxMessageBytes} B message limit. This payload is chunked over Riptide and cannot " +
-                    "be sent at all over Steam.", false);
+                    $"{MaxMessageBytes} B message limit.", false);
                 return false;
-            }
-
-            if (bytes.Length > MaxUnfragmentedPayloadBytes && (sendType & PacketSendMode.Reliable) == 0)
-            {
-                // Steam fragments this internally and drops the whole message if
-                // any fragment is lost. Reliable sends are fine; unreliable ones
-                // are a silent, permanent hole.
-                WarnOversizedUnreliable(packet, bytes.Length);
             }
 
             var _sendType = ConvertSendType(sendType); //(int)sendType;

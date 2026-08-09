@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
+using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
+using ONI_Together.Networking.Packets.Core;
 using UnityEngine;
 
 namespace ONI_Together.Networking.Transport
@@ -54,7 +56,89 @@ namespace ONI_Together.Networking.Transport
                 _pendingQueues.Remove(key);
         }
 
-        public abstract bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate);
+        /// <summary>
+        /// Serialize, split if the payload will not survive as one piece, and
+        /// hand the bytes to the transport.
+        ///
+        /// Splitting used to live in RiptidePacketSender alone, so the same
+        /// packet was delivered over Riptide and refused over Steam. A packet is
+        /// written once and sent over whichever transport is active, so where it
+        /// gets split cannot be one transport's private business.
+        /// </summary>
+        public bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate)
+        {
+            byte[] bytes = PacketSender.SerializePacketForSending(packet);
+
+            // A chunk is already sized to fit; splitting it again would recurse.
+            if (bytes.Length <= MaxUnfragmentedPayloadBytes || packet is ChunkedPacket)
+                return SendSerialized(conn, bytes, packet, sendType);
+
+            return SendChunked(conn, bytes, sendType);
+        }
+
+        private bool SendChunked(object conn, byte[] fullData, PacketSendMode sendType)
+        {
+            int chunkDataSize = MaxUnfragmentedPayloadBytes - ChunkedPacket.HeaderOverheadBytes;
+            int totalChunks = (fullData.Length + chunkDataSize - 1) / chunkDataSize;
+
+            if (totalChunks > ChunkedPacket.MaxChunks)
+            {
+                DebugConsole.LogError(
+                    $"[Transport] refusing a {fullData.Length} B payload: it needs {totalChunks} chunks and the " +
+                    $"reassembler accepts at most {ChunkedPacket.MaxChunks}.", false);
+                return false;
+            }
+
+            int sequenceId = ChunkedPacket.GetNextSequenceId();
+            bool allSent = true;
+
+            for (int i = 0; i < totalChunks; i++)
+            {
+                int offset = i * chunkDataSize;
+                int length = System.Math.Min(chunkDataSize, fullData.Length - offset);
+                byte[] chunkData = new byte[length];
+                System.Array.Copy(fullData, offset, chunkData, 0, length);
+
+                var chunk = new ChunkedPacket
+                {
+                    SenderId = ChunkedPacket.LocalSenderId,
+                    SequenceId = sequenceId,
+                    ChunkIndex = i,
+                    TotalChunks = totalChunks,
+                    ChunkData = chunkData
+                };
+
+                byte[] chunkBytes = PacketSender.SerializePacketForSending(chunk);
+
+                // Chunking only reconstructs if every piece arrives, so the
+                // reliability of the pieces is not the caller's to choose.
+                //
+                // This does not contradict the "Unreliable for steady-state
+                // drift" invariant the periodic syncers are built on. That
+                // invariant assumes a packet fits one MTU, so a loss costs
+                // exactly that packet and the next force-refresh repairs it.
+                // A payload that has to be split has already left that regime:
+                // losing one datagram would discard the whole payload with
+                // nothing to rebuild it from and no refresh tick behind it.
+                // Reaching here at all means a batch was sized wrong, so say so.
+                if (!SendSerialized(conn, chunkBytes, chunk, PacketSendMode.Reliable))
+                    allSent = false;
+            }
+
+            // Previously this returned true whatever happened, so a partial send
+            // looked like a success and the receiver waited for a chunk that was
+            // never on the wire.
+            if (!allSent)
+            {
+                DebugConsole.LogError(
+                    $"[Transport] only part of a {totalChunks}-chunk payload was sent; the receiver cannot " +
+                    "reassemble it.", false);
+            }
+            return allSent;
+        }
+
+        /// <summary>Hand already-serialized bytes to the transport. No size logic here.</summary>
+        protected abstract bool SendSerialized(object conn, byte[] bytes, IPacket packet, PacketSendMode sendType);
 
         /// <summary>
         /// Largest serialized payload this transport delivers as a single

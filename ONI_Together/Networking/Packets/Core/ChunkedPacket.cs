@@ -29,7 +29,13 @@ namespace ONI_Together.Networking.Packets.Core
 		/// got the same guard, so a corrupt or hostile header sized an array for
 		/// us. 8192 chunks is ~8 MB of payload, far past anything legitimate.
 		/// </summary>
-		private const int MaxChunks = 8192;
+		internal const int MaxChunks = 65536;
+
+		/// <summary>
+		/// SenderId 8 + SequenceId 4 + ChunkIndex 4 + TotalChunks 4 + length 4,
+		/// plus the 4-byte packet type the sender frames every packet with.
+		/// </summary>
+		internal const int HeaderOverheadBytes = 28;
 
 		/// <summary>Bounded so a lost chunk cannot cost a buffer for the rest of the session.</summary>
 		private const int MaxPendingSets = 32;

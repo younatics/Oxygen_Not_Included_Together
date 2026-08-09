@@ -4,6 +4,7 @@ using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Animation;
 using ONI_Together.Networking.Packets.Architecture;
+using ONI_Together.Networking.Packets.Core;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Lan;
@@ -127,38 +128,53 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"64 NetIds is {LimitTable(size)}");
         }
 
-        [UnitTest(name: "Declared packet ceilings fit Steam's message limit", category: "PacketSize")]
-        public static UnitTestResult DeclaredCeilingsFitSteam()
+        [UnitTest(name: "Every transport can carry the largest declared packet", category: "PacketSize")]
+        public static UnitTestResult DeclaredCeilingsAreDeliverable()
         {
-            // These caps exist to bound a hostile or corrupt payload, but they
-            // are also a statement about how big a packet may legitimately get.
-            // Riptide chunks that far; Steam refuses past 512 KB and the failure
-            // log is commented out, so the packet just disappears.
+            // These caps bound a hostile or corrupt payload, but they are also a
+            // statement about how large a packet may legitimately get. Splitting
+            // now lives in the shared sender, so both transports have to be able
+            // to carry that much - it used to live only in the Riptide one, and
+            // the same packet was delivered there and refused over Steam.
             var declared = new (string name, int bytes)[]
             {
                 ("WorldDataPacket.MaxCompressedBytes", 32 * 1024 * 1024),
                 ("InstantiationsPacket.MaxCompressedBytes", 16 * 1024 * 1024),
             };
 
-            var over = new List<string>();
-            foreach (var (name, bytes) in declared)
+            var transports = new (string name, int unfragmented)[]
             {
-                if (bytes > SteamworksPacketSender.STEAM_MAX_MESSAGE_BYTES)
-                    over.Add($"{name}={bytes / 1024 / 1024} MB");
+                ("riptide", RiptidePacketSender.MAX_PAYLOAD_BYTES),
+                ("steam", SteamworksPacketSender.STEAM_UNRELIABLE_MTU_BYTES),
+            };
+
+            var problems = new List<string>();
+            foreach (var (tname, unfragmented) in transports)
+            {
+                long capacity = (long)ChunkedPacket.MaxChunks * (unfragmented - ChunkedPacket.HeaderOverheadBytes);
+                foreach (var (pname, bytes) in declared)
+                {
+                    if (bytes > capacity)
+                        problems.Add($"{pname}={bytes / 1024 / 1024} MB over {tname} capacity {capacity / 1024 / 1024} MB");
+                }
             }
 
-            if (over.Count > 0)
+            if (problems.Count > 0)
             {
                 return UnitTestResult.Fail(
-                    $"{string.Join(", ", over)} exceed Steam's {SteamworksPacketSender.STEAM_MAX_MESSAGE_BYTES / 1024} KB " +
-                    "message limit. Riptide splits a payload this large and delivers it; Steam cannot send it at " +
-                    "all. The sender now refuses it with an error instead of dropping it silently, so the failure " +
-                    "is at least visible - but the packet still does not arrive. Closing this means chunking " +
-                    "in the shared sender rather than only in the Riptide one, so both transports carry the same " +
-                    "payload the same way.");
+                    string.Join("; ", problems) +
+                    $". Capacity is MaxChunks ({ChunkedPacket.MaxChunks}) times the per-chunk payload, so a " +
+                    "declared ceiling above it cannot be delivered on that transport however it is split.");
             }
 
-            return UnitTestResult.Pass("declared ceilings fit Steam's message limit");
+            long minCapacity = long.MaxValue;
+            foreach (var (_, unfragmented) in transports)
+            {
+                long c = (long)ChunkedPacket.MaxChunks * (unfragmented - ChunkedPacket.HeaderOverheadBytes);
+                if (c < minCapacity) minCapacity = c;
+            }
+            return UnitTestResult.Pass(
+                $"every declared ceiling fits the smallest transport capacity ({minCapacity / 1024 / 1024} MB)");
         }
     }
 }
