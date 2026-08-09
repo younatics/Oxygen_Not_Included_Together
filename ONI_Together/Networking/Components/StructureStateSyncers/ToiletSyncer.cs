@@ -17,10 +17,6 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         private Storage storage;
         private ConduitConsumer conduitConsumer;
         private KPrefabID prefabID;
-        private BuildingHP buildingHP;
-
-        /// <summary>Last host hit-point value reported as differing, so a standing disagreement is logged once.</summary>
-        private int _lastReportedHpMismatch = int.MinValue;
 
         protected override void Initialize()
         {
@@ -29,7 +25,6 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             storage = GetComponent<Storage>();
             conduitConsumer = GetComponent<ConduitConsumer>();
             prefabID = GetComponent<KPrefabID>();
-            buildingHP = GetComponent<BuildingHP>();
         }
 
         protected override void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues)
@@ -39,14 +34,8 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             BuildingUtils.EncodeStorageContents(storage, optionalValues);
             optionalValues["is_operational"] = operational?.IsOperational ?? true;
 
-            // Damage is not replicated anywhere in the mod - no code touches
-            // BuildingHP, Damaged or Repairable - so each peer decided for
-            // itself whether a building was broken, and they disagreed. A
-            // toilet showed as needing repair on the client while the host saw
-            // it working. is_operational is a different thing and does not
-            // cover it.
-            if (buildingHP != null)
-                optionalValues["hit_points"] = buildingHP.HitPoints;
+            // Hit points are sampled by StructureSyncerBase for every structure,
+            // not here - a toilet was only where the disagreement was noticed.
             if (flushToilet != null)
             {
                 value = storage?.MassStored() ?? 0f;
@@ -70,37 +59,6 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             if (storage == null) return;
             BuildingUtils.RebuildStorageFromData(storage, packet.OptionalValues);
             SyncToilet(packet);
-
-            // Reported, not corrected. BuildingHP.HitPoints has no setter, so
-            // forcing the client to match needs the game's own damage/repair
-            // call rather than an assignment - and which one is right has to be
-            // seen in a session before it is guessed at. The measurement is
-            // what was missing: nothing in the mod touched BuildingHP at all,
-            // so a toilet reading as broken on one peer and fine on the other
-            // left no trace anywhere.
-            if (buildingHP != null && packet.OptionalValues.TryGetValue("hit_points", out var hp))
-            {
-                int hostHp = (int)hp.Float;
-                // Once per change, not once per packet. State arrives twice a
-                // second per structure and a disagreement persists by
-                // definition, so reporting every packet buried the log: 9005
-                // copies of this one line, 27% of a crashed client's log, in
-                // the session that was supposed to explain the crash.
-                if (buildingHP.HitPoints != hostHp)
-                {
-                    if (_lastReportedHpMismatch != hostHp)
-                    {
-                        _lastReportedHpMismatch = hostHp;
-                        DebugConsole.LogWarning(
-                            $"[StructureState] {gameObject.GetProperName()} hit points differ: " +
-                            $"host {hostHp}, here {buildingHP.HitPoints} - damage is not replicated");
-                    }
-                }
-                else
-                {
-                    _lastReportedHpMismatch = int.MinValue;
-                }
-            }
 
             if (packet.OptionalValues.TryGetValue("is_operational", out var isOp))
             {

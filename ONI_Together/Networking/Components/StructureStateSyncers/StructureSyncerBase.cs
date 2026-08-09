@@ -13,6 +13,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         protected float sendInterval = 0.5f;
         protected float timer;
         protected Operational operational;
+        protected BuildingHP buildingHP;
         protected int cell;
         protected Variant lastSentValue;
         protected bool lastSentActive;
@@ -38,6 +39,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             base.OnSpawn();
             cell = Grid.PosToCell(this);
             operational = GetComponent<Operational>();
+            buildingHP = GetComponent<BuildingHP>();
             Initialize();
         }
 
@@ -71,6 +73,15 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
             if (operational != null)
                 currentActive = operational.IsActive;
+
+            // Damage rides on every structure packet, because nothing else
+            // carried it. Nothing in the mod referenced BuildingHP, Damaged or
+            // Repairable anywhere, so a building broken on one peer and intact
+            // on the other left no trace at all - a live session had a toilet at
+            // 0 hit points on the host and 30 on the client, and neither side
+            // could tell. Sampled here rather than in each subclass so it covers
+            // every structure that syncs, not the one that was complained about.
+            AddHitPoints(ref optionalValues);
 
             bool changed = StructureStatePacket.VariantValueChanged(currentValue, lastSentValue) ||
                 currentActive != lastSentActive ||
@@ -162,6 +173,49 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             PacketSender.SendToPlayer(playerId, packet, PacketSendMode.ReliableImmediate);
         }
 
+        private const string HitPointsKey = "hit_points";
+
+        private void AddHitPoints(ref Dictionary<string, Variant> optionalValues)
+        {
+            if (buildingHP == null) return;
+            optionalValues ??= new Dictionary<string, Variant>();
+            optionalValues[HitPointsKey] = buildingHP.HitPoints;
+        }
+
+        /// <summary>
+        /// Bring this peer's damage in line with the host's.
+        ///
+        /// BuildingHP.HitPoints has no setter, so the difference is applied
+        /// through the game's own damage event - the same one the game raises
+        /// when something actually breaks a building. That matters for more than
+        /// tidiness: going through the event is what updates Damaged, queues the
+        /// repair errand and puts the broken overlay on the building. Writing a
+        /// number would have changed the number and nothing else.
+        /// </summary>
+        protected void ApplyHitPoints(StructureStatePacket packet)
+        {
+            if (buildingHP == null) return;
+            if (packet.OptionalValues == null) return;
+            if (!packet.OptionalValues.TryGetValue(HitPointsKey, out var hp)) return;
+
+            // Clamped to what this building can actually hold. A negative delta
+            // is a repair, and the game's damage handler just subtracts, so an
+            // unclamped one would push hit points above the maximum and leave
+            // the building permanently over-healed.
+            int hostHp = Mathf.Clamp((int)hp.Float, 0, buildingHP.MaxHitPoints);
+            int delta = buildingHP.HitPoints - hostHp;
+            if (delta == 0) return;
+
+            // Positive delta: this peer is healthier than the host, so damage it
+            // by the difference. Negative: the host repaired, so heal by it.
+            gameObject.BoxingTrigger((int)GameHashes.DoBuildingDamage, new BuildingHP.DamageSourceInfo
+            {
+                damage = delta,
+                source = "Multiplayer",
+                popString = string.Empty,
+            });
+        }
+
         protected abstract void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues);
         protected abstract void ApplyState(StructureStatePacket packet);
 
@@ -176,6 +230,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
             ApplyState(packet);
             ApplyOperationalState(packet);
+            ApplyHitPoints(packet);
         }
 
         private void ApplyOperationalState(StructureStatePacket packet)
