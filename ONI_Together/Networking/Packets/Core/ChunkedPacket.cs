@@ -73,5 +73,18 @@ namespace ONI_Together.Networking.Packets.Core
 		{
 			return _nextSequenceId++;
 		}
+
+		/// <summary>
+		/// How many partially received sets are being held. Nothing else can see
+		/// this, so a test cannot otherwise tell "still waiting for a chunk" from
+		/// "gave up" from "spliced two senders together".
+		/// </summary>
+		internal static int PendingSetCount => _pendingChunks.Count;
+
+		/// <summary>Drop all partial state. Used by tests to isolate cases.</summary>
+		internal static void ResetPending()
+		{
+			_pendingChunks.Clear();
+		}
 	}
 }
