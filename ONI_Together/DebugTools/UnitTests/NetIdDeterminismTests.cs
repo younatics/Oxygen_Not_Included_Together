@@ -201,6 +201,14 @@ namespace ONI_Together.DebugTools.UnitTests
             if (NetworkIdentityRegistry.Count == 0)
                 return UnitTestResult.Skip("registry is empty - no colony loaded");
 
+            // Reported separately, because they are different bugs. A lookup
+            // for id 0 is a sender that left a field unset; a lookup for a real
+            // id that is not here is two peers disagreeing about an object.
+            int unset = NetworkIdentityRegistry.UnsetIdLookupCount;
+            if (unset > 0)
+                return UnitTestResult.Fail(
+                    $"{unset} packets arrived carrying NetId 0 - a sender is not filling the id in");
+
             int fails = NetworkIdentityRegistry.LookupFailCount;
             if (fails > 0)
                 return UnitTestResult.Fail(

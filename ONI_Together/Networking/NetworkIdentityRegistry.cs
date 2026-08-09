@@ -152,9 +152,35 @@ namespace ONI_Together.Networking
 
 
 
+		/// <summary>
+		/// Lookups for id 0, which is the "not registered" sentinel and can
+		/// never resolve. Counted apart from real failures because they are a
+		/// different bug: a sender that left a field unset, not two peers
+		/// disagreeing about an object.
+		/// </summary>
+		public static int UnsetIdLookupCount => _unsetIdLookupCount;
+		private static int _unsetIdLookupCount = 0;
+
 		public static bool TryGet(int netId, out NetworkIdentity entity)
 		{
 			using var _ = Profiler.Scope();
+
+			// A host logged 299 of these in one session, mixed in with genuine
+			// disagreements in the same counter - and LookupFailCount is a test
+			// gate, so an unset field was being reported as a desync. Nothing is
+			// ever stored under 0, so this is not a miss, it is a malformed
+			// packet.
+			if (netId == 0)
+			{
+				entity = null;
+				_unsetIdLookupCount++;
+				if (_unsetIdLookupCount <= 3 || _unsetIdLookupCount % 500 == 0)
+				{
+					DebugConsole.LogWarning(
+						$"[Registry] lookup for NetId 0 (#{_unsetIdLookupCount}) - a packet was sent with no id set");
+				}
+				return false;
+			}
 
 			bool found = identities.TryGetValue(netId, out entity);
 			if (!found)
@@ -204,6 +230,7 @@ namespace ONI_Together.Networking
 
 			identities.Clear();
 			_lookupFailCount = 0;
+			_unsetIdLookupCount = 0;
 			// Carried over from the previous session before, so a clean run
 			// inherited the last one's collisions and the counter stopped
 			// meaning "this session".
