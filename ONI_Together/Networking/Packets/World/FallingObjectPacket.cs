@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System;
 using System.IO;
@@ -62,6 +62,16 @@ namespace ONI_Together.Networking.Packets.World
 		private void Apply()
 		{
 			using var _ = Profiler.Scope();
+
+			// Grid.CellToPos divides by Grid.WidthInCells, so calling it before
+			// the world is built is a DivideByZeroException, not a bad position.
+			// A client that is still loading receives these anyway - 78 of them
+			// in one live session - and each one escaped through dispatch.
+			if (Grid.WidthInCells == 0 || !Grid.IsValidCell(Cell))
+			{
+				DebugConsole.LogWarning($"[FallingObject] ignoring particle for cell {Cell}: world not ready");
+				return;
+			}
 
 			IsApplying = true;
 			try

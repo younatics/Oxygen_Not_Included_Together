@@ -70,13 +70,21 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 			if (MultiplayerSession.IsHost)
 				return;
 
-			if(!NetworkIdentityRegistry.TryGet(MinionNetId, out var minionId))
+			// Both of these reported the failure and then carried on into it.
+			// A minion the client has not registered yet is routine - it arrives
+			// a moment later - but the code fell straight through to
+			// minionId.TryGetComponent on a null, so every miss became a
+			// NullReferenceException escaping through the dispatch path. A live
+			// session logged 103 of them in twenty seconds.
+			if (!NetworkIdentityRegistry.TryGet(MinionNetId, out var minionId) || minionId == null)
 			{
-				DebugConsole.LogError("Could not find minion with net id " + MinionNetId + " to toggle effect " + EffectId + " to " + (IsAdding ? "on" : "off"), false);
+				DebugConsole.LogWarning("Could not find minion with net id " + MinionNetId + " to toggle effect " + EffectId + " to " + (IsAdding ? "on" : "off"));
+				return;
 			}
-			if(!minionId.TryGetComponent<Effects>(out var minionEffects))
+			if (!minionId.TryGetComponent<Effects>(out var minionEffects) || minionEffects == null)
 			{
-				DebugConsole.LogError("Could not find effects instance on minion "+minionId.gameObject.GetProperName(), false);
+				DebugConsole.LogWarning("Could not find effects instance on minion " + minionId.gameObject.GetProperName());
+				return;
 			}
 			if (IsAdding)
 			{
