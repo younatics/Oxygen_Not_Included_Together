@@ -56,5 +56,32 @@ namespace ONI_Together.Networking.Transport
 
         public abstract bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate);
 
+        /// <summary>
+        /// Largest serialized payload this transport delivers as a single
+        /// indivisible unit. Past this it is split - by us on Riptide, inside
+        /// Steam on Steam - and on an unreliable send, losing any one piece
+        /// discards the whole payload.
+        ///
+        /// Callers that build periodic packets have to size their batches
+        /// against this. Without it there was no contract to size against, and
+        /// ConduitFlowSyncer ended up hardcoding Steam's number
+        /// ("50 * 22 = 1100 bytes, fits Steam P2P unreliable MTU") while running
+        /// over Riptide, whose limit is 1000.
+        /// </summary>
+        public abstract int MaxUnfragmentedPayloadBytes { get; }
+
+        /// <summary>
+        /// Largest payload the transport accepts at all. Beyond this the send
+        /// fails outright rather than being split.
+        /// </summary>
+        public abstract int MaxMessageBytes { get; }
+
+        /// <summary>
+        /// The strictest limit any supported transport imposes. A packet built
+        /// once and sent over whichever transport happens to be active has to
+        /// fit this, not the limit of the transport that was in mind when it was
+        /// written.
+        /// </summary>
+        public const int StrictestUnfragmentedPayloadBytes = 1000;
     }
 }

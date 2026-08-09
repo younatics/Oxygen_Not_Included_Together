@@ -14,6 +14,18 @@ namespace ONI_Together.Networking.Transport.Steam
 {
     public class SteamworksPacketSender : TransportPacketSender
     {
+        // Steam fragments an unreliable message past roughly one MTU and drops
+        // the entire message if any fragment is lost - the same failure Riptide
+        // has, at a different threshold. Steam is not the safe transport.
+        public const int STEAM_UNRELIABLE_MTU_BYTES = 1200;
+
+        // k_cbMaxSteamNetworkingSocketsMessageSizeSend
+        public const int STEAM_MAX_MESSAGE_BYTES = 512 * 1024;
+
+        public override int MaxUnfragmentedPayloadBytes => STEAM_UNRELIABLE_MTU_BYTES;
+
+        public override int MaxMessageBytes => STEAM_MAX_MESSAGE_BYTES;
+
         public override bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate)
         {
             using var _ = Profiler.Scope();

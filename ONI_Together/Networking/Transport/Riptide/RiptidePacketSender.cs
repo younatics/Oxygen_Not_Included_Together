@@ -9,7 +9,13 @@ namespace ONI_Together.Networking.Transport.Lan
 {
     public class RiptidePacketSender : TransportPacketSender
     {
-        private const int MAX_PAYLOAD_BYTES = 1000;
+        internal const int MAX_PAYLOAD_BYTES = 1000;
+
+        public override int MaxUnfragmentedPayloadBytes => MAX_PAYLOAD_BYTES;
+
+        // Anything larger is split by SendChunked rather than refused, so there
+        // is no hard ceiling here - only the chunk count grows.
+        public override int MaxMessageBytes => int.MaxValue;
 
         public override bool SendPacket(object conn, IPacket packet, PacketSendMode sendType = PacketSendMode.ReliableImmediate)
         {

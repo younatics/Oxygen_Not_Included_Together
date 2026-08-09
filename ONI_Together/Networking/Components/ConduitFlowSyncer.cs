@@ -36,7 +36,7 @@ namespace ONI_Together.Networking.Components
 		private const float INITIAL_DELAY = 5f;
 		// 22 bytes/update (cell:4 + type:1 + element:4 + mass:4 + temp:4 + disease idx:1 + disease count:4)
 		// 50 * 22 = 1100 bytes, fits Steam P2P unreliable MTU (~1200 B) without fragmentation.
-		private const int MAX_UPDATES_PER_PACKET = 50;
+		internal const int MAX_UPDATES_PER_PACKET = 50;
 		private const float MASS_THRESHOLD = 0.01f;      // 10 g
 		private const float TEMP_THRESHOLD = 0.5f;       // 0.5 K
 
