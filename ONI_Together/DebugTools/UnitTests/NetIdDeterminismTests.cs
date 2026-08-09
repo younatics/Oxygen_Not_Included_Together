@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using ONI_Together.Networking;
 using UnityEngine;
@@ -38,9 +38,16 @@ namespace ONI_Together.DebugTools.UnitTests
         /// </summary>
         private static string ClassifyKind(GameObject go)
         {
-            if (go.TryGetComponent<Building>(out _)) return "building";
-            if (go.TryGetComponent<Workable>(out var w)) return "workable:" + w.GetType().Name;
-            return "entity";
+            // Mobility is tagged because it decides how to read a cell
+            // mismatch. A building in a different cell on the two peers is a
+            // bug; a critter or a hauled ore pile in a different cell is just
+            // where it happens to be standing. Without the tag the comparer
+            // cannot tell those apart, and neither can a reader.
+            string prefix = IsMobile(go) ? "mobile/" : "";
+
+            if (go.TryGetComponent<Building>(out _)) return prefix + "building";
+            if (go.TryGetComponent<Workable>(out var w)) return prefix + "workable:" + w.GetType().Name;
+            return prefix + "entity";
         }
 
         /// <summary>
