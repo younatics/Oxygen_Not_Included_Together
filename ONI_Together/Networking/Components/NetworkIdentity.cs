@@ -185,9 +185,31 @@ namespace ONI_Together.Networking.Components
 		/// This will be primarily used when the host spawns in an object and the client and host need to sync the netid
 		/// </summary>
 		/// <param name="netIdOverride"></param>
+		/// <summary>Sequence of the packet that last named this object.</summary>
+		[SkipSaveFileSerialization]
+		private int _namedBySequence = int.MinValue;
+
 		public void OverrideNetId(int netIdOverride)
 		{
 			using var _ = Profiler.Scope();
+
+			// Refuse a name older than the one already applied.
+			//
+			// Without this the last packet to arrive wins whatever order it was
+			// sent in, and the same object could be named twice by a spawn
+			// announcement and a periodic sweep racing each other. That is why
+			// every attempt to announce spawns faster - 500 ms, 100 ms,
+			// immediately - turned netid_compare from agreeing to disagreeing
+			// while the 2 s interval happened to keep them apart.
+			int sequence = Packets.Architecture.PacketHandler.CurrentSequence;
+			if (_namedBySequence != int.MinValue && sequence - _namedBySequence < 0)
+			{
+				DebugConsole.Log(
+					$"[NetworkIdentity] ignoring stale naming of {gameObject.name}: " +
+					$"packet {sequence} is older than {_namedBySequence}");
+				return;
+			}
+			_namedBySequence = sequence;
 
 			// The host has named this object, so it is no longer a preview.
 			if (IsClientPreview)

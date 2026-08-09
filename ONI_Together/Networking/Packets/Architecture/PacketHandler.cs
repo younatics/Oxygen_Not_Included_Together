@@ -25,6 +25,15 @@ namespace ONI_Together.Networking.Packets.Architecture
 			}
 		}
 
+		/// <summary>
+		/// Sequence number of the packet being dispatched right now.
+		///
+		/// Valid only inside OnDispatched. It exists so a handler can refuse to
+		/// apply something older than what it already has - without it, the last
+		/// message to arrive always wins, whatever order they were sent in.
+		/// </summary>
+		public static int CurrentSequence { get; private set; }
+
 		public static void HandleIncoming(byte[] data)
 		{
 			using var _ = Profiler.Scope();
@@ -54,6 +63,12 @@ namespace ONI_Together.Networking.Packets.Architecture
                     }
 
                     using var scope = Profiler.Scope();
+
+                    // Read before deserializing: the sequence sits in the header,
+                    // and handlers read it through CurrentSequence to decide
+                    // whether what they are being told is newer than what they
+                    // already applied.
+                    CurrentSequence = reader.ReadInt32();
 
                     var packet = PacketRegistry.Create(type);
 					packet.Deserialize(reader);

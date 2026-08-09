@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
@@ -35,7 +35,7 @@ namespace ONI_Together.Networking.Packets.Core
 		/// SenderId 8 + SequenceId 4 + ChunkIndex 4 + TotalChunks 4 + length 4,
 		/// plus the 4-byte packet type the sender frames every packet with.
 		/// </summary>
-		internal const int HeaderOverheadBytes = 28;
+		internal const int HeaderOverheadBytes = 24 + Networking.PacketSender.FramingBytes;
 
 		/// <summary>Bounded so a lost chunk cannot cost a buffer for the rest of the session.</summary>
 		private const int MaxPendingSets = 32;

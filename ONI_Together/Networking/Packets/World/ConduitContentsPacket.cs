@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Components;
+﻿using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using Shared.Profiling;
 using System.Collections.Generic;
@@ -30,7 +30,7 @@ namespace ONI_Together.Networking.Packets.World
 		public const int BytesPerUpdate = 22;
 
 		/// <summary>The Updates.Count prefix, plus the int packet type the sender frames with.</summary>
-		public const int HeaderBytes = 8;
+		public const int HeaderBytes = 4 + Networking.PacketSender.FramingBytes;
 
 		/// <summary>
 		/// How many updates fit in one indivisible payload of the given size.

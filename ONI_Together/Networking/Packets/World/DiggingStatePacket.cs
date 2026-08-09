@@ -38,7 +38,7 @@ namespace ONI_Together.Networking.Packets.World
 		public int BatchCount = 1;
 
 		/// <summary>Counts, sweep header, and the packet type the sender frames with.</summary>
-		public const int HeaderBytes = 20;
+		public const int HeaderBytes = 16 + Networking.PacketSender.FramingBytes;
 
 		/// <summary>Cell 4 + NetId 4.</summary>
 		public const int BytesPerCell = 8;

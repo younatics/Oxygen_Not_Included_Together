@@ -53,6 +53,24 @@ namespace ONI_Together.Networking
         public static int MAX_PACKET_SIZE_RELIABLE = 512;
 		public static int MAX_PACKET_SIZE_UNRELIABLE = 1024;
 
+		/// <summary>
+		/// What SerializePacketForSending prepends: packet type + sequence.
+		///
+		/// Batch caps subtract this, so it has to be derived rather than
+		/// restated. Adding the sequence without updating the callers pushed the
+		/// conduit batch from 998 B back over the 1000 B limit - reintroducing
+		/// the fragmentation this session had already fixed once.
+		/// </summary>
+		public const int FramingBytes = 8;
+
+		private static int _sequence;
+
+		/// <summary>Next outgoing sequence number. Wraps; comparisons use the difference.</summary>
+		public static int NextSequence() => ++_sequence;
+
+		/// <summary>Reset on session teardown so a new session does not inherit a high water mark.</summary>
+		public static void ResetSequence() => _sequence = 0;
+
         public static byte[] SerializePacketForSending(IPacket packet)
 		{
 			using var _ = Profiler.Scope();
@@ -62,6 +80,13 @@ namespace ONI_Together.Networking
 			{
 				int packet_type = PacketRegistry.GetPacketId(packet);
 				writer.Write(packet_type);
+
+				// Monotonic per sender. The header used to be a bare packet type,
+				// so a receiver had no way to tell an older message from a newer
+				// one - which is why naming an object could be applied out of
+				// order and why every attempt to send spawn announcements faster
+				// broke id agreement. See PacketHandler.CurrentSequence.
+				writer.Write(NextSequence());
 				packet.Serialize(writer);
 				return ms.ToArray();
 			}
