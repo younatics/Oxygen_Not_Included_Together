@@ -10,18 +10,6 @@ namespace ONI_Together.Networking.Packets.World
 	{
 		public List<int> DigCells = new List<int>();
 
-		/// <summary>DigCells.Count prefix plus the packet type the sender frames with.</summary>
-		public const int HeaderBytes = 8;
-
-		public const int BytesPerCell = 4;
-
-		/// <summary>How many cells fit in one indivisible payload of the given size.</summary>
-		public static int MaxCellsFor(int payloadLimitBytes)
-		{
-			int fits = (payloadLimitBytes - HeaderBytes) / BytesPerCell;
-			return fits < 1 ? 1 : fits;
-		}
-
 		public void Serialize(BinaryWriter writer)
 		{
 			using var _ = Profiler.Scope();

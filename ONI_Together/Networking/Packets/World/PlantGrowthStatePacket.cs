@@ -22,36 +22,6 @@ namespace ONI_Together.Networking.Packets.World
 	{
 		public List<PlantData> Plants = new List<PlantData>();
 
-		/// <summary>Plants.Count prefix plus the packet type the sender frames with.</summary>
-		public const int HeaderBytes = 8;
-
-		/// <summary>
-		/// Serialized cost of one entry.
-		///
-		/// Counted rather than assumed because it is not fixed: PlantPrefabTag
-		/// goes out as a full string on every plant on every tick, and it is most
-		/// of the entry. A batch has to be closed on accumulated bytes, not on a
-		/// count, or the cap is wrong for whatever is actually growing.
-		/// </summary>
-		public static int EntryBytes(in PlantData p)
-		{
-			int tag = string.IsNullOrEmpty(p.PlantPrefabTag)
-				? 1
-				: System.Text.Encoding.UTF8.GetByteCount(p.PlantPrefabTag) + LengthPrefixBytes(p.PlantPrefabTag);
-
-			//   net id 4 + receptacle 4 + cell 4 + tag + maturity 4 + three bools
-			return 4 + 4 + 4 + tag + 4 + 3;
-		}
-
-		/// <summary>BinaryWriter writes string length as a 7-bit encoded int.</summary>
-		private static int LengthPrefixBytes(string s)
-		{
-			int len = System.Text.Encoding.UTF8.GetByteCount(s);
-			int bytes = 1;
-			while (len >= 0x80) { len >>= 7; bytes++; }
-			return bytes;
-		}
-
 		public void Serialize(BinaryWriter writer)
 		{
 			using var _ = Profiler.Scope();
