@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Run this ONCE on the client box (PC-B) and leave it running. It polls the
     host's share for requests and answers them, so the host side can drive the
@@ -213,6 +213,14 @@ while ($running) {
                             oniRunning = [bool]$p
                             oniStartedUtc = if ($p) { $p.StartTime.ToUniversalTime().ToString('o') } else { $null }
                             playerLogUtc = if (Test-Path $playerLog) { (Get-Item $playerLog).LastWriteTimeUtc.ToString('o') } else { $null }
+                            # Six clean exits with no exception, no Windows error
+                            # and no crash dump all point the same way, and there
+                            # was no memory figure anywhere to confirm or kill the
+                            # idea. Cheap to carry on every ping, and the shape
+                            # over a session is the whole answer.
+                            workingSetMB = if ($p) { [math]::Round($p.WorkingSet64 / 1MB, 0) } else { $null }
+                            privateMB    = if ($p) { [math]::Round($p.PrivateMemorySize64 / 1MB, 0) } else { $null }
+                            freeRamMB    = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB, 0)
                         }
                     }
                     'pull-mod'  { $reply.result = Invoke-PullMod }
