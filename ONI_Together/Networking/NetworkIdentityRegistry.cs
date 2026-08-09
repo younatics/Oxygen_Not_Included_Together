@@ -40,9 +40,23 @@ namespace ONI_Together.Networking
 			return id;
 		}
 
-		public static void Unregister(int netId)
+		/// <summary>
+		/// Free a slot, but only if <paramref name="owner"/> is the object that
+		/// actually holds it.
+		///
+		/// This used to remove whatever sat under the id. Ids are not guaranteed
+		/// unique per object, so a dying object could evict a live one that had
+		/// been handed the same id - the live object then vanished from the
+		/// registry while still on screen, and every packet addressed to it
+		/// counted as a failed lookup. Checking the owner turns that into a
+		/// no-op.
+		/// </summary>
+		public static void Unregister(int netId, NetworkIdentity owner)
 		{
 			using var _ = Profiler.Scope();
+
+			if (identities.TryGetValue(netId, out var current) && !ReferenceEquals(current, owner))
+				return;
 
 			identities.Remove(netId);
 		}

@@ -24,6 +24,35 @@ namespace ONI_Together.Networking
 
 			return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ building.Def.ObjectLayer.GetHashCode();
 		}
+		/// <summary>
+		/// Stable string hash. string.GetHashCode() happens to be deterministic
+		/// on Mono, which is the only reason ids ever matched across peers, but
+		/// nothing guarantees that. FNV-1a is fixed by its specification, so the
+		/// id no longer depends on a runtime implementation detail.
+		/// </summary>
+		private static int StableHash(string s)
+		{
+			unchecked
+			{
+				uint hash = 2166136261;
+				for (int i = 0; i < s.Length; i++)
+				{
+					hash ^= s[i];
+					hash *= 16777619;
+				}
+				return (int)hash;
+			}
+		}
+
+		private static int Mix(int hash, int value)
+		{
+			unchecked
+			{
+				hash ^= value;
+				return (int)((uint)hash * 16777619);
+			}
+		}
+
 		public static int GetDeterministicWorkableId(GameObject go)
 		{
 			using var _ = Profiler.Scope();
@@ -36,14 +65,31 @@ namespace ONI_Together.Networking
 			if (!go.TryGetComponent<Workable>(out var workable))
 				return 0;
 
-			int hash = GetDeterministicEntityId(go,false,false) ^ workable.GetType().Name.GetHashCode() ^ ((int)workable.workTime).GetHashCode()
-				^ workable.multitoolHitEffectTag.GetHashCode() ^ workable.multitoolContext.GetHashCode();
-			int breakoff = 0;
-			while (NetworkIdentityRegistry.Exists(hash + breakoff))
-			{
-				breakoff++;
-			}
-			hash += breakoff;
+			// Identity and location only. Two things used to break this:
+			//
+			//   1. The base hash came from GetDeterministicEntityId(useCell:false),
+			//      so the cell never entered a workable's hash and every object of
+			//      a prefab collapsed onto one value. That call also mixed in
+			//      PrimaryElement.Mass and Temperature, which change while the
+			//      object lives, so the same object rehashed differently over time.
+			//   2. The collision was then resolved by probing the local registry
+			//      (hash+0, hash+1, ...), which distributes ids in arrival order.
+			//      Entity creation is not replicated, so arrival order is
+			//      structurally independent on the two peers and they could not
+			//      agree - divergence was certain, not probable.
+			//
+			// The id is now a pure function of what the object is and where it is,
+			// with no registry state involved, so both peers compute it alike.
+			//
+			// Residual risk: two objects of the same prefab and workable type
+			// stacked in one cell now hash alike where the probe used to separate
+			// them. That is a detectable, local collision rather than a guaranteed
+			// cross-peer disagreement - strictly the better failure mode - and the
+			// "One cell holds one id per workable type" test watches for it.
+			int hash = StableHash(go.PrefabID().ToString());
+			hash = Mix(hash, cell);
+			hash = Mix(hash, StableHash(workable.GetType().Name));
+
 			DebugConsole.Log($"Registered workable {go.PrefabID().ToString()} with id: {hash} for workable type {workable.GetType().Name} at cell {cell}");
 			return hash;
 		}
