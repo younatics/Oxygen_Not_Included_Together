@@ -158,6 +158,12 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             if (operational != null)
                 active = operational.IsActive;
 
+            // The periodic path adds this and the on-demand reply did not, so a
+            // client that asked for state because its own was stale got an
+            // answer with the damage left out - and stayed wrong about exactly
+            // the thing it had asked about.
+            AddHitPoints(ref optionalValues);
+
             var identity = gameObject.GetNetIdentity();
             if (identity.NetId == 0) return;
 
@@ -214,6 +220,16 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                 source = "Multiplayer",
                 popString = string.Empty,
             });
+
+            // Leaves a trace, because a correction that works silently cannot be
+            // told apart from one that never runs. The first attempt at this
+            // could only be checked by finding a mismatch warning, and removing
+            // the mismatch removed the evidence with it - a session where no
+            // building happened to break looked exactly like a session where the
+            // fix worked.
+            ThrottledLog.Warn(delta > 0
+                ? "[StructureState] damage replicated from host"
+                : "[StructureState] repair replicated from host");
         }
 
         protected abstract void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues);

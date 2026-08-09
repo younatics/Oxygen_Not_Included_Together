@@ -96,6 +96,15 @@ namespace ONI_Together.Patches.World.Buildings
 				if (!MultiplayerSession.IsClient)
 					return true;
 
+				// IsActive is read from the game's own update loop, so a throw
+				// here does not stay in the mod - it lands inside whatever was
+				// asking. Unity components report destroyed as null, and
+				// TryGetComponent on one throws through Component.gameObject; a
+				// live client hit that repeatedly on objects that had just been
+				// removed.
+				if (__instance.IsNullOrDestroyed())
+					return true;
+
 				if (__instance.TryGetComponent<ClientReceiver_Operational>(out var wrap))
 				{
 					__result = wrap.IsActive;
@@ -112,6 +121,15 @@ namespace ONI_Together.Patches.World.Buildings
 				using var _ = Profiler.Scope();
 
 				if (!MultiplayerSession.IsClient)
+					return true;
+
+				// IsActive is read from the game's own update loop, so a throw
+				// here does not stay in the mod - it lands inside whatever was
+				// asking. Unity components report destroyed as null, and
+				// TryGetComponent on one throws through Component.gameObject; a
+				// live client hit that repeatedly on objects that had just been
+				// removed.
+				if (__instance.IsNullOrDestroyed())
 					return true;
 
 				if (__instance.TryGetComponent<ClientReceiver_Operational>(out var wrap))

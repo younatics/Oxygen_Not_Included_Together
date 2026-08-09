@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System;
 using System.IO;
@@ -70,9 +70,14 @@ namespace ONI_Together.Networking.Packets.World
 					if (researchScreen != null)
 					{
 						// Call OnActiveResearchChanged to update visuals
+						// GetValue(null) passes a single null argument, not an
+						// empty argument list, so this called a one-parameter
+						// method with zero values and threw
+						// TargetParameterCountException every time research
+						// completed. The screen simply never refreshed.
 						HarmonyLib.Traverse.Create(researchScreen)
 							.Method("OnActiveResearchChanged", new Type[] { typeof(object) })
-							.GetValue(null);
+							.GetValue(new object[] { null });
 					}
 				}
 				catch (Exception ex) { DebugConsole.LogError($"[ResearchCompletePacket] Error refreshing research screen: {ex}"); }
