@@ -18,6 +18,14 @@ namespace ONI_Together.Networking
 
 		public static int Count => identities?.Count ?? 0;
 
+		/// <summary>
+		/// Read-only view of the failed-lookup counter so a test can assert on it.
+		/// A packet addressed to a NetId this peer never registered is the visible
+		/// end of a NetId disagreement, so this is the cheapest divergence gate
+		/// there is - no second machine and no log parsing needed.
+		/// </summary>
+		public static int LookupFailCount => _lookupFailCount;
+
 		public static int Register(NetworkIdentity entity)
 		{
 			using var _ = Profiler.Scope();

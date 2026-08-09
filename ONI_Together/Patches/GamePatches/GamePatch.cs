@@ -19,6 +19,11 @@ namespace ONI_Together.Patches.GamePatches
     {
       using var _ = Profiler.Scope();
 
+#if DEBUG
+      // Both peers, not just the host: a divergence verdict needs both sides.
+      UnitTestRunner.Tick();
+#endif
+
       if (MultiplayerSession.IsHost)
       {
         InstantiationBatcher.Update();
