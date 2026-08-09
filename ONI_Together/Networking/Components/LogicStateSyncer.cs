@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Misc;
 using ONI_Together.Networking.Packets.World;
 using System.Collections.Generic;
@@ -228,7 +228,11 @@ namespace ONI_Together.Networking.Components
         {
             if (go.IsNullOrDestroyed()) return;
 
-            var identity = go.GetNetIdentity();
+            // Must not create one. This runs from building cleanup, and
+            // attaching an identity to an object that is being destroyed threw
+            // out of registration the moment lazily attached identities started
+            // being registered.
+            var identity = go.GetExistingNetIdentity();
             if (identity == null) return;
 
             _tracked.Remove(identity.NetId);

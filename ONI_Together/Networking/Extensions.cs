@@ -61,6 +61,25 @@ namespace ONI_Together.Networking
 			return attached;
 		}
 
+		/// <summary>
+		/// The identity this object already has, or null. Never attaches one.
+		///
+		/// Anything winding an object down wants this. Asking the creating
+		/// version during cleanup attaches an identity to a dying object and
+		/// then tries to register it, which throws - and an unregister path that
+		/// creates the thing it is unregistering was never going to be right
+		/// anyway.
+		/// </summary>
+		public static NetworkIdentity GetExistingNetIdentity(this GameObject go)
+		{
+			using var _ = Profiler.Scope();
+
+			if (go.IsNullOrDestroyed())
+				return null;
+
+			return go.TryGetComponent<NetworkIdentity>(out var identity) ? identity : null;
+		}
+
 		public static bool TryGetNetIdentity(this GameObject go, out NetworkIdentity identity)
 		{
 			using var _ = Profiler.Scope();
