@@ -193,6 +193,39 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"all {total} creatures carry an id");
         }
 
+        [UnitTest(name: "Nothing is rehoused in bulk", category: "NetId")]
+        public static UnitTestResult RehousingIsRare()
+        {
+            // Rehousing exists to repair a duplicate that came out of a save. It
+            // is a repair, so it should be rare - and when it stops being rare
+            // it is telling you the id function is wrong, not that the colony is
+            // damaged.
+            //
+            // That is how registering building sites went wrong: a site and the
+            // building it becomes share a cell, a prefab tag and an object
+            // layer, so they hashed identically and every completed building
+            // collided with its own scaffold. A host rehoused 694 tiles, 537
+            // wires and 512 ladders in one session, and each replacement id came
+            // from walking the registry - which two peers have no reason to
+            // agree about.
+            int collisions = NetworkIdentityRegistry.CollisionCount;
+            if (NetworkIdentityRegistry.Count == 0)
+                return UnitTestResult.Skip("registry is empty - no colony loaded");
+
+            // A handful is a repaired save. A percentage of the colony is a
+            // broken hash.
+            int budget = System.Math.Max(20, NetworkIdentityRegistry.Count / 50);
+            if (collisions > budget)
+            {
+                return UnitTestResult.Fail(
+                    $"{collisions} id collisions against {NetworkIdentityRegistry.Count} identities. " +
+                    "That is not a damaged save being repaired, it is two kinds of object hashing alike - " +
+                    "check what shares a cell, a prefab and a layer.");
+            }
+
+            return UnitTestResult.Pass($"{collisions} collisions across {NetworkIdentityRegistry.Count} identities");
+        }
+
         [UnitTest(name: "No identity was minted just to send a packet", category: "NetId")]
         public static UnitTestResult NoLazyIdentities()
         {

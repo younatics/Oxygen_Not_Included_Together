@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using Shared.Profiling;
 using UnityEngine;
 
@@ -10,6 +10,13 @@ namespace ONI_Together.Networking
 		/// Generates a deterministic NetID for a building based on its location and object layer.
 		/// Range: 1,000,000,000+
 		/// </summary>
+		/// <summary>
+		/// Distinguishes a building site from the finished building at the same
+		/// cell. Any fixed non-zero value works; this one is arbitrary and must
+		/// stay put, because changing it renames every site mid-session.
+		/// </summary>
+		private const int UnderConstructionSalt = 0x5C0FF01D;
+
 		public static int GetDeterministicBuildingId(GameObject go)
 		{
 			using var _ = Profiler.Scope();
@@ -19,10 +26,23 @@ namespace ONI_Together.Networking
 			int cell = Grid.PosToCell(go);
 			if (!Grid.IsValidCell(cell)) return 0;
 
-			if (!go.TryGetComponent<Building>(out var building))
-				return cell.GetHashCode() ^ go.PrefabID().GetHashCode();
+			// A building site and the building it becomes sit in the same cell,
+			// carry the same prefab tag and use the same object layer, so they
+			// hashed to exactly the same id. Once sites started being registered
+			// this made every completed building collide with its own scaffold -
+			// one host logged 694 rehoused tiles, 537 wires and 512 ladders in a
+			// single session.
+			//
+			// Separated by the hash rather than by probing for a free slot.
+			// Probing walks upward through whatever is already registered, which
+			// two peers have no reason to agree about; this is a pure function
+			// of the object, so they reach the same answer without talking.
+			int phase = go.TryGetComponent<BuildingUnderConstruction>(out var underConstruction) && underConstruction != null ? UnderConstructionSalt : 0;
 
-			return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ building.Def.ObjectLayer.GetHashCode();
+			if (!go.TryGetComponent<Building>(out var building))
+				return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ phase;
+
+			return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ building.Def.ObjectLayer.GetHashCode() ^ phase;
 		}
 		/// <summary>
 		/// Stable string hash. string.GetHashCode() happens to be deterministic
