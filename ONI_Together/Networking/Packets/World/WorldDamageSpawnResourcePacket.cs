@@ -71,6 +71,18 @@ namespace ONI_Together.Networking.Packets.World
 
 			Element element = ElementLoader.elements[ElementIndex];
 
+			// This is the busiest spawn path there is - every dig, every broken
+			// tile, every meteor - so a joining client that is still in the menu
+			// receives these before anything else. Spawning then runs the ore's
+			// OnPrefabInit against an empty Grid, and Pickupable divides by
+			// Grid.WidthInCells, which is zero until a world exists.
+			if (Grid.WidthInCells == 0 || !Grid.IsValidCell(Grid.PosToCell(Position)))
+			{
+				DebugConsole.LogWarning(
+					$"[WorldDamageSpawnResource] ignoring drop at {Position}: no world loaded yet");
+				return;
+			}
+
 			InvokePlaySoundForSubstance(element, Position);
 
 			float dropMass = Mass;
@@ -84,7 +96,27 @@ namespace ONI_Together.Networking.Packets.World
 			NetworkIdentity.ReserveNextNetId(NetId);
 
 			GameObject dropped = element.substance.SpawnResource(Position, dropMass, Temperature, DiseaseIndex, DiseaseCount);
-			NetworkIdentity identity = dropped.GetComponent<NetworkIdentity>();
+
+			// SpawnResource returns null when the element cannot be placed where
+			// it was asked for, and the identity is only there if the prefab
+			// carries one. Both were dereferenced unchecked, so a refused drop
+			// threw out of the packet handler instead of being dropped - and the
+			// reserved id above would have been left dangling either way.
+			if (dropped == null)
+			{
+				DebugConsole.LogWarning(
+					$"[WorldDamageSpawnResource] {element?.id} could not be spawned at {Position}");
+				NetworkIdentity.ReserveNextNetId(0);
+				return;
+			}
+
+			if (!dropped.TryGetComponent<NetworkIdentity>(out var identity) || identity == null)
+			{
+				DebugConsole.LogWarning(
+					$"[WorldDamageSpawnResource] {dropped.name} has no NetworkIdentity; NetId {NetId} is unclaimed");
+				return;
+			}
+
 			if (identity.NetId != NetId)
 				identity.OverrideNetId(NetId);
 			DebugConsole.Log("[WorldDamageSpawnResourcePacket] Synchronized Network ID");
