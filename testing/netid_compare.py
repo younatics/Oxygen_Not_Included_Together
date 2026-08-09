@@ -23,7 +23,13 @@ RECORD = re.compile(r"\[NETID\]\s+([^|]+)\|([^|]+)\|(-?\d+)\|(-?\d+)\s*$")
 
 
 def load(path):
-    """Last dump wins - a run may trigger the suite several times."""
+    """Keyed by NetId, because that is the identity. Last dump wins.
+
+    This used to key by (kind, prefab, cell), which reads a single object that
+    has moved as two - one on each side - and reported it as a disagreement.
+    Ore being hauled and critters walking do exactly that, and it was the whole
+    of the remaining "mismatch": ids matched, cells did not.
+    """
     table = {}
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -31,7 +37,7 @@ def load(path):
             if not m:
                 continue
             kind, prefab, cell, net_id = m.groups()
-            table[(kind.strip(), prefab.strip(), int(cell))] = int(net_id)
+            table[int(net_id)] = (kind.strip(), prefab.strip(), int(cell))
     return table
 
 
@@ -52,15 +58,20 @@ def main():
         return 2
 
     shared = set(host) & set(client)
-    mismatched = sorted(k for k in shared if host[k] != client[k])
+
+    # An id known to both but describing a different thing is a real
+    # disagreement. A different cell alone is the object having moved, which is
+    # reported separately rather than counted as a failure.
+    mismatched = sorted(k for k in shared if host[k][:2] != client[k][:2])
+    moved = sorted(k for k in shared if host[k][:2] == client[k][:2] and host[k][2] != client[k][2])
     host_only = sorted(set(host) - set(client))
     client_only = sorted(set(client) - set(host))
 
     by_kind = defaultdict(lambda: [0, 0])
     for key in shared:
-        by_kind[key[0]][0] += 1
-        if host[key] != client[key]:
-            by_kind[key[0]][1] += 1
+        by_kind[host[key][0]][0] += 1
+        if host[key][:2] != client[key][:2]:
+            by_kind[host[key][0]][1] += 1
 
     print("=" * 72)
     print("NETID CROSS-PEER COMPARISON")
@@ -69,6 +80,7 @@ def main():
     print(f"  client records          : {len(client)}")
     print(f"  known to both           : {len(shared)}")
     print(f"  DIFFERENT id on the two : {len(mismatched)}")
+    print(f"  same id, different cell : {len(moved)}   (moved, not a disagreement)")
     print(f"  host only               : {len(host_only)}")
     print(f"  client only             : {len(client_only)}")
 
@@ -84,8 +96,9 @@ def main():
         print()
         print("  first disagreements:")
         for key in mismatched[:15]:
-            kind, prefab, cell = key
-            print(f"    {prefab:<26} {kind:<22} cell {cell:<8} host={host[key]:<14} client={client[key]}")
+            hk, hp, hc = host[key]
+            ck, cp, cc = client[key]
+            print(f"    id {key:<14} host={hp}/{hk}@{hc}  client={cp}/{ck}@{cc}")
         if len(mismatched) > 15:
             print(f"    ... and {len(mismatched) - 15} more")
 
@@ -99,12 +112,14 @@ def main():
                     "clientRecords": len(client),
                     "shared": len(shared),
                     "mismatched": [
-                        {"kind": k[0], "prefab": k[1], "cell": k[2],
-                         "host": host[k], "client": client[k]}
-                        for k in mismatched
+                        {"netId": k, "host": host[k], "client": client[k]} for k in mismatched
                     ],
-                    "hostOnly": [{"kind": k[0], "prefab": k[1], "cell": k[2]} for k in host_only],
-                    "clientOnly": [{"kind": k[0], "prefab": k[1], "cell": k[2]} for k in client_only],
+                    "moved": [
+                        {"netId": k, "prefab": host[k][1],
+                         "hostCell": host[k][2], "clientCell": client[k][2]} for k in moved
+                    ],
+                    "hostOnly": [{"netId": k, "kind": host[k][0], "prefab": host[k][1], "cell": host[k][2]} for k in host_only],
+                    "clientOnly": [{"netId": k, "kind": client[k][0], "prefab": client[k][1], "cell": client[k][2]} for k in client_only],
                     "byKind": {k: {"shared": v[0], "differ": v[1]} for k, v in by_kind.items()},
                 },
                 fh,
@@ -121,6 +136,8 @@ def main():
         return 1
 
     print(f"  The peers agree on all {len(shared)} objects they both know.")
+    if moved:
+        print(f"  {len(moved)} of them are in different cells - position drift, not identity.")
     if host_only or client_only:
         print(f"  Note: {len(host_only)} host-only and {len(client_only)} client-only objects were")
         print("  not comparable. Replication gaps show up here, not as id disagreement.")
