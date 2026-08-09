@@ -24,6 +24,47 @@ workable 쪽은 **cell 을 포함**한다. 따라서 host.log 와 client.log 에
 
 ---
 
+## 0-b. PC 1대로 먼저 할 수 있는 것 — `selfcheck_log.py`
+
+`diff_logs.py` 는 두 박스가 필요하다. **`selfcheck_log.py` 는 한 박스, 로그 하나면 된다.**
+
+`NetIdHelper.GetDeterministicWorkableId` ([NetIdHelper.cs:39](../ONI_Together/Networking/NetIdHelper.cs#L39)) 는
+`GetDeterministicEntityId` 를 **`useCell: false`** 로 호출한다. 즉 **셀이 해시에 안 들어간다.**
+같은 prefab·원소·질량·온도인 물건들은 전부 같은 기본 해시로 뭉치고, 그 다음
+
+```csharp
+while (NetworkIdentityRegistry.Exists(hash + breakoff)) breakoff++;
+```
+
+이 `hash+0, hash+1, hash+2 …` 를 **도착 순서대로** 나눠준다.
+→ **id 를 결정하는 건 물건의 정체성이 아니라 등록 순서다.**
+엔티티 생성은 복제되지 않으므로(`KInstantiatePatch` 큐 호출 주석 처리) 두 피어의 등록 순서는
+구조적으로 독립이다. 따라서 두 피어는 **확률이 아니라 필연으로** 서로 다른 id 를 붙인다.
+
+로그 하나에서 두 가지가 바로 떨어진다:
+
+- **A** 같은 `(prefab, workable type, cell)` 이 한 실행 안에서 **다른 id** 로 재등록됨
+- **B** 연속된 id 구간이 **여러 셀**에 걸쳐 있음 → 셀이 해시에 없다는 직접 증거
+
+```powershell
+python selfcheck_log.py "$env:USERPROFILE\AppData\LocalLow\Klei\Oxygen Not Included\Player.log"
+```
+
+exit code 1 이면 확정. `diff_logs.py` 와 같은 회귀 게이트로 쓴다.
+
+---
+
+## 0-c. 전제조건 (이 박스에서 실제로 걸린 것)
+
+| 항목 | 내용 |
+|---|---|
+| .NET SDK 8 | 필요. `dotnet` 이 PATH 에 없으면 `bootstrap.ps1` 이 `C:\Program Files\dotnet` 으로 폴백한다 |
+| .NET 6 런타임 | **불필요.** publicizer/refasmer 는 net6.0 이지만 `.config/dotnet-tools.json` 의 `rollForward: true` 로 .NET 8 위에서 돈다. 이게 `false` 면 `MSB3073` 로 빌드가 깨진다 |
+| Python | 3.8+. Windows 에는 `python3` 가 없다 — **`python`** 을 쓴다. Store 스텁이 가리면 전체 경로로 호출한다 |
+| 관리자 권한 | 방화벽 규칙 추가에만 필요. 없으면 `-SkipFirewall` 로 돌리고 나중에 따로 연다 |
+
+---
+
 ## 1. 토폴로지
 
 ```
@@ -109,11 +150,20 @@ Harmony 패치가 두 번 적용된다. 감사 항목 상당수(중복 실행·�
 .\collect-logs.ps1 -Role client -Label S1-baseline    # PC-B
 ```
 
-로그를 한 곳에 모아:
+로그를 한 곳에 모아 (Windows 는 `python3` 가 아니라 `python`):
 
-```bash
-python3 diff_logs.py runs/S1-baseline/host.log runs/S1-baseline/client.log
+```powershell
+python diff_logs.py runs\S1-baseline\host.log runs\S1-baseline\client.log
 ```
+
+세션이 **도는 동안** 상태를 보려면 (다른 사람·에이전트가 같이 볼 때):
+
+```powershell
+.\watch-log.ps1 -OutDir runs\S1-baseline\live
+```
+
+`runs\S1-baseline\live\status.txt` (시그니처 카운터) 와 `recent.log` (최근 관심 라인) 를
+몇 초마다 다시 쓴다. 15 MB 짜리 로그를 열지 않고 현재 상태만 읽을 수 있다.
 
 ---
 

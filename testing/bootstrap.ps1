@@ -117,6 +117,15 @@ if ($Role -eq 'host') {
     Ok "wrote $propsUser"
 
     $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnet) {
+        # Installed but not on PATH (happens in restricted/child shells) - use the default location.
+        $known = 'C:\Program Files\dotnet'
+        if (Test-Path (Join-Path $known 'dotnet.exe')) {
+            $env:PATH = "$known;$env:PATH"
+            $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+            Warn "dotnet was not on PATH; using $known for this session"
+        }
+    }
     if (-not $dotnet) { Die 'dotnet SDK not found. Install .NET SDK 8: winget install Microsoft.DotNet.SDK.8' }
     $sdks = (& dotnet --list-sdks) -join "`n"
     if ($sdks -notmatch '(?m)^8\.') { Warn "No .NET 8 SDK listed. Publicizer/ILRepack may fail.`n$sdks" }

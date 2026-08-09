@@ -17,6 +17,35 @@ python3 diff_logs.py runs\S1\host.log runs\S1\client.log
 
 ---
 
+## S0 — 선행 점검 (PC 1대, 게임 1개)  ⭐ S1 보다 먼저
+
+**목적** ① 빌드·모드 로드·LAN 바인딩이 되는지 ② AUDIT #3 을 **두 번째 PC 없이** 확정.
+
+S1/S2 는 두 박스가 필요하지만, #3 의 *메커니즘*은 로그 하나로 증명된다
+(README 0-b 참고 — 셀이 workable 해시에 안 들어가고 id 가 등록 순서로 배분된다).
+
+1. PC-A 한 대에서 ONI 실행 → Mods 메뉴에서 dev 버전만 활성화, Workshop 버전 비활성화
+2. 새 콜로니 생성 → LAN 호스트 시작 (클라 없이도 된다)
+3. 타일 몇 칸 채굴 지정 → 복제인간이 캐게 둔다 → 종료
+4. 판정:
+
+```powershell
+python selfcheck_log.py "$env:USERPROFILE\AppData\LocalLow\Klei\Oxygen Not Included\Player.log"
+```
+
+**기대 (버그가 살아있다면)**
+- `A` 같은 `(prefab, type, cell)` 이 여러 id 를 받는다
+- `B` 연속 id 구간이 여러 셀에 걸친다 → 셀이 해시에 없음이 확정
+- exit code 1
+
+**판정**
+- A 또는 B → **#3 확정.** 두 번째 PC 는 이제 "얼마나 나쁜지" 를 재는 용도지, 확정용이 아니다
+- 둘 다 0 → 이 실행에는 workable 등록이 거의 없었다는 뜻. 더 캐고 다시 돌린다
+
+> 세션이 도는 동안 옆에서 보려면 별도 창에서 `.\watch-log.ps1`.
+
+---
+
 ## S1 — 최소 참가 + 채굴 5칸  ⭐ 먼저 이것부터
 
 **목적** AUDIT #3 (NetId 를 가변 float 에서 파생) 확정/반증. 계측 추가 없이.
