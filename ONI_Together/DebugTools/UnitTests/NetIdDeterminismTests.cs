@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using ONI_Together.Networking;
+using ONI_Together.Networking.Components;
 using UnityEngine;
 
 namespace ONI_Together.DebugTools.UnitTests
@@ -140,6 +141,56 @@ namespace ONI_Together.DebugTools.UnitTests
             }
 
             return UnitTestResult.Pass($"no shared ids across {entries.Count} identities");
+        }
+
+        [UnitTest(name: "Every critter has an identity", category: "NetId")]
+        public static UnitTestResult CrittersAreIdentified()
+        {
+            // A creature with NetId 0 cannot be spoken about at all: not its
+            // position, not its animation, not the fact that it was moved. A
+            // host logged "no netId found on" sixteen times for pokeshells and
+            // juveniles, and moving one into a ranch never reached the client
+            // because there was no address to send it under.
+            //
+            // Counted over the live world rather than asserted at spawn,
+            // because the failure was never a broken spawn path - it was a
+            // creature that arrived through a path nobody had hooked.
+            var missing = new Dictionary<string, int>();
+            int total = 0;
+
+            foreach (var creature in UnityEngine.Object.FindObjectsByType<KPrefabID>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (creature == null) continue;
+                var go = creature.gameObject;
+                if (!go.HasTag(GameTags.Creature) || go.HasTag(GameTags.BaseMinion))
+                    continue;
+
+                total++;
+                var identity = go.GetComponent<NetworkIdentity>();
+                if (identity != null && identity.NetId != 0)
+                    continue;
+
+                string name = go.PrefabID().ToString();
+                missing.TryGetValue(name, out int n);
+                missing[name] = n + 1;
+            }
+
+            if (total == 0)
+                return UnitTestResult.Skip("no creatures in this world");
+
+            if (missing.Count > 0)
+            {
+                var worst = missing.OrderByDescending(kvp => kvp.Value)
+                                   .Take(5)
+                                   .Select(kvp => $"{kvp.Key} x{kvp.Value}");
+                int sum = missing.Values.Sum();
+                return UnitTestResult.Fail(
+                    $"{sum} of {total} creatures have no NetId: {string.Join(", ", worst)}. " +
+                    "The host cannot report their position or actions, so they will not move on a client.");
+            }
+
+            return UnitTestResult.Pass($"all {total} creatures carry an id");
         }
 
         [UnitTest(name: "No registry lookup failures", category: "NetId")]
