@@ -43,7 +43,14 @@ namespace ONI_Together.DebugTools.UnitTests
             return "entity";
         }
 
-        private static List<Entry> Collect()
+        /// <summary>
+        /// Anything that walks. Its cell is where it happened to be standing
+        /// when the dump ran, so cell-based invariants do not apply to it.
+        /// </summary>
+        private static bool IsMobile(GameObject go)
+            => go.TryGetComponent<Navigator>(out _) || go.TryGetComponent<MinionIdentity>(out _);
+
+        private static List<Entry> Collect(bool staticOnly = false)
         {
             var list = new List<Entry>();
             foreach (var identity in NetworkIdentityRegistry.AllIdentities)
@@ -51,6 +58,8 @@ namespace ONI_Together.DebugTools.UnitTests
                 if (identity == null || identity.gameObject == null) continue;
 
                 var go = identity.gameObject;
+                if (staticOnly && IsMobile(go)) continue;
+
                 int cell = Grid.PosToCell(go);
                 if (!Grid.IsValidCell(cell)) continue;
 
@@ -82,7 +91,11 @@ namespace ONI_Together.DebugTools.UnitTests
         [UnitTest(name: "One id per (prefab, kind, cell)", category: "NetId")]
         public static UnitTestResult OneIdPerLocation()
         {
-            var entries = Collect();
+            // Static objects only. Three duplicants standing in one cell hold
+            // three ids, which is correct and which this reported as a bug -
+            // the same mistake as the consecutive-id heuristic it replaced:
+            // an invariant applied to things it was never about.
+            var entries = Collect(staticOnly: true);
             if (entries.Count == 0)
                 return UnitTestResult.Skip("registry is empty - no colony loaded");
 
