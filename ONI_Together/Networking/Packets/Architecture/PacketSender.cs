@@ -253,11 +253,45 @@ namespace ONI_Together.Networking
 
 			if (!MultiplayerSession.ConnectedPlayers.TryGetValue(steamID, out var player) || player.Connection == null)
 			{
-				DebugConsole.LogWarning($"[PacketSender] No connection found for SteamID {steamID}");
+				// Named and counted rather than repeated. A live session produced
+				// 5436 of these in 26 minutes, all for id 0, and the message said
+				// nothing about which packet - so there was no way to tell which
+				// of the request-reply paths was handing over a bad requester id,
+				// and every reply on that path was being dropped in silence.
+				ReportUndeliverable(steamID, packet.GetType().Name);
 				return false;
 			}
 
 			return SendToConnection(player.Connection, packet, sendType);
+		}
+
+		/// <summary>
+		/// Undeliverable sends, grouped by (recipient, packet) and summarised
+		/// every 10 s. The count matters as much as the name: a path that drops
+		/// one reply is a race, and a path that drops eight a second is broken.
+		/// </summary>
+		private static readonly Dictionary<string, int> _undeliverable = new Dictionary<string, int>();
+		private static float _undeliverableFlushTime;
+
+		private static void ReportUndeliverable(ulong recipient, string packetName)
+		{
+			string key = recipient + "/" + packetName;
+			_undeliverable.TryGetValue(key, out int n);
+			_undeliverable[key] = n + 1;
+
+			float now = UnityEngine.Time.unscaledTime;
+			if (_undeliverableFlushTime == 0f) { _undeliverableFlushTime = now; return; }
+			if (now - _undeliverableFlushTime < 10f) return;
+			_undeliverableFlushTime = now;
+
+			foreach (var kvp in _undeliverable)
+			{
+				int slash = kvp.Key.IndexOf('/');
+				DebugConsole.LogWarning(
+					$"[PacketSender] undeliverable x{kvp.Value}: {kvp.Key.Substring(slash + 1)} " +
+					$"-> player {kvp.Key.Substring(0, slash)} (not a connected player)");
+			}
+			_undeliverable.Clear();
 		}
 
 		private static bool CanBroadcastTo(MultiplayerPlayer player)

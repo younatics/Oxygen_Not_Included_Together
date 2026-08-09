@@ -204,14 +204,28 @@ namespace ONI_Together.Networking
                 case NetworkTransport.STEAMWORKS:
                     return SteamUser.GetSteamID().m_SteamID;
                 case NetworkTransport.RIPTIDE:
-                    if (MultiplayerSession.IsClient)
+                    // Whoever actually holds an id, not whoever the session
+                    // flags say we are. MultiplayerSession.IsClient requires
+                    // InSession, which stays false while a client is still
+                    // joining - and in that window this returned the *server's*
+                    // id, which is zero on a box that is not hosting.
+                    //
+                    // That window is short but its damage is not. Every syncer
+                    // asks the host for state as soon as it spawns, stamping
+                    // the request with this id; a request from player zero can
+                    // never be answered, so the syncer stays stale and asks
+                    // again at every cooldown, forever. One live session logged
+                    // 5436 undeliverable replies to id 0 over 26 minutes from
+                    // exactly this loop.
+                    //
+                    // Only a joining client ever sets RiptideClient.CLIENT_ID -
+                    // a host drives its own loopback through RiptideServer's
+                    // private client - so a non-zero value there is unambiguous.
+                    if (RiptideClient.CLIENT_ID != 0)
                     {
                         return RiptideClient.CLIENT_ID;
                     }
-                    else
-                    {
-                        return RiptideServer.CLIENT_ID;
-                    }
+                    return RiptideServer.CLIENT_ID;
                 default:
                     return Utils.NilUlong();
             }
