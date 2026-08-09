@@ -138,6 +138,47 @@ namespace ONI_Together.Networking.Components
 				// DebugConsole.Log($"[NetworkIdentity] Registered Existing NetId {NetId} for {gameObject.name}");
 			}
 			IsRegistered = true;
+
+			AnnounceSpawnIfHost();
+		}
+
+		/// <summary>
+		/// Tell clients about an object the host just named.
+		///
+		/// Announcing from KInstantiate only caught two spawns in a whole run,
+		/// because most objects never go through Util.KInstantiate -
+		/// SpawnResource, which produces the element piles that are 71% of what
+		/// a client draws unnamed, is one of them. Announcing here instead
+		/// catches every creation path, because they all end up needing an id.
+		/// </summary>
+		private void AnnounceSpawnIfHost()
+		{
+			if (NetId == 0) return;
+			if (!MultiplayerSession.IsHost || !MultiplayerSession.InSession) return;
+			if (!NeedsReplication()) return;
+
+			Misc.World.InstantiationBatcher.Queue(new Packets.InstantiationsPacket.InstantiationEntry
+			{
+				NetId = NetId,
+				PrefabName = TryGetComponent<KPrefabID>(out var kpid) ? kpid.PrefabTag.Name : gameObject.name,
+				Position = transform.position,
+				Rotation = transform.rotation,
+				ObjectName = gameObject.name,
+				InitializeId = true,
+				GameLayer = gameObject.layer
+			});
+		}
+
+		/// <summary>
+		/// Objects the peers must agree on by name: anything that can be picked
+		/// up, hauled or interacted with across the link. Buildings and conduits
+		/// are excluded - they already replicate through their own paths, and
+		/// including them would make this scale with the whole colony.
+		/// </summary>
+		private bool NeedsReplication()
+		{
+			if (TryGetComponent<Building>(out _)) return false;
+			return TryGetComponent<Pickupable>(out _) || TryGetComponent<Navigator>(out _);
 		}
 
 		/// <summary>
