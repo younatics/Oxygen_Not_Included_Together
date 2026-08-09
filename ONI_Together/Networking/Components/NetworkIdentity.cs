@@ -14,11 +14,25 @@ namespace ONI_Together.Networking.Components
 		[SkipSaveFileSerialization]
 		private bool IsRegistered = false;
 
+		/// <summary>
+		/// Drawn on a client before the host has named it. Visible, not
+		/// addressable, and not in the registry until OverrideNetId arrives.
+		/// </summary>
+		[SkipSaveFileSerialization]
+		public bool IsClientPreview { get; private set; }
+
 		public override void OnSpawn()
 		{
 			using var _ = Profiler.Scope();
 
 			base.OnSpawn();
+
+			// Read here rather than in the patch: OnSpawn runs inside the
+			// KInstantiate call that set it, and only objects that carry a
+			// NetworkIdentity care.
+			if (KInstantiatePatch.ConsumeClientPreviewFlag())
+				IsClientPreview = true;
+
 			RegisterIdentity();
 		}
 
@@ -27,6 +41,14 @@ namespace ONI_Together.Networking.Components
 			using var _ = Profiler.Scope();
 
 			if (IsRegistered)
+				return;
+
+			// A client-side preview draws immediately so the game stays
+			// responsive, but it must not mint its own id: the host has not
+			// issued one, so anything the client registered under it would be
+			// an address the host cannot use. It stays unregistered until
+			// OverrideNetId hands it the host's id.
+			if (IsClientPreview)
 				return;
 
 			if (Grid.WidthInCells == 0)
@@ -87,6 +109,9 @@ namespace ONI_Together.Networking.Components
 		public void OverrideNetId(int netIdOverride)
 		{
 			using var _ = Profiler.Scope();
+
+			// The host has named this object, so it is no longer a preview.
+			IsClientPreview = false;
 
 			// Unregister old NetId
 			NetworkIdentityRegistry.Unregister(NetId, this);

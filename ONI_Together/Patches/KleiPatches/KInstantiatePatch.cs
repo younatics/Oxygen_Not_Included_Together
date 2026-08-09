@@ -19,13 +19,33 @@ public static class KInstantiatePatch
 	{
 		using var _ = Profiler.Scope();
 
-		if (MultiplayerSession.IsClient)
-		{
-			//DebugConsole.Log($"[MP] Blocked KInstantiate on client for prefab '{original?.name}'");
-			return true; // Prevent instantiation
-		}
+		// Both branches returned true, so nothing was ever blocked despite the
+		// comment. Blocking outright is not the answer either: the client would
+		// stop drawing anything until the host answered, and a dig order would
+		// feel broken.
+		//
+		// The object is allowed, but on a client it is marked as a local preview
+		// so NetworkIdentity does not mint an id for it. An id the host never
+		// issued is what makes the peers disagree - the client held objects the
+		// host had no name for, and every packet about the real one missed.
+		// The preview adopts the host's id when it arrives.
+		if (MultiplayerSession.IsClient && MultiplayerSession.InSession)
+			_nextIsClientPreview = true;
 
-		return true; // Allow host to instantiate
+		return true;
+	}
+
+	/// <summary>
+	/// Set for the duration of one KInstantiate on a client, read by
+	/// NetworkIdentity.OnSpawn, which runs inside that call.
+	/// </summary>
+	private static bool _nextIsClientPreview;
+
+	public static bool ConsumeClientPreviewFlag()
+	{
+		bool v = _nextIsClientPreview;
+		_nextIsClientPreview = false;
+		return v;
 	}
 
 	// Queue instantiation into batcher on host
