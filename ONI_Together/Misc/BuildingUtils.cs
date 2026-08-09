@@ -76,6 +76,17 @@ namespace ONI_Together.Misc
             DebugConsole.LogError($"[Storage/RebuildStorageFromData] Failed to rebuild storage from data! Key: {keyPrefix + "stor"} not found!");
         }
 
+        private struct StoredItem
+        {
+            public int Hash;
+            public float Mass;
+            public float Temperature;
+            public byte DiseaseIdx;
+            public int DiseaseCount;
+        }
+
+        private static readonly List<StoredItem> _incoming = new List<StoredItem>();
+
         private static void RebuildFromBlob(Storage storage, byte[] blob, string diseaseReason)
         {
             using var ms = new MemoryStream(blob);
@@ -83,16 +94,43 @@ namespace ONI_Together.Misc
 
             float capacityKg = reader.ReadSingle();
             int count = reader.ReadInt32();
+
+            _incoming.Clear();
+            for (int i = 0; i < count; i++)
+            {
+                _incoming.Add(new StoredItem
+                {
+                    Hash = reader.ReadInt32(),
+                    Mass = reader.ReadSingle(),
+                    Temperature = reader.ReadSingle(),
+                    DiseaseIdx = reader.ReadByte(),
+                    DiseaseCount = reader.ReadInt32(),
+                });
+            }
+
+            // Update in place when the same things are still in there.
+            //
+            // This used to clear the storage and build it again on every packet.
+            // Structure state arrives twice a second and a toilet's water mass
+            // drifts continuously, so "changed" was true almost every time - and
+            // each rebuild destroyed every stored object and created new ones,
+            // which minted new NetIds. One live client registered the same water
+            // pile at the same cell 2109 times in 29 minutes, two ids
+            // alternating every half second, and did it for six cells at once:
+            // 14655 of its 19106 workable registrations were this.
+            if (TryUpdateInPlace(storage, diseaseReason))
+                return;
+
             ClearStorage(storage);
             if (count == 0) return;
 
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < _incoming.Count; i++)
             {
-                int hash = reader.ReadInt32();
-                float mass = reader.ReadSingle();
-                float temperature = reader.ReadSingle();
-                byte diseaseIdx = reader.ReadByte();
-                int diseaseCount = reader.ReadInt32();
+                int hash = _incoming[i].Hash;
+                float mass = _incoming[i].Mass;
+                float temperature = _incoming[i].Temperature;
+                byte diseaseIdx = _incoming[i].DiseaseIdx;
+                int diseaseCount = _incoming[i].DiseaseCount;
                 if (mass <= 0f) continue;
 
                 Tag tag = new Tag(hash);
@@ -120,6 +158,50 @@ namespace ONI_Together.Misc
             }
         }
         
+        /// <summary>
+        /// True if the storage already holds exactly these things, in which case
+        /// only their mass, temperature and disease need correcting - no object
+        /// is destroyed and none is created, so nothing takes a new NetId.
+        ///
+        /// Composition is compared by prefab tag and order, which is how the
+        /// blob is written, so a genuine change - something added, removed or
+        /// swapped - still falls through to the full rebuild.
+        /// </summary>
+        private static bool TryUpdateInPlace(Storage storage, string diseaseReason)
+        {
+            var items = storage.items;
+            if (items == null) return false;
+
+            // Entries with no mass are skipped by the rebuild, so they must be
+            // skipped here too or the counts would never line up.
+            int expected = 0;
+            for (int i = 0; i < _incoming.Count; i++)
+            {
+                if (_incoming[i].Mass > 0f) expected++;
+            }
+            if (items.Count != expected) return false;
+
+            int slot = 0;
+            for (int i = 0; i < _incoming.Count; i++)
+            {
+                if (_incoming[i].Mass <= 0f) continue;
+
+                var go = items[slot];
+                if (go == null) return false;
+                if (!go.TryGetComponent<PrimaryElement>(out var pe)) return false;
+                if (go.GetComponent<KPrefabID>()?.PrefabTag.GetHash() != _incoming[i].Hash) return false;
+
+                pe.Mass = _incoming[i].Mass;
+                pe.Temperature = _incoming[i].Temperature;
+                if (_incoming[i].DiseaseIdx != byte.MaxValue && pe.DiseaseIdx != _incoming[i].DiseaseIdx)
+                    pe.AddDisease(_incoming[i].DiseaseIdx, _incoming[i].DiseaseCount, diseaseReason);
+
+                slot++;
+            }
+
+            return true;
+        }
+
         private static void ClearStorage(Storage storage)
         {
             for (int i = storage.items.Count - 1; i >= 0; i--)
