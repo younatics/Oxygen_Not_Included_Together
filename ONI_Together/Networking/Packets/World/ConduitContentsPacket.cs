@@ -26,6 +26,26 @@ namespace ONI_Together.Networking.Packets.World
 		public const byte CONDUIT_GAS = 0;
 		public const byte CONDUIT_LIQUID = 1;
 
+		/// <summary>Cell 4 + type 1 + element 4 + mass 4 + temp 4 + disease idx 1 + disease count 4.</summary>
+		public const int BytesPerUpdate = 22;
+
+		/// <summary>The Updates.Count prefix, plus the int packet type the sender frames with.</summary>
+		public const int HeaderBytes = 8;
+
+		/// <summary>
+		/// How many updates fit in one indivisible payload of the given size.
+		///
+		/// The batch size used to be a constant picked for one transport's MTU.
+		/// Deriving it means the packet stays whole on whichever transport is
+		/// actually carrying it, and it follows automatically if the entry layout
+		/// or a transport limit ever changes.
+		/// </summary>
+		public static int MaxUpdatesFor(int payloadLimitBytes)
+		{
+			int fits = (payloadLimitBytes - HeaderBytes) / BytesPerUpdate;
+			return fits < 1 ? 1 : fits;
+		}
+
 		public List<ConduitCellUpdate> Updates = new List<ConduitCellUpdate>();
 
 		public void Serialize(BinaryWriter writer)

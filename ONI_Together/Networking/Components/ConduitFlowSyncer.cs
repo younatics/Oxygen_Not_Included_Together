@@ -1,5 +1,6 @@
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
+using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Steamworks;
 using Shared.Profiling;
 using System;
@@ -36,7 +37,15 @@ namespace ONI_Together.Networking.Components
 		private const float INITIAL_DELAY = 5f;
 		// 22 bytes/update (cell:4 + type:1 + element:4 + mass:4 + temp:4 + disease idx:1 + disease count:4)
 		// 50 * 22 = 1100 bytes, fits Steam P2P unreliable MTU (~1200 B) without fragmentation.
-		internal const int MAX_UPDATES_PER_PACKET = 50;
+		// Derived from the strictest transport limit rather than a fixed number,
+		// so a batch stays a single indivisible payload whichever transport is
+		// active. It was 50, sized against Steam's ~1200 B unreliable MTU while
+		// running over Riptide, whose limit is 1000: every periodic batch was
+		// 1108 B, got split into unreliable chunks, and one lost chunk discarded
+		// the batch for good. Steam is not exempt - it fragments past its own MTU
+		// and drops the whole message the same way.
+		internal static readonly int MAX_UPDATES_PER_PACKET =
+			ConduitContentsPacket.MaxUpdatesFor(TransportPacketSender.StrictestUnfragmentedPayloadBytes);
 		private const float MASS_THRESHOLD = 0.01f;      // 10 g
 		private const float TEMP_THRESHOLD = 0.5f;       // 0.5 K
 
