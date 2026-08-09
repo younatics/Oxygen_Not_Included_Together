@@ -90,6 +90,24 @@ namespace ONI_Together.Networking
 			hash = Mix(hash, cell);
 			hash = Mix(hash, StableHash(workable.GetType().Name));
 
+			// Local uniqueness is not optional, and dropping this probe was a
+			// regression: two iron piles in one cell hashed alike, RegisterExisting
+			// refused the second, and it stayed on screen with no address at all.
+			//
+			// It does distribute ids in arrival order, which two peers cannot
+			// agree on - but they were never meant to agree by computing the same
+			// hash. The host propagates the id it issued (OverrideNetId, carried
+			// on the spawn packets), and that is what makes the peers match. The
+			// hash only has to be stable and unique on the peer that issues it.
+			//
+			// Including the cell above is what makes this rare: before, every
+			// object of a prefab collapsed onto one value and the probe ran
+			// constantly.
+			int breakoff = 0;
+			while (NetworkIdentityRegistry.Exists(hash + breakoff))
+				breakoff++;
+			hash += breakoff;
+
 			DebugConsole.Log($"Registered workable {go.PrefabID().ToString()} with id: {hash} for workable type {workable.GetType().Name} at cell {cell}");
 			return hash;
 		}
