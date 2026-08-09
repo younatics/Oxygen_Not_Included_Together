@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Menus;
 using ONI_Together.Misc;
 using ONI_Together.Networking.Components;
@@ -463,7 +463,10 @@ namespace ONI_Together.Networking
                 }
 				else if(NetworkConfig.IsLanConfig())
 				{
-                    DebugConsole.Log($"[GameClient] Reconnecting to cached server: {_cachedConnectionInfo.Value.ServerPort}:{_cachedConnectionInfo.Value.ServerPort}");
+                    // Printed the port twice, so this read "8080:8080" and looked like a
+                    // corrupted address while the connection itself was fine. A log
+                    // that lies costs a session; this one nearly did.
+                    DebugConsole.Log($"[GameClient] Reconnecting to cached server: {_cachedConnectionInfo.Value.ServerIp}:{_cachedConnectionInfo.Value.ServerPort}");
                     var ip = _cachedConnectionInfo.Value.ServerIp;
                     var port = _cachedConnectionInfo.Value.ServerPort;
                     _cachedConnectionInfo = null; // Clear cache to prevent re-triggering

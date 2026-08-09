@@ -66,13 +66,22 @@ namespace ONI_Together.Networking.Packets.Core
 			if (MultiplayerSession.IsHost)
 				return;
 
-			if (!NetworkIdentityRegistry.TryGet(EntityNetId, out var networkEntity))
+			// Both of these reported the failure and then used the null they
+			// had just reported, so a packet for an entity this peer does not
+			// have became a NullReferenceException thrown out of the network
+			// thread instead of a dropped packet. That is the whole difference
+			// between a peer that misses an animation and a peer that stops
+			// reading its socket - and a joining client, which by definition
+			// does not have the entities yet, hits it repeatedly.
+			if (!NetworkIdentityRegistry.TryGet(EntityNetId, out var networkEntity) || networkEntity == null)
 			{
 				DebugConsole.LogWarning("Could not find entity with net id " + EntityNetId + " to toggle AnimationOverride " + Kanim + " to " + (AddingOverride ? "on" : "off"));
+				return;
 			}
-			if (!networkEntity.TryGetComponent<KAnimControllerBase>(out var kbac))
+			if (!networkEntity.TryGetComponent<KAnimControllerBase>(out var kbac) || kbac == null)
 			{
-				DebugConsole.LogWarning("Could not find KAnimControllerBaseon entity " + networkEntity.gameObject.GetProperName());
+				DebugConsole.LogWarning("Could not find KAnimControllerBase on entity " + networkEntity.gameObject.GetProperName());
+				return;
 			}
 			if (AddingOverride)
 			{

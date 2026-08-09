@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Chores;
 using Shared.Profiling;
@@ -22,6 +22,7 @@ namespace ONI_Together.Networking.Components
 
 		private readonly ChoreConsumer.PreconditionSnapshot _scratchSnapshot = new();
 		private float timeSinceLastBroadcast;
+		private int _sweepId;
 
 		public override void OnSpawn()
 		{
@@ -88,7 +89,27 @@ namespace ONI_Together.Networking.Components
 			AppendEntriesMerged(packet, _scratchSnapshot.succeededContexts, ref lastContext, ref hasLastContext, ref listIndex);
 			AppendEntriesMerged(packet, _scratchSnapshot.failedContexts, ref lastContext, ref hasLastContext, ref listIndex);
 
-			PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+			// Split on bytes. The cap of 32 entries counted rows, and a row here
+			// carries three strings - a chore type id, a target label like
+			// "Deliver Coal to Coal Generator", and an icon name - so nine to
+			// thirteen of them already exceed the payload limit the cap was
+			// meant to protect. SendChunked always sends Reliable, so going
+			// over turned a twice-a-second unreliable broadcast per duplicant
+			// into a reliable chunk burst.
+			var batches = SweepBatcher.Split(packet.Entries, ChoreErrandsPacket.HeaderBytes, e => e.Bytes());
+
+			int sweepId = ++_sweepId;
+			for (int i = 0; i < batches.Count; i++)
+			{
+				PacketSender.SendToAllClients(new ChoreErrandsPacket
+				{
+					DupeNetId = identity.NetId,
+					SweepId = sweepId,
+					BatchIndex = i,
+					BatchCount = batches.Count,
+					Entries = batches[i]
+				}, PacketSendMode.Unreliable);
+			}
 		}
 
 		private void AppendCurrentChore(ChoreErrandsPacket packet, ref int listIndex)

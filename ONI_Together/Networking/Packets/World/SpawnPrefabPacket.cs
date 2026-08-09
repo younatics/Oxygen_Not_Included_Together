@@ -1,4 +1,5 @@
-using System.IO;
+﻿using System.IO;
+using ONI_Together.DebugTools;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using UnityEngine;
@@ -72,6 +73,22 @@ public class SpawnPrefabPacket : IPacket
     {
         if (MultiplayerSession.IsHost) return;
 
+        // Nothing may be built before there is a world to build it in.
+        //
+        // A joining client turns packet processing on while it is still in the
+        // menu, because the save file transfer needs it, and the host starts
+        // sending spawns immediately. Instantiating then runs OnPrefabInit
+        // against an empty Grid: Pickupable and the infrared visualizer both
+        // divide by Grid.WidthInCells, which is zero until a world is loaded.
+        // A live client logged fifteen of those in the eight seconds between
+        // connecting and loading, and the session did not survive the minute.
+        if (Grid.WidthInCells == 0 || !Grid.IsValidCell(Grid.PosToCell(Position)))
+        {
+            DebugConsole.LogWarning(
+                $"[SpawnPrefab] ignoring spawn of {Hash} at {Position}: no world loaded yet");
+            return;
+        }
+
         GameObject go;
         if (HasElementData)
         {
@@ -87,6 +104,16 @@ public class SpawnPrefabPacket : IPacket
             go.SetActive(IsActive);
         }
         
+        // SpawnResource returns null when the element cannot be placed where it
+        // was asked for, and this went straight on to dereference it - so a
+        // refused spawn became a NullReferenceException out of a packet handler
+        // rather than a dropped packet.
+        if (go == null)
+        {
+            DebugConsole.LogWarning($"[SpawnPrefab] {Hash} could not be spawned at {Position}");
+            return;
+        }
+
         go.AddOrGet<NetworkIdentity>().OverrideNetId(NetId);
         
         // Race condition guard: Was this prefab already picked up / stored before the packet arrived?

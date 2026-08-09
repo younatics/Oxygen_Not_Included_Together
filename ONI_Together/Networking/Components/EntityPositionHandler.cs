@@ -86,7 +86,19 @@ namespace ONI_Together.Networking.Components
                     // serverTimestamp is stale or we've never heard from the host
                     if (serverTimestamp == 0 || Time.unscaledTime - (serverTimestamp / 1000f) > STALE_THRESHOLD)
                     {
-                        PacketSender.SendToHost(new EntityPositionRequestPacket { NetId = this.GetNetId() });
+                        // RequesterId was never set here, so it went out as 0
+                        // and the host replied to a player that does not exist.
+                        // Every position request a client has ever made was
+                        // answered into nothing, and because the answer is what
+                        // clears serverTimestamp, the staleness check above
+                        // stayed true and the request repeated at every cooldown
+                        // for the whole session - 3312 dropped replies in the
+                        // last fifteen-minute one.
+                        PacketSender.SendToHost(new EntityPositionRequestPacket
+                        {
+                            NetId = this.GetNetId(),
+                            RequesterId = MultiplayerSession.LocalUserID,
+                        });
                         _lastRequestTime = Time.unscaledTime;
                     }
                 }

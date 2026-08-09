@@ -117,6 +117,18 @@ namespace ONI_Together.Networking.Packets
 
 			if (MultiplayerSession.IsHost) return;
 
+			// A joining client enables packet processing while still in the menu
+			// so the save transfer can run, and the host starts sending spawns
+			// straight away. Instantiating with no world runs OnPrefabInit
+			// against an empty Grid, and Pickupable divides by Grid.WidthInCells
+			// - zero until a world exists.
+			if (Grid.WidthInCells == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[InstantiationsPacket] ignoring {Entries.Count} spawns: no world loaded yet");
+				return;
+			}
+
 			foreach (var e in Entries)
 				Instantiate(e);
 		}

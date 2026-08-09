@@ -19,6 +19,9 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         private KPrefabID prefabID;
         private BuildingHP buildingHP;
 
+        /// <summary>Last host hit-point value reported as differing, so a standing disagreement is logged once.</summary>
+        private int _lastReportedHpMismatch = int.MinValue;
+
         protected override void Initialize()
         {
             flushToilet = GetComponent<FlushToilet>();
@@ -78,11 +81,24 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             if (buildingHP != null && packet.OptionalValues.TryGetValue("hit_points", out var hp))
             {
                 int hostHp = (int)hp.Float;
+                // Once per change, not once per packet. State arrives twice a
+                // second per structure and a disagreement persists by
+                // definition, so reporting every packet buried the log: 9005
+                // copies of this one line, 27% of a crashed client's log, in
+                // the session that was supposed to explain the crash.
                 if (buildingHP.HitPoints != hostHp)
                 {
-                    DebugConsole.LogWarning(
-                        $"[StructureState] {gameObject.GetProperName()} hit points differ: " +
-                        $"host {hostHp}, here {buildingHP.HitPoints} - damage is not replicated");
+                    if (_lastReportedHpMismatch != hostHp)
+                    {
+                        _lastReportedHpMismatch = hostHp;
+                        DebugConsole.LogWarning(
+                            $"[StructureState] {gameObject.GetProperName()} hit points differ: " +
+                            $"host {hostHp}, here {buildingHP.HitPoints} - damage is not replicated");
+                    }
+                }
+                else
+                {
+                    _lastReportedHpMismatch = int.MinValue;
                 }
             }
 
