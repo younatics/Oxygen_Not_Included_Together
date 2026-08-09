@@ -38,6 +38,17 @@ namespace ONI_Together.Patches.World
 			Grid.Damage[cell] = 0f;
 			InvokePlaySoundForSubstance(element, vector);
 			//Instance.PlaySoundForSubstance(element, vector);
+			// The host owns ore. A client that spawns its own copy ends up with
+			// two: this one, and the one WorldDamageSpawnResourcePacket creates
+			// when the host's arrives. The local copy carries an id the host
+			// never issued, so every packet addressed to the real one is a
+			// failed lookup - which is where the client's lookup counter in the
+			// hundreds comes from while the host's stays at two.
+			//
+			// The cell still clears here; only the resource is left to the host.
+			if (MultiplayerSession.IsClient)
+				return;
+
 			float num = mass * 0.5f;
 			if (!(num <= 0f))
 			{
