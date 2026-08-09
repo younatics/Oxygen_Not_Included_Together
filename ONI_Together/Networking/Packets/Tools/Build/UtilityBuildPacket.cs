@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using ONI_Together.DebugTools;
 using ONI_Together.Misc;
 using ONI_Together.Networking.Packets.Architecture;
@@ -107,6 +107,17 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			using var scope = Profiler.Scope();
 
 			DebugConsole.Log("[UtilityBuildPacket] OnDispatched");
+
+			// Its siblings BuildPacket and BuildCompletePacket both open with a
+			// Grid check; this one was written without. Everything below places
+			// buildings into the world and drives the game's own build tools,
+			// none of which exist for a client that is still in the menu.
+			if (Grid.WidthInCells == 0)
+			{
+				DebugConsole.LogWarning("[UtilityBuildPacket] ignoring path: no world loaded yet");
+				return;
+			}
+
 			if (PathChunks == null || PathChunks.Length == 0)
 			{
 				DebugConsole.LogWarning("[UtilityBuildPacket] Received empty path, ignoring.");
@@ -151,8 +162,17 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			}
 			///mirrored from BuildMenu OnRecipeElementsFullySelected
 			BaseUtilityBuildTool tool = def.BuildingComplete.TryGetComponent<Wire>(out _) ? WireBuildTool.Instance : UtilityBuildTool.Instance;
+			if (tool == null)
+			{
+				DebugConsole.LogWarning($"[UtilityBuildPacket] no build tool for {def.PrefabID}; the UI is not up yet");
+				return;
+			}
 
-			if(PlanScreen.Instance?.ProductInfoScreen?.materialSelectionPanel?.PriorityScreen == null)
+			// The null-conditional chain made this read as a guard while doing
+			// the opposite: when PlanScreen.Instance itself is null the
+			// condition is true and the body dereferences it immediately.
+			if (PlanScreen.Instance != null &&
+			    PlanScreen.Instance.ProductInfoScreen?.materialSelectionPanel?.PriorityScreen == null)
 			{
 				PlanScreen.Instance.CopyBuildingOrder(def,FacadeID);
 				PlanScreen.Instance.OnActiveToolChanged(SelectTool.Instance);
@@ -164,7 +184,14 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			IList<Tag> cachedMaterials = tool.selectedElements != null ? [.. tool.selectedElements] : [];
 			var cachedMgr = tool.conduitMgr;
 
+			// Null for anything that is not a conduit, and this went straight
+			// on to call GetNetworkManager on it.
 			IHaveUtilityNetworkMgr conduitManagerHaver = def.BuildingComplete.GetComponent<IHaveUtilityNetworkMgr>();
+			if (conduitManagerHaver == null)
+			{
+				DebugConsole.LogWarning($"[UtilityBuildPacket] {def.PrefabID} has no utility network manager; ignoring");
+				return;
+			}
 
 			tool.def = def;
 			tool.path = path;

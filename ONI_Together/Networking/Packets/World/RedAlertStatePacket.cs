@@ -25,7 +25,14 @@ namespace ONI_Together.Networking.Packets.World
         {
             ActiveWorldID = reader.ReadInt32();
             IsRedAlert = reader.ReadBoolean();
-            activeWorld = ClusterManager.Instance.GetWorld(ActiveWorldID);
+
+            // Resolved when the packet is applied, not while it is being read.
+            // ClusterManager.Instance is null until a world exists, and a
+            // joining client processes packets from the menu - so this threw
+            // inside the read loop, where the activeWorld == null guard below
+            // could never save it. A handler that throws costs one packet; a
+            // deserializer that throws costs whatever came after it in the
+            // stream.
         }
 
         public void OnDispatched()
@@ -33,6 +40,10 @@ namespace ONI_Together.Networking.Packets.World
             if (MeterScreen_RedAlertPatch.IsSyncing) 
                 return;
 
+            if (ClusterManager.Instance == null)
+                return;
+
+            activeWorld = ClusterManager.Instance.GetWorld(ActiveWorldID);
             if(activeWorld == null)
                 return;
 
