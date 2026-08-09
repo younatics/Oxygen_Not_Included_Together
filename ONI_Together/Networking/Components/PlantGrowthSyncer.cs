@@ -1,6 +1,7 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Trackers;
+using ONI_Together.Networking.Transport;
 using Shared.Profiling;
 using System.Collections.Generic;
 using UnityEngine;
@@ -19,6 +20,10 @@ namespace ONI_Together.Networking.Components
 		private const float LIVE_EVENT_DELAY = 2f;
 
 		private float _lastSyncTime;
+
+		// A plant snapshot is split across packets when the colony is large.
+		private int _plantSweepId;
+		private readonly SweepAssembler<PlantData> _plantSweep = new SweepAssembler<PlantData>("Plants");
 		private bool _initialized;
 		private float _initializationTime;
 
@@ -145,23 +150,57 @@ namespace ONI_Together.Networking.Components
 			using var _ = Profiler.Scope();
 
 			var sw = System.Diagnostics.Stopwatch.StartNew();
-			var packet = new PlantGrowthStatePacket();
 
+			// Collected whole, then split into batches that each fit one
+			// indivisible payload, with a sweep id so the receiver can wait for
+			// all of them. 200 plants was 8612 B against a 1000 B limit and only
+			// 22 fit - the 25-plant cliff the audit recorded as S4 is this
+			// arithmetic. Cutting the snapshot without the sweep header would
+			// have each batch delete the plants belonging to the others.
+			int limit = TransportPacketSender.StrictestUnfragmentedPayloadBytes;
+			var all = new List<PlantData>();
 			lock (PlantTracker.AllPlants)
 			{
 				foreach (var growing in PlantTracker.AllPlants)
 				{
-					if (!TryBuildPlantData(growing, out var data))
-						continue;
-
-					packet.Plants.Add(data);
+					if (TryBuildPlantData(growing, out var data))
+						all.Add(data);
 				}
 			}
 
-			PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+			// Sized first so every batch can carry the true BatchCount; a
+			// receiver cannot start a sweep it does not know the length of.
+			var batches = new List<List<PlantData>>();
+			var current = new List<PlantData>();
+			int bytes = PlantGrowthStatePacket.HeaderBytes;
+			foreach (var p in all)
+			{
+				int cost = PlantGrowthStatePacket.EntryBytes(p);
+				if (current.Count > 0 && bytes + cost > limit)
+				{
+					batches.Add(current);
+					current = new List<PlantData>();
+					bytes = PlantGrowthStatePacket.HeaderBytes;
+				}
+				current.Add(p);
+				bytes += cost;
+			}
+			batches.Add(current);   // always at least one, so an empty sweep still clears
+
+			int sweepId = ++_plantSweepId;
+			for (int i = 0; i < batches.Count; i++)
+			{
+				PacketSender.SendToAllClients(new PlantGrowthStatePacket
+				{
+					SweepId = sweepId,
+					BatchIndex = i,
+					BatchCount = batches.Count,
+					Plants = batches[i]
+				}, PacketSendMode.Unreliable);
+			}
 
 			sw.Stop();
-			SyncStats.RecordSync(SyncStats.Plants, packet.Plants.Count, packet.Plants.Count * 48, sw.ElapsedMilliseconds);
+			SyncStats.RecordSync(SyncStats.Plants, all.Count, all.Count * 43, sw.ElapsedMilliseconds);
 		}
 
 		public bool OnPlantLifecycleReceived(PlantLifecyclePacket packet)
@@ -199,6 +238,12 @@ namespace ONI_Together.Networking.Components
 			if (MultiplayerSession.IsHost || Grid.WidthInCells == 0)
 				return;
 
+			// Hold batches until the whole sweep is here. Reconciling on part of
+			// a snapshot would destroy every plant that lives in a batch which
+			// has not arrived.
+			if (!_plantSweep.Accept(packet.SweepId, packet.BatchIndex, packet.BatchCount, packet.Plants, out var sweepPlants))
+				return;
+
 			try
 			{
 				IsApplyingState = true;
@@ -207,7 +252,7 @@ namespace ONI_Together.Networking.Components
 				var remoteByReceptacleId = new Dictionary<int, PlantData>();
 				var remoteByCell = new Dictionary<int, PlantData>();
 
-				foreach (var plant in packet.Plants)
+				foreach (var plant in sweepPlants)
 				{
 					if (plant.PlantNetId != 0)
 						remoteByPlantId[plant.PlantNetId] = plant;
@@ -255,7 +300,7 @@ namespace ONI_Together.Networking.Components
 					Util.KDestroyGameObject(growing.gameObject);
 				}
 
-				foreach (var plant in packet.Plants)
+				foreach (var plant in sweepPlants)
 				{
 					if (plant.PlantNetId != 0 && matchedPlantIds.Contains(plant.PlantNetId))
 						continue;

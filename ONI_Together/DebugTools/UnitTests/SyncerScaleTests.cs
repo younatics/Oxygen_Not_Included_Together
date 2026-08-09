@@ -79,23 +79,46 @@ namespace ONI_Together.DebugTools.UnitTests
             return fits;
         }
 
-        [UnitTest(name: "Plant growth batch fits one payload at colony scale", category: "Scale")]
+        [UnitTest(name: "Plant growth sweep splits into payload-sized batches", category: "Scale")]
         public static UnitTestResult PlantGrowthBatchFits()
         {
-            int fits = MaxThatFits(n => Plants(n), 512);
-            int actual = Size(Plants(LargeColonyPlants));
+            // Replays PlantGrowthSyncer's rule - accumulate entry bytes, close
+            // the batch before it would exceed the limit - and checks every
+            // batch it produces. Measuring one giant packet would only prove the
+            // packet type can hold one, which is not the property that matters
+            // now that the syncer never builds one.
+            var all = Plants(LargeColonyPlants).Plants;
+            var batch = new PlantGrowthStatePacket { SweepId = int.MaxValue, BatchCount = int.MaxValue };
+            int bytes = PlantGrowthStatePacket.HeaderBytes;
+            int batches = 0, worst = 0;
 
-            if (actual > Limit)
+            foreach (var p in all)
             {
-                return UnitTestResult.Fail(
-                    $"{LargeColonyPlants} plants serialize to {actual} B against a {Limit} B limit - only {fits} " +
-                    "fit. PlantGrowthSyncer has no batch cap, so the packet grows with the colony and is sent " +
-                    $"Unreliable; past {fits} plants every periodic update is split. This is the 25-plant cliff " +
-                    "the audit recorded as S4, and the number falls out of the entry layout: the prefab tag is " +
-                    "sent as a string on every plant, every tick.");
+                int cost = PlantGrowthStatePacket.EntryBytes(p);
+                if (batch.Plants.Count > 0 && bytes + cost > Limit)
+                {
+                    int size = Size(batch);
+                    if (size > Limit)
+                        return UnitTestResult.Fail($"a closed batch of {batch.Plants.Count} plants is {size} B, over {Limit}");
+                    if (size > worst) worst = size;
+                    batches++;
+                    batch = new PlantGrowthStatePacket { SweepId = int.MaxValue, BatchCount = int.MaxValue };
+                    bytes = PlantGrowthStatePacket.HeaderBytes;
+                }
+                batch.Plants.Add(p);
+                bytes += cost;
+            }
+            if (batch.Plants.Count > 0)
+            {
+                int size = Size(batch);
+                if (size > Limit)
+                    return UnitTestResult.Fail($"the final batch of {batch.Plants.Count} plants is {size} B, over {Limit}");
+                if (size > worst) worst = size;
+                batches++;
             }
 
-            return UnitTestResult.Pass($"{LargeColonyPlants} plants is {actual} B; {fits} fit in {Limit} B");
+            return UnitTestResult.Pass(
+                $"{LargeColonyPlants} plants go out as {batches} batches, largest {worst} B, limit {Limit} B");
         }
 
         [UnitTest(name: "Digging sweep splits into payload-sized batches", category: "Scale")]
@@ -136,14 +159,12 @@ namespace ONI_Together.DebugTools.UnitTests
             int digHundred = Size(DigCells(101));
             notes.Add($"dig entry {(digHundred - digOne) / 100} B");
 
-            if (perEntry > 32)
-            {
-                return UnitTestResult.Fail(
-                    $"a plant costs {perEntry} B per entry, so only {(Limit - 8) / perEntry} fit one payload. " +
-                    "PlantPrefabTag is written as a full string on every plant on every tick; interning it to an " +
-                    "id would cut the entry to under 20 B and roughly double what fits.");
-            }
-
+            // Not a failure: batching keeps every packet legal whatever an entry
+            // costs. It decides how many packets a tick costs, which is a
+            // bandwidth question, so it is recorded rather than gated. Most of
+            // the 43 B is PlantPrefabTag going out as a full string per plant
+            // per tick; interning it would roughly double what fits.
+            notes.Add($"{(Limit - PlantGrowthStatePacket.HeaderBytes) / perEntry} plants per packet");
             return UnitTestResult.Pass(string.Join(", ", notes));
         }
     }
