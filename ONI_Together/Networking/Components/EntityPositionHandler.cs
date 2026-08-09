@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ONI_Together.Networking.Packets.Core;
 using Shared.Profiling;
 using UnityEngine;
@@ -43,19 +43,31 @@ namespace ONI_Together.Networking.Components
 		{
 			using var _ = Profiler.Scope();
 
-			if (this.GetNetId() == 0)
-				return;
-
 			if (!MultiplayerSession.InSession)
 				return;
 
             if (MultiplayerSession.IsClient)
 			{
+				// Applied even without a NetId of our own. A client-side preview
+				// waits unnamed until the host names it, and bailing out here
+				// left it frozen for that whole time - not because position
+				// packets were missing, but because this handler never ran. A
+				// duplicant measured five cells from where the host had it, with
+				// 1859 position packets in flight.
+				//
+				// serverTimestamp still gates whether there is anything to
+				// apply, so an object that has genuinely never been told stays
+				// where it is.
 				UpdatePosition();
                 // Only do this if this entity is NOT visible by the host but is visible by the client
                 TryRequestEntityPositionIfVisible();
                 return;
 			}
+
+			// The send path does need one - a position addressed to id 0 cannot
+			// be matched to anything on the far side.
+			if (this.GetNetId() == 0)
+				return;
 
 			// Skip if no clients connected
 			if (MultiplayerSession.ConnectedPlayers.Count == 0)
