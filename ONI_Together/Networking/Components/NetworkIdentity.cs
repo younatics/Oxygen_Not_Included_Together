@@ -231,6 +231,22 @@ namespace ONI_Together.Networking.Components
 		/// object stays unregistered and unmarked - it will try again the next
 		/// time RegisterIdentity runs, rather than pretending it succeeded.
 		/// </summary>
+		/// <summary>
+		/// Called when the registry hands this object's id to somebody else.
+		/// Without it the evicted object keeps an id that now resolves to a
+		/// different object, which is how two duplicants from one printing pod
+		/// ended up sharing an address.
+		/// </summary>
+		internal void RehouseAfterEviction(int lostId)
+		{
+			if (NetId != lostId)
+				return;
+
+			IsRegistered = false;
+			if (!TryRehouse())
+				NetId = 0;
+		}
+
 		private bool TryRehouse()
 		{
 			using var _ = Profiler.Scope();

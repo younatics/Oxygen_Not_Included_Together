@@ -139,7 +139,30 @@ namespace ONI_Together.Networking
 
 			if (identities.ContainsKey(netId))
 			{
-				DebugConsole.LogWarning($"[NetEntityRegistry] Overwriting existing entity for NetId {netId}");
+				var incumbent = identities[netId];
+
+				// Overwriting used to be silent and unconditional, which left
+				// whoever was there before holding an id that now resolves to
+				// somebody else. A live client did exactly that with two
+				// duplicants from one printing pod delivery and ended up with a
+				// minion whose personality could not be resolved - and that
+				// throws out of FaceGraph.ApplyShape inside World.LateUpdate,
+				// every frame, which the game does not survive.
+				//
+				// The newcomer wins, because this is the host telling us what an
+				// id means. The incumbent is moved rather than abandoned.
+				if (!ReferenceEquals(incumbent, entity))
+				{
+					DebugConsole.LogWarning(
+						$"[NetEntityRegistry] NetId {netId} reassigned from '{incumbent?.name ?? "null"}' " +
+						$"to '{entity?.name ?? "null"}'");
+
+					identities[netId] = entity;
+					if (incumbent != null && !incumbent.IsNullOrDestroyed())
+						incumbent.RehouseAfterEviction(netId);
+					return;
+				}
+
 				identities[netId] = entity;
 			}
 			else

@@ -77,6 +77,28 @@ namespace ONI_Together.Networking.Packets.World
 					return;
 				}
 
+				// A duplicant the renderer cannot draw must not be left standing.
+				//
+				// FaceGraph.ApplyShape reads the personality to build a face, and
+				// with none it throws - inside SymbolOverrideController, inside
+				// KAnimBatch.UpdateDirty, inside World.LateUpdate. That is the
+				// render loop, so it throws every frame from then on and the game
+				// does not recover. A live client logged 148 of them in the
+				// seconds before it closed itself.
+				//
+				// Losing one duplicant is recoverable; the host still has it and
+				// the next sync can bring it back. A dead render loop is not.
+				if (EntityData.IsDuplicant &&
+				    entity.TryGetComponent<MinionIdentity>(out var minionIdentity) &&
+				    Db.Get().Personalities.Get(minionIdentity.personalityResourceId) == null)
+				{
+					DebugConsole.LogError(
+						$"[EntitySpawnPacket] '{EntityData.Name}' arrived with no resolvable personality " +
+						"and was discarded - drawing it would throw out of World.LateUpdate every frame");
+					Util.KDestroyGameObject(entity);
+					return;
+				}
+
 				///duplicants from the printer are assigned an extra skill point, this is skipped over with a direct delivery
 				if (entity.TryGetComponent<MinionResume>(out var res))
 					res.ForceAddSkillPoint();
