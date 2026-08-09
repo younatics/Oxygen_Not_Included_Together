@@ -293,8 +293,22 @@ namespace ONI_Together.DebugTools
                         // beside it forever and the scenario would never mine.
                         if (Grid.Element[n].hardness >= 150) continue;
 
-                        var go = Util.KInstantiate(prefab, Grid.CellToPosCBC(n, Grid.SceneLayer.Move));
-                        go.SetActive(true);
+                        if (MultiplayerSession.IsClient)
+                        {
+                            // A client asks; it does not decide. Instantiating
+                            // here would skip the intent path entirely, which is
+                            // the half of the protocol a one-sided scenario never
+                            // exercises - and both peers issuing orders is the
+                            // case that actually has to work.
+                            PacketSender.SendToAllOtherPeers(
+                                new Networking.Packets.Tools.Dig.DiggablePacket(n, 0));
+                        }
+                        else
+                        {
+                            var go = Util.KInstantiate(prefab, Grid.CellToPosCBC(n, Grid.SceneLayer.Move));
+                            go.SetActive(true);
+                        }
+
                         already.Add(n);
                         placed++;
                         if (placed >= count) break;

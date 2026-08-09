@@ -29,6 +29,7 @@ param(
     [string]$HostIp = '192.168.45.39',
     [int]$Port = 8080,
     [string]$Share = 'C:\ONI_MP_Share',
+    [int]$PeerDigCells = 0,
     [int]$SettleSeconds = 45,
     [ValidateRange(0, 3)][int]$Speed = 3
 )
@@ -119,6 +120,16 @@ Send-Host "dig $DigCells"
 $dug = Wait-HostLog '\[SCENARIO\] OK dig' 60 $mark
 if (-not $dug) { Die 'dig did not report' }
 Ok $dug.Substring($dug.IndexOf('[SCENARIO]'))
+
+# Both peers issue orders, because a one-sided scenario never exercises the
+# intent path: the client asks the host to dig rather than digging by itself,
+# and that request-and-confirm round trip is half the protocol.
+if ($PeerDigCells -gt 0) {
+    Step "digging $PeerDigCells cells from the peer"
+    Send-Peer "dig $PeerDigCells"
+    Start-Sleep -Seconds 6
+    Ok 'peer dig requested'
+}
 
 # Without this the run proves only that markers spawn and replicate. Paused,
 # no duplicant moves and nothing is ever mined, so the ore-spawn, chore and
