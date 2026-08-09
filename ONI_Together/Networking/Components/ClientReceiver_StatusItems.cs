@@ -26,6 +26,22 @@ namespace ONI_Together.Networking.Components
         
         public float LastApplyTime { get; private set; }
 
+        /// <summary>
+        /// One per entity. A status sweep is only ever about this entity, and
+        /// Apply clears everything before rebuilding, so a batch applied alone
+        /// would wipe the items carried by the rest of its sweep.
+        /// </summary>
+        private readonly SweepAssembler<StatusItemEntry> _assembler =
+            new SweepAssembler<StatusItemEntry>("StatusItems");
+
+        public void AcceptBatch(int sweepId, int batchIndex, int batchCount, List<StatusItemEntry> batch)
+        {
+            using var _ = Profiler.Scope();
+
+            if (_assembler.Accept(sweepId, batchIndex, batchCount, batch, out var complete))
+                Apply(complete);
+        }
+
         public void Apply(List<StatusItemEntry> entries)
         {
             using var _ = Profiler.Scope();

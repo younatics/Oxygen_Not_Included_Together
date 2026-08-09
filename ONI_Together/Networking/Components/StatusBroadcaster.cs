@@ -20,6 +20,7 @@ namespace ONI_Together.Networking.Components
 
         private float timeSinceLastSoftSync;
         private float timeSinceHardSync;
+        private int _sweepId;
 
         public override void OnSpawn()
         {
@@ -70,13 +71,13 @@ namespace ONI_Together.Networking.Components
             var group = selectable.GetStatusItemGroup();
             if (group == null) return;
 
-            var packet = new StatusItemsPacket { DupeNetId = identity.NetId };
+            var entries = new List<StatusItemEntry>();
             foreach (var entry in group)
             {
-                if (packet.Entries.Count >= StatusItemsPacket.MaxEntries)
+                if (entries.Count >= StatusItemsPacket.MaxEntries)
                     break;
 
-                packet.Entries.Add(new StatusItemEntry
+                entries.Add(new StatusItemEntry
                 {
                     ItemId = entry.item?.Id ?? string.Empty,
                     CategoryId = entry.category?.Id,
@@ -85,7 +86,28 @@ namespace ONI_Together.Networking.Components
                 });
             }
 
-            PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+            // Split on bytes. The old cap of 64 entries was counted, and these
+            // entries are four strings each with a rendered tooltip among them -
+            // "Stress: 42.3% (+0.4%/cycle)" and worse - so four to eleven of
+            // them already exceed the payload limit the cap was there to
+            // protect. Every duplicant with a few status items was sending an
+            // oversize packet twice a second, and because SendChunked always
+            // sends Reliable, the transport turned each one into a reliable
+            // chunk burst on a path that was deliberately Unreliable.
+            var batches = SweepBatcher.Split(entries, StatusItemsPacket.HeaderBytes, e => e.Bytes());
+
+            int sweepId = ++_sweepId;
+            for (int i = 0; i < batches.Count; i++)
+            {
+                PacketSender.SendToAllClients(new StatusItemsPacket
+                {
+                    DupeNetId = identity.NetId,
+                    SweepId = sweepId,
+                    BatchIndex = i,
+                    BatchCount = batches.Count,
+                    Entries = batches[i]
+                }, PacketSendMode.Unreliable);
+            }
         }
     }
 }

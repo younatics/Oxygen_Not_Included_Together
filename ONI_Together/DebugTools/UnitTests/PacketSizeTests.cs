@@ -175,6 +175,70 @@ namespace ONI_Together.DebugTools.UnitTests
                 $"{all.Count} buildings -> {batches.Count} batches, each within {limit} B");
         }
 
+        [UnitTest(name: "Every status item batch fits every transport", category: "PacketSize")]
+        public static UnitTestResult StatusItemBatchesFit()
+        {
+            // Tooltips as they really are: a rendered sentence with runtime
+            // numbers in it. The old cap of 64 entries assumed a fixed width and
+            // there is none - a stressed duplicant with a dozen status items was
+            // sending several kilobytes twice a second.
+            var entries = new List<StatusItemEntry>();
+            for (int i = 0; i < 64; i++)
+            {
+                entries.Add(new StatusItemEntry
+                {
+                    ItemId = "Stressed",
+                    CategoryId = "Status",
+                    DisplayName = "Stressed",
+                    Tooltip = "Stress is at 42.3% and rising by 0.4% per cycle. " +
+                              "This duplicant will have a stress reaction at 100%. " +
+                              "Recent causes: Sopping Wet, Dark, Unhygienic Surroundings."
+                });
+            }
+
+            var batches = SweepBatcher.Split(entries, StatusItemsPacket.HeaderBytes, e => e.Bytes());
+            int limit = TransportPacketSender.StrictestUnfragmentedPayloadBytes;
+            int total = 0;
+
+            for (int i = 0; i < batches.Count; i++)
+            {
+                int size = SerializedSize(new StatusItemsPacket
+                {
+                    DupeNetId = 1234,
+                    SweepId = 3,
+                    BatchIndex = i,
+                    BatchCount = batches.Count,
+                    Entries = batches[i]
+                });
+                total += batches[i].Count;
+
+                if (size > limit)
+                {
+                    return UnitTestResult.Fail(
+                        $"batch {i} of {batches.Count} holds {batches[i].Count} status items and serializes " +
+                        $"to {LimitTable(size)}. StatusBroadcaster sends these Unreliable, and SendChunked " +
+                        "always sends Reliable - so going over does not fragment, it converts a cosmetic " +
+                        "twice-a-second broadcast into a reliable chunk burst per entity.");
+                }
+            }
+
+            if (total != entries.Count)
+                return UnitTestResult.Fail($"split {entries.Count} status items into batches holding {total}");
+
+            // MaxEntries must not be the thing doing the limiting: if a batch
+            // ever reaches it, the byte budget stopped being what decides.
+            foreach (var batch in batches)
+            {
+                if (batch.Count >= StatusItemsPacket.MaxEntries)
+                    return UnitTestResult.Fail(
+                        $"a batch reached the {StatusItemsPacket.MaxEntries}-entry sanity bound; the byte " +
+                        "budget should always close a batch first");
+            }
+
+            return UnitTestResult.Pass(
+                $"{entries.Count} status items -> {batches.Count} batches, each within {limit} B");
+        }
+
         [UnitTest(name: "An empty sweep still produces one batch", category: "PacketSize")]
         public static UnitTestResult EmptySweepIsStillSent()
         {
