@@ -14,6 +14,7 @@ namespace ONI_Together.Networking
 		private static readonly System.Random rng = new System.Random();
 
 		private static int _lookupFailCount = 0;
+		private static int _collisionCount = 0;
 		private static float _lastFailLogTime = 0f;
 
 		public static int Count => identities?.Count ?? 0;
@@ -25,6 +26,12 @@ namespace ONI_Together.Networking
 		/// there is - no second machine and no log parsing needed.
 		/// </summary>
 		public static int LookupFailCount => _lookupFailCount;
+
+		/// <summary>
+		/// Registrations refused because the id was already held by a different
+		/// object. Each one is an object that exists but cannot be addressed.
+		/// </summary>
+		public static int CollisionCount => _collisionCount;
 
 		public static int Register(NetworkIdentity entity)
 		{
@@ -69,12 +76,28 @@ namespace ONI_Together.Networking
 			if (!identities.ContainsKey(netId))
 			{
 				identities[netId] = entity;
-				//DebugConsole.Log($"[NetEntityRegistry] Registered existing entity with net id: {netId}");
+				return;
 			}
-			//else
-			//{
-			//    DebugConsole.LogWarning($"[NetEntityRegistry] NetId {netId} already registered. Skipping duplicate registration.");
-			//}
+
+			if (ReferenceEquals(identities[netId], entity))
+				return;
+
+			// This warning was commented out, so a collision was invisible. The
+			// loser keeps its NetId and is simply not in the registry, which
+			// makes every packet addressed to it a failed lookup - and the
+			// failure surfaces far from here, as an object that will not sync.
+			//
+			// It matters more since the workable hash stopped probing the
+			// registry for a free slot: two workables that hash alike now
+			// genuinely collide instead of being separated by arrival order.
+			_collisionCount++;
+			if (_collisionCount <= 5 || _collisionCount % 50 == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[NetEntityRegistry] NetId {netId} already held by " +
+					$"'{identities[netId]?.name ?? "null"}'; '{entity?.name ?? "null"}' is left unregistered " +
+					$"({_collisionCount} collisions so far)");
+			}
 		}
 
 		public static void RegisterOverride(NetworkIdentity entity, int netId)
