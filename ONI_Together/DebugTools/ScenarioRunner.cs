@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ONI_Together.Networking;
@@ -142,6 +143,14 @@ namespace ONI_Together.DebugTools
                     DebugConsole.Log($"{Tag} OK stop-net");
                     break;
 
+                case "dig":
+                {
+                    int count = parts.Length > 1 ? int.Parse(parts[1]) : 6;
+                    int placed = Dig(count);
+                    DebugConsole.Log($"{Tag} OK dig :: placed {placed} of {count}");
+                    break;
+                }
+
                 case "runtests":
                 {
                     var categories = parts.Skip(1).ToArray();
@@ -155,16 +164,82 @@ namespace ONI_Together.DebugTools
             }
         }
 
+        /// <summary>
+        /// Mark cells for digging, the way the client's reconcile path does:
+        /// instantiate DigPlacer directly rather than going through DigTool,
+        /// which would fire the client-to-host patches and make the scenario
+        /// part of what it is measuring.
+        ///
+        /// Digging is what makes a run produce freshly spawned Diggables, which
+        /// is the only way to exercise the NetId path - a save restores its
+        /// serialized ids and never calls the hash.
+        ///
+        /// Cells are picked by scanning outward from the middle of the world in
+        /// a fixed order, so two runs of the same scenario dig the same cells.
+        /// </summary>
+        private static int Dig(int count)
+        {
+            if (Game.Instance == null) throw new InvalidOperationException("no game loaded");
+
+            var prefab = Assets.GetPrefab("DigPlacer");
+            if (prefab == null) throw new InvalidOperationException("DigPlacer prefab not found");
+
+            var already = new HashSet<int>();
+            foreach (var d in global::Components.Diggables.Items)
+            {
+                if (d != null) already.Add(Grid.PosToCell(d));
+            }
+
+            int placed = 0;
+            int midX = Grid.WidthInCells / 2;
+            int midY = Grid.HeightInCells / 2;
+
+            for (int radius = 0; radius < Grid.HeightInCells && placed < count; radius++)
+            {
+                for (int dx = -radius; dx <= radius && placed < count; dx++)
+                {
+                    int x = midX + dx;
+                    int y = midY - radius;
+                    if (x < 0 || x >= Grid.WidthInCells || y < 0 || y >= Grid.HeightInCells) continue;
+
+                    int cell = Grid.XYToCell(x, y);
+                    if (!Grid.IsValidCell(cell) || !Grid.Solid[cell]) continue;
+                    if (already.Contains(cell)) continue;
+
+                    var go = Util.KInstantiate(prefab, Grid.CellToPosCBC(cell, Grid.SceneLayer.Move));
+                    go.SetActive(true);
+                    already.Add(cell);
+                    placed++;
+                    DebugConsole.Log($"{Tag} dig cell {cell} ({x},{y})");
+                }
+            }
+            return placed;
+        }
+
         /// <summary>Accept a full path, or match a colony/save name under save_files.</summary>
         private static string ResolveSave(string arg)
         {
             if (File.Exists(arg)) return arg;
 
-            string root = SaveLoader.GetSavePrefixAndCreateFolder();
-            if (!Directory.Exists(root)) return null;
+            // Both roots: with Steam Cloud on, saves live under cloud_save_files
+            // and GetSavePrefixAndCreateFolder points at the local one, which is
+            // then empty. Looking in only one is how "load <name>" came back as
+            // "no save matching" for a save that plainly existed.
+            var roots = new List<string>();
+            try { roots.Add(SaveLoader.GetSavePrefixAndCreateFolder()); } catch { }
+            string docs = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Klei", "OxygenNotIncluded");
+            roots.Add(Path.Combine(docs, "save_files"));
+            roots.Add(Path.Combine(docs, "cloud_save_files"));
 
-            var candidates = Directory.GetFiles(root, "*.sav", SearchOption.AllDirectories);
-            if (candidates.Length == 0) return null;
+            var candidates = new List<string>();
+            foreach (var r in roots)
+            {
+                if (string.IsNullOrEmpty(r) || !Directory.Exists(r)) continue;
+                candidates.AddRange(Directory.GetFiles(r, "*.sav", SearchOption.AllDirectories));
+            }
+            if (candidates.Count == 0) return null;
 
             // Newest match wins: a scenario usually wants the save it just made.
             return candidates
