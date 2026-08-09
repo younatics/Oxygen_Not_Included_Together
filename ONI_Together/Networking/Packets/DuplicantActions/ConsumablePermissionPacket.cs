@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Packets.Architecture;
+﻿using ONI_Together.Networking.Packets.Architecture;
 using System.IO;
 using ONI_Together.Networking.Components;
 using Shared.Profiling;
@@ -79,7 +79,12 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
                 }
             }
 
-            ManagementMenu.Instance.consumablesScreen.MarkRowsDirty();
+            // Runs on every dispatch, including the branch that returns
+            // before touching the registry, so the early exits above never
+            // protected it. ManagementMenu.Instance is null until the game UI
+            // exists - the research packets all guard this same access.
+            if (ManagementMenu.Instance != null)
+                ManagementMenu.Instance.consumablesScreen?.MarkRowsDirty();
         }
     }
 }

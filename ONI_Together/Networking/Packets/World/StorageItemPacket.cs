@@ -126,9 +126,11 @@ namespace ONI_Together.Networking.Packets.World
                 }
 
                 int amount = (int)ConsumedAmount;
-                if(pickupable != null)
+                // The GameObject was null-checked and the component fetched
+                // from it was not. PickupItemPacket does the same fetch and
+                // checks it.
+                if (pickupable != null && pickupable.TryGetComponent<PrimaryElement>(out var component))
                 {
-                    PrimaryElement component = pickupable.GetComponent<PrimaryElement>();
                     amount = (int)component.Units;
                 }
 

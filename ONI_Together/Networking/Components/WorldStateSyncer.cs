@@ -122,6 +122,9 @@ namespace ONI_Together.Networking.Components
         {
             if (!_clientViewports.TryGetValue(userId, out var rect))
                 return false;
+            // Both neighbours in this file guard the cell; this one did not.
+            if (!Grid.IsValidCell(cell))
+                return false;
             Grid.CellToXY(cell, out int x, out int y);
             return x >= rect.xMin - margin && x < rect.xMax + margin &&
                    y >= rect.yMin - margin && y < rect.yMax + margin;
@@ -148,6 +151,11 @@ namespace ONI_Together.Networking.Components
 
         public static bool IsCellInRect(int cell, RectInt rect, int margin = 2)
         {
+            // Safe only by accident until now: every caller happened to check
+            // the viewport first, which fails when the Grid is empty. A caller
+            // that skipped that step got a divide by zero.
+            if (!Grid.IsValidCell(cell))
+                return false;
             Grid.CellToXY(cell, out int x, out int y);
             return x >= rect.xMin - margin && x < rect.xMax + margin &&
                    y >= rect.yMin - margin && y < rect.yMax + margin;

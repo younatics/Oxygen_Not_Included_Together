@@ -73,7 +73,7 @@ namespace ONI_Together.Networking.Packets.World.Handlers
                 {
                     targets[targetIndex] = new KeyValuePair<IToggleHandler, Chore>(handler, null);
                     handler.HandleToggle();
-                    toggleable.GetComponent<KSelectable>().RemoveStatusItem(Db.Get().BuildingStatusItems.PendingSwitchToggle);
+                    toggleable.GetComponent<KSelectable>()?.RemoveStatusItem(Db.Get().BuildingStatusItems.PendingSwitchToggle);
                 }
                 return true;
             }

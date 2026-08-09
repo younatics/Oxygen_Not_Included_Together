@@ -38,6 +38,12 @@ namespace ONI_Together.Networking.Packets.Social
 
         public void OnDispatched()
         {
+            // ScheduleManager.Instance is null until a world exists, and a
+            // joining client processes packets from the menu. Its sibling
+            // ScheduleDeletePacket already guards this; the rest did not.
+            if (ScheduleManager.Instance == null)
+                return;
+
             using var _ = Profiler.Scope();
 
             if (IsApplying)

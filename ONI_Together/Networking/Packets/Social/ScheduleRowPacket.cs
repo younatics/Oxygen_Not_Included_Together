@@ -78,6 +78,12 @@ namespace ONI_Together.Networking.Packets.Social
 
         public void OnDispatched()
         {
+            // ScheduleManager.Instance is null until a world exists, and a
+            // joining client processes packets from the menu. Its sibling
+            // ScheduleDeletePacket already guards this; the rest did not.
+            if (ScheduleManager.Instance == null)
+                return;
+
             using var _ = Profiler.Scope();
 
             if (IsApplying)
@@ -100,6 +106,16 @@ namespace ONI_Together.Networking.Packets.Social
             var schedules = ScheduleManager.Instance.schedules;
             if (schedules == null)
                 return;
+
+            // Indexed straight off the wire. A stale or reordered packet
+            // naming a schedule this peer no longer has threw out of the
+            // handler rather than being ignored.
+            if (ScheduleIndex < 0 || ScheduleIndex >= schedules.Count)
+            {
+                DebugConsole.LogWarning(
+                    $"[ScheduleRowPacket] schedule {ScheduleIndex} of {schedules.Count} does not exist here");
+                return;
+            }
 
             Schedule schedule = schedules[ScheduleIndex];
             if (schedule == null)

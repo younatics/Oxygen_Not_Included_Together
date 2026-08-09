@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
@@ -60,7 +60,22 @@ namespace ONI_Together.Networking.Packets.World
 					///move care packages a bit to the left to be centered
 					Pos.x -= 0.5f;
 				}
+				// Deliver instantiates a prefab, which runs OnPrefabInit against
+				// the Grid. Without a world that is a divide by zero, and the
+				// try/catch around this only turned it into a duplicant the
+				// client silently never received.
+				if (Grid.WidthInCells == 0)
+				{
+					DebugConsole.LogWarning("[EntitySpawnPacket] ignoring delivery: no world loaded yet");
+					return;
+				}
+
 				GameObject entity = deliverable.Deliver(Pos);
+				if (entity == null)
+				{
+					DebugConsole.LogWarning($"[EntitySpawnPacket] delivery produced nothing at {Pos}");
+					return;
+				}
 
 				///duplicants from the printer are assigned an extra skill point, this is skipped over with a direct delivery
 				if (entity.TryGetComponent<MinionResume>(out var res))

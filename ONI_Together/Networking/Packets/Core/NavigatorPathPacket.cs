@@ -191,11 +191,18 @@ namespace ONI_Together.Networking.Packets.Core
 			if (!navigator)
 				return false;
 
-			if (Steps == null/* || Steps.Count < 2*/)
+			// The count half of this was commented out, which left Steps[-1]
+			// reachable below for an empty path.
+			if (Steps == null || Steps.Count == 0)
 			{
 				DebugConsole.LogWarning($"[NavigatorPathPacket] Received invalid path for {NetId}");
 				return false;
 			}
+
+			// CellToPosCBC divides by Grid.WidthInCells, zero until a world
+			// exists, and a client processes packets while still in the menu.
+			if (Grid.WidthInCells == 0)
+				return false;
 
 			return true;
 		}

@@ -134,7 +134,11 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             if (component == null || !component.Def.Replaceable || !def.CanReplace(replacementCandidate))
                 return null;
 
-            Tag tag = replacementCandidate.GetComponent<PrimaryElement>().Element.tag;
+            // Fetched from a component that was checked one line earlier and
+            // then dereferenced without a check of its own.
+            if (!replacementCandidate.TryGetComponent<PrimaryElement>(out var replacementElement))
+                return null;
+            Tag tag = replacementElement.Element.tag;
             if (tag.GetHash() == (int)SimHashes.StableSnow)
                 tag = SimHashes.Snow.CreateTag();
             if (component.Def == def && selected_elements[0] == tag)
@@ -185,7 +189,11 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             if (component == null || !component.Def.Replaceable || !def.CanReplace(replacementCandidate))
                 return null;
 
-            Tag tag = replacementCandidate.GetComponent<PrimaryElement>().Element.tag;
+            // Fetched from a component that was checked one line earlier and
+            // then dereferenced without a check of its own.
+            if (!replacementCandidate.TryGetComponent<PrimaryElement>(out var replacementElement))
+                return null;
+            Tag tag = replacementElement.Element.tag;
             if (tag.GetHash() == (int)SimHashes.StableSnow)
                 tag = SimHashes.Snow.CreateTag();
             if (component.Def == def && selected_elements[0] == tag)

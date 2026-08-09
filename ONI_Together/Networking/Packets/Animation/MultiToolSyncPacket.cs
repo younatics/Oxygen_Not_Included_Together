@@ -24,7 +24,11 @@ namespace ONI_Together.Networking.Packets.Animation
 			WorkerNetId = worker.GetNetId();
 			WorkableNetId = smi.workable?.GetNetId() ?? 0;
 			HitEffectPrefabId = smi.hitEffectPrefab.PrefabID().ToString();
-			Context = worker.GetComponent<AnimEventHandler>().context;
+			// A worker without an AnimEventHandler used to throw here, while the
+			// two lines above it already tolerate a missing component.
+			Context = worker.TryGetComponent<AnimEventHandler>(out var animEvents)
+				? animEvents.context
+				: default;
 		}
 
 
