@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
@@ -69,7 +69,10 @@ public class EntityPositionPacket : IPacket, IViewportCullable
         }
 		else
 		{
-			DebugConsole.LogWarning($"[Packets] Could not find entity with NetId {NetId}");
+			// Position arrives many times a second for an entity this peer does
+			// not have, so this was one line per packet: 5881 of them for a
+			// single hatch, and 27909 across 26 ids in one session.
+			ThrottledLog.Warn($"[Packets] Could not find entity with NetId {NetId}");
 		}
 	}
 }

@@ -55,7 +55,7 @@ namespace ONI_Together.Networking.Packets.Events
 
 			if (!NetworkIdentityRegistry.TryGet(NetId, out var go))
 			{
-				DebugConsole.LogWarning($"[EventTriggeredPacket] Could not find entity with NetId {NetId} for event {EventHash}");
+				ThrottledLog.Warn($"[EventTriggeredPacket] Could not find entity with NetId {NetId} for event {EventHash}");
 				return;
 			}
 

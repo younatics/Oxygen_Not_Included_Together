@@ -1,7 +1,8 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
+using UnityEngine;
 using Shared.Profiling;
 
 namespace ONI_Together.Networking.Packets.World
@@ -15,23 +16,12 @@ namespace ONI_Together.Networking.Packets.World
 	/// </summary>
 	public class GroundItemPickedUpPacket : IPacket
 	{
-		private static readonly HashSet<int> PendingPickupNetIds = [];
+		private static readonly PendingRemovals Pending = new PendingRemovals("PendingPickup");
 
 		public int NetId;
 
-		public static bool TryConsumePending(int netId)
-		{
-			using var _ = Profiler.Scope();
-			return PendingPickupNetIds.Remove(netId);
-		}
-
-		public static void ClearPending()
-		{
-			using var _ = Profiler.Scope();
-			int n = PendingPickupNetIds.Count;
-			PendingPickupNetIds.Clear();
-			DebugConsole.Log($"[PendingPickup] cleared count={n}");
-		}
+		public static bool TryConsumePending(int netId) => Pending.TryConsume(netId);
+		public static void ClearPending() => Pending.Clear();
 
 		public void Serialize(BinaryWriter writer)
 		{
@@ -51,8 +41,8 @@ namespace ONI_Together.Networking.Packets.World
 
 			if (!NetworkIdentityRegistry.TryGetComponent<Pickupable>(NetId, out var pickupable))
 			{
-				PendingPickupNetIds.Add(NetId);
-				DebugConsole.LogWarning($"[GroundItemPickedUpPacket] Pickupable NetId {NetId} not yet registered; queued pending removal");
+				Pending.Queue(NetId);
+				ThrottledLog.Warn("[GroundItemPickedUpPacket] pickup arrived for an item this peer does not have");
 				return;
 			}
 

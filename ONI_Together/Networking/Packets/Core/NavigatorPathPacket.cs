@@ -173,7 +173,7 @@ namespace ONI_Together.Networking.Packets.Core
 
 			if (!NetworkIdentityRegistry.TryGet(NetId, out var foundEntity))
 			{
-				DebugConsole.LogWarning($"[NavigatorPathPacket] Could not find entity with NetId {NetId}");
+				ThrottledLog.Warn($"[NavigatorPathPacket] Could not find entity with NetId {NetId}");
 				return false;
 			}
 

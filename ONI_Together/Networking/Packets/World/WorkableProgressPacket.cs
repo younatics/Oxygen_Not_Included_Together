@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using Shared.Profiling;
@@ -213,7 +213,19 @@ namespace ONI_Together.Networking.Packets.World
 					yield break;
 			}
 
-			DebugConsole.LogWarning($"[WorkableProgressPacket] Failed to resolve target {packet.TargetNetId} ({packet.TargetTypeName})");
+			ThrottledLog.Warn($"[WorkableProgressPacket] Failed to resolve target {packet.TargetNetId} ({ShortTypeName(packet.TargetTypeName)})");
+		}
+
+		/// <summary>
+		/// "Pickupable" rather than "Pickupable, Assembly-CSharp, Version=0.0.0.0,
+		/// Culture=neutral, PublicKeyToken=null". The tail is identical on every
+		/// line and was ninety characters of it.
+		/// </summary>
+		private static string ShortTypeName(string assemblyQualified)
+		{
+			if (string.IsNullOrEmpty(assemblyQualified)) return "?";
+			int comma = assemblyQualified.IndexOf(',');
+			return comma > 0 ? assemblyQualified.Substring(0, comma) : assemblyQualified;
 		}
 	}
 }

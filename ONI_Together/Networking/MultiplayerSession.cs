@@ -52,6 +52,9 @@ namespace ONI_Together.Networking
 			HostUserID = Utils.NilUlong();
 			WorkProgressPatch.ClearTracking();
 			RemoteProgressRegistry.ClearAll();
+			// So a count never spans two sessions and reads as one long retry
+			// loop when it was two short ones.
+			ThrottledLog.Reset();
 			DebugConsole.Log("[MultiplayerSession] Session cleared.");
 		}
 

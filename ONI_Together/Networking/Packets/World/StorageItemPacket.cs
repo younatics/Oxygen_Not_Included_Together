@@ -16,7 +16,7 @@ namespace ONI_Together.Networking.Packets.World
     /// </summary>
     public class StorageItemPacket : IPacket, IBulkablePacket
     {
-        private static readonly HashSet<int> PendingPickupNetIds = [];
+        private static readonly PendingRemovals Pending = new PendingRemovals("PendingStorage");
 
         public int NetId;
         public int StorageNetId;
@@ -30,19 +30,9 @@ namespace ONI_Together.Networking.Packets.World
 
         public uint IntervalMs => 250;
 
-        public static bool TryConsumePending(int netId)
-        {
-            using var _ = Profiler.Scope();
-            return PendingPickupNetIds.Remove(netId);
-        }
+        public static bool TryConsumePending(int netId) => Pending.TryConsume(netId);
 
-        public static void ClearPending()
-        {
-            using var _ = Profiler.Scope();
-            int n = PendingPickupNetIds.Count;
-            PendingPickupNetIds.Clear();
-            DebugConsole.Log($"[PendingPickup] cleared count={n}");
-        }
+        public static void ClearPending() => Pending.Clear();
 
         public void Serialize(BinaryWriter writer)
         {
@@ -87,8 +77,8 @@ namespace ONI_Together.Networking.Packets.World
 
             if (!NetworkIdentityRegistry.TryGetComponent<Pickupable>(NetId, out var pickupable))
             {
-                PendingPickupNetIds.Add(NetId);
-                DebugConsole.LogWarning($"[StoreItemPacket] Pickupable NetId {NetId} not yet registered; queued pending removal");
+                Pending.Queue(NetId);
+                ThrottledLog.Warn("[StoreItemPacket] store arrived for an item this peer does not have");
                 return;
             }
 
