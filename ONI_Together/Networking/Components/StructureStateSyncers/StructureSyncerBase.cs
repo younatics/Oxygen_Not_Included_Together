@@ -185,7 +185,7 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         {
             if (buildingHP == null) return;
             optionalValues ??= new Dictionary<string, Variant>();
-            optionalValues[HitPointsKey] = buildingHP.HitPoints;
+            optionalValues[HitPointsKey] = new Variant { Type = Variant.TypeCode.Int, Int = buildingHP.HitPoints };
         }
 
         /// <summary>
@@ -208,7 +208,17 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             // is a repair, and the game's damage handler just subtracts, so an
             // unclamped one would push hit points above the maximum and leave
             // the building permanently over-healed.
-            int hostHp = Mathf.Clamp((int)hp.Float, 0, buildingHP.MaxHitPoints);
+            // Read the field the value was actually written to. Variant is a
+            // tagged union with separate Float and Int fields and no conversion
+            // between them - an int goes in as Int and .Float stays zero.
+            //
+            // Reading .Float made every host reading look like zero hit points,
+            // so the client damaged its own building by its entire health on
+            // every packet. That is the "host is fine, client shows it broken"
+            // report: the sync was not failing to run, it was running with a
+            // number that was always zero.
+            int hostHp = hp.Type == Variant.TypeCode.Int ? hp.Int : (int)hp.Float;
+            hostHp = Mathf.Clamp(hostHp, 0, buildingHP.MaxHitPoints);
             int delta = buildingHP.HitPoints - hostHp;
             if (delta == 0) return;
 
@@ -227,9 +237,13 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             // the mismatch removed the evidence with it - a session where no
             // building happened to break looked exactly like a session where the
             // fix worked.
-            ThrottledLog.Warn(delta > 0
-                ? "[StructureState] damage replicated from host"
-                : "[StructureState] repair replicated from host");
+            // With the numbers, because without them this line was true and
+            // useless: it said damage was replicated while replicating a host
+            // reading of zero that never existed. One printed value would have
+            // shown that in a glance.
+            ThrottledLog.Warn(
+                $"[StructureState] {gameObject.GetProperName()} {(delta > 0 ? "damaged" : "repaired")} " +
+                $"to match host: {buildingHP.HitPoints} -> {hostHp} of {buildingHP.MaxHitPoints}");
         }
 
         protected abstract void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues);
