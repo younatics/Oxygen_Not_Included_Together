@@ -1,6 +1,7 @@
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Trackers;
+using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Steamworks;
 using System.Collections.Generic;
 using Shared.Profiling;
@@ -33,6 +34,10 @@ namespace ONI_Together.Networking.Components
 
 		private ushort[] _shadowElements;
 		private float[] _shadowMass;
+
+		// A dig snapshot is split across packets when it is large; these carry it.
+		private int _digSweepId;
+		private readonly SweepAssembler<int> _digSweep = new SweepAssembler<int>("Digging");
 
 		// Rotating background scan - covers off-screen areas
 		private const int BG_SCAN_CHUNK_SIZE = 32;
@@ -239,24 +244,46 @@ namespace ONI_Together.Networking.Components
 			using var _ = Profiler.Scope();
 
 			var sw = System.Diagnostics.Stopwatch.StartNew();
-			var digPacket = new DiggingStatePacket();
 
 			try
 			{
+				// Collect the whole snapshot, then split it into batches that each
+				// fit one indivisible payload. The receiver holds them and
+				// reconciles only once the sweep is complete - a snapshot that is
+				// applied in pieces deletes the cells belonging to the pieces that
+				// have not arrived yet.
+				var cells = new List<int>();
 				foreach (var diggable in global::Components.Diggables.Items)
 				{
 					if (diggable == null) continue;
 					int cell = Grid.PosToCell(diggable);
 					if (Grid.IsValidCell(cell))
-					{
-						digPacket.DigCells.Add(cell);
-					}
+						cells.Add(cell);
 				}
 
-				PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
+				int perBatch = DiggingStatePacket.MaxCellsFor(
+					TransportPacketSender.StrictestUnfragmentedPayloadBytes);
+				int batchCount = cells.Count == 0 ? 1 : (cells.Count + perBatch - 1) / perBatch;
+				int sweepId = ++_digSweepId;
+
+				for (int b = 0; b < batchCount; b++)
+				{
+					var digPacket = new DiggingStatePacket
+					{
+						SweepId = sweepId,
+						BatchIndex = b,
+						BatchCount = batchCount
+					};
+					int start = b * perBatch;
+					int end = System.Math.Min(start + perBatch, cells.Count);
+					for (int i = start; i < end; i++)
+						digPacket.DigCells.Add(cells[i]);
+
+					PacketSender.SendToAllClients(digPacket, PacketSendMode.Unreliable);
+				}
 
 				sw.Stop();
-				SyncStats.RecordSync(SyncStats.Digging, digPacket.DigCells.Count, digPacket.DigCells.Count * 4, sw.ElapsedMilliseconds);
+				SyncStats.RecordSync(SyncStats.Digging, cells.Count, cells.Count * DiggingStatePacket.BytesPerCell, sw.ElapsedMilliseconds);
 			}
 			catch (System.Exception ex)
 			{
@@ -268,6 +295,19 @@ namespace ONI_Together.Networking.Components
 		{
 			using var _ = Profiler.Scope();
 
+			// Hold batches until the whole sweep is here. Reconciling on a
+			// partial snapshot would delete every dig that happens to live in a
+			// batch that has not arrived.
+			if (!_digSweep.Accept(packet.SweepId, packet.BatchIndex, packet.BatchCount, packet.DigCells, out var cells))
+				return;
+
+			ApplyDiggingState(cells);
+		}
+
+		private void ApplyDiggingState(List<int> sweepCells)
+		{
+			using var _ = Profiler.Scope();
+
 			// Reconcile
 			// 1. Get all local diggables
 			// 2. Remove extra
@@ -275,6 +315,9 @@ namespace ONI_Together.Networking.Components
 
 			try
 			{
+				// Membership is checked once per local diggable, so a list scan
+				// would be quadratic on a big dig order.
+				var remote = new HashSet<int>(sweepCells);
 				var localDigs = new HashSet<int>();
 				var toRemove = new List<Diggable>();
 
@@ -282,7 +325,7 @@ namespace ONI_Together.Networking.Components
 				{
 					int cell = Grid.PosToCell(diggable);
 					localDigs.Add(cell);
-					if (!packet.DigCells.Contains(cell))
+					if (!remote.Contains(cell))
 					{
 						toRemove.Add(diggable);
 					}
@@ -296,7 +339,7 @@ namespace ONI_Together.Networking.Components
 				}
 
 				// Add Missing
-				foreach (var cell in packet.DigCells)
+				foreach (var cell in sweepCells)
 				{
 					if (!localDigs.Contains(cell))
 					{

@@ -97,21 +97,27 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"{LargeColonyPlants} plants is {actual} B; {fits} fit in {Limit} B");
         }
 
-        [UnitTest(name: "Digging batch fits one payload at colony scale", category: "Scale")]
+        [UnitTest(name: "Digging sweep splits into payload-sized batches", category: "Scale")]
         public static UnitTestResult DiggingBatchFits()
         {
-            int fits = MaxThatFits(n => DigCells(n), 4096);
-            int actual = Size(DigCells(LargeColonyDigCells));
+            // WorldStateSyncer sends a dig snapshot as SweepId/BatchIndex/
+            // BatchCount batches and the client reconciles only once the whole
+            // sweep has arrived. Verify a full batch is legal and that the
+            // header cost is accounted for - the sweep fields are why the cap
+            // moved from 248 to 245.
+            int perBatch = DiggingStatePacket.MaxCellsFor(Limit);
+            var batch = DigCells(perBatch);
+            batch.SweepId = int.MaxValue;
+            batch.BatchIndex = int.MaxValue - 1;
+            batch.BatchCount = int.MaxValue;
 
-            if (actual > Limit)
-            {
-                return UnitTestResult.Fail(
-                    $"{LargeColonyDigCells} dig cells serialize to {actual} B against a {Limit} B limit - only " +
-                    $"{fits} fit. WorldStateSyncer sends every outstanding dig in one Unreliable packet, so a " +
-                    "large dig order splits every tick.");
-            }
+            int size = Size(batch);
+            if (size > Limit)
+                return UnitTestResult.Fail($"a full batch of {perBatch} dig cells is {size} B, over {Limit}");
 
-            return UnitTestResult.Pass($"{LargeColonyDigCells} dig cells is {actual} B; {fits} fit in {Limit} B");
+            int batches = (LargeColonyDigCells + perBatch - 1) / perBatch;
+            return UnitTestResult.Pass(
+                $"{LargeColonyDigCells} dig cells go out as {batches} batches of at most {perBatch}, largest {size} B");
         }
 
         [UnitTest(name: "Entry cost of a periodic packet is bounded", category: "Scale")]
