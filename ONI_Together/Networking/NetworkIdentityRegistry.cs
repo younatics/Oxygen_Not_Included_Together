@@ -90,6 +90,19 @@ namespace ONI_Together.Networking
 			if (ReferenceEquals(identities[netId], entity))
 				return true;
 
+			// A destroyed incumbent is not a collision, it is a stale entry.
+			//
+			// Building sites churn constantly - created, completed, destroyed -
+			// and their slots stayed behind, so every new site "collided" with a
+			// corpse. Worse, reporting it read that corpse's name, and a
+			// destroyed Unity object is not caught by ?. - it throws. A host
+			// logged 261 NullReferenceExceptions out of this one line.
+			if (identities[netId].IsNullOrDestroyed())
+			{
+				identities[netId] = entity;
+				return true;
+			}
+
 			// This warning was commented out, so a collision was invisible. The
 			// loser keeps its NetId and is simply not in the registry, which
 			// makes every packet addressed to it a failed lookup - and the
@@ -103,7 +116,7 @@ namespace ONI_Together.Networking
 			{
 				DebugConsole.LogWarning(
 					$"[NetEntityRegistry] NetId {netId} already held by " +
-					$"'{identities[netId]?.name ?? "null"}'; '{entity?.name ?? "null"}' must be renamed " +
+					$"'{SafeName(identities[netId])}'; '{SafeName(entity)}' must be renamed " +
 					$"({_collisionCount} collisions so far)");
 			}
 
@@ -154,8 +167,8 @@ namespace ONI_Together.Networking
 				if (!ReferenceEquals(incumbent, entity))
 				{
 					DebugConsole.LogWarning(
-						$"[NetEntityRegistry] NetId {netId} reassigned from '{incumbent?.name ?? "null"}' " +
-						$"to '{entity?.name ?? "null"}'");
+						$"[NetEntityRegistry] NetId {netId} reassigned from '{SafeName(incumbent)}' " +
+						$"to '{SafeName(entity)}'");
 
 					identities[netId] = entity;
 					if (incumbent != null && !incumbent.IsNullOrDestroyed())
@@ -172,6 +185,15 @@ namespace ONI_Together.Networking
 			}
 		}
 		public static bool Exists(int netId) => identities.ContainsKey(netId);
+
+		/// <summary>
+		/// A name that will not throw. Unity reports a destroyed object as null
+		/// through operator==, but ?. does not use that operator - reading .name
+		/// on a destroyed component throws, which is how a diagnostic line
+		/// became the most frequent exception in a host's log.
+		/// </summary>
+		private static string SafeName(NetworkIdentity identity)
+			=> identity.IsNullOrDestroyed() ? "destroyed" : identity.name;
 
 
 

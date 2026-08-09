@@ -199,6 +199,47 @@ namespace ONI_Together.DebugTools.UnitTests
             }
         }
 
+        [UnitTest(name: "A destroyed holder does not block the slot", category: "Registry")]
+        public static UnitTestResult DestroyedHolderIsReplaced()
+        {
+            // Building sites churn constantly - created, completed, destroyed -
+            // and their registry slots outlived them, so every new site
+            // collided with a corpse. Reporting that collision then read the
+            // corpse's name, and a destroyed Unity object is not caught by ?.
+            // A host logged 261 NullReferenceExceptions out of that one line.
+            if (!TryFindFreeId(out int id))
+                return UnitTestResult.Skip("no free probe id");
+
+            var corpse = NewProbe("registry-destroyed-holder");
+            var arrival = NewProbe("registry-destroyed-arrival");
+            try
+            {
+                NetworkIdentityRegistry.RegisterExisting(corpse, id);
+                Destroy(corpse);
+
+                int before = NetworkIdentityRegistry.CollisionCount;
+
+                // Must succeed, and must not throw reading the dead one's name.
+                if (!NetworkIdentityRegistry.RegisterExisting(arrival, id))
+                    return UnitTestResult.Fail(
+                        "a destroyed holder still owned the slot; every replacement is a permanent collision");
+
+                if (NetworkIdentityRegistry.CollisionCount != before)
+                    return UnitTestResult.Fail(
+                        "replacing a destroyed holder counted as a collision - the counter stops meaning anything");
+
+                if (!NetworkIdentityRegistry.TryGet(id, out var holder) || !ReferenceEquals(holder, arrival))
+                    return UnitTestResult.Fail("the slot does not resolve to the new object");
+
+                return UnitTestResult.Pass("a stale slot is taken over rather than fought over");
+            }
+            finally
+            {
+                NetworkIdentityRegistry.Unregister(id, arrival);
+                Destroy(arrival);
+            }
+        }
+
         [UnitTest(name: "Re-registering the same object is not a collision", category: "Registry")]
         public static UnitTestResult ReRegisterIsIdempotent()
         {
