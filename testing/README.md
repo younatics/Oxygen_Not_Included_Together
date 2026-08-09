@@ -111,6 +111,12 @@ cd <레포>\testing
 .\deploy-to-peer.ps1 -PeerHost 192.168.0.42 -PeerUser <계정>
 ```
 
+> ⚠️ **PC-B 에서 따로 빌드하면 안 된다.** 이 빌드는 byte-reproducible 이 아니다.
+> 같은 커밋을 그대로 rebuild 해도 DLL sha256 이 바뀐다 (측정: `0FF63E01…` → `42B9C33B…`).
+> `Deterministic` 이 안 켜져 있어 MVID·타임스탬프가 매번 달라진다.
+> 규칙 2("두 박스 byte-identical")를 지키는 방법은 **PC-A 에서 빌드하고 밀어넣는 것 하나뿐**이다.
+> 그래서 **재빌드할 때마다 `deploy-to-peer.ps1` 을 다시 돌려야 한다.**
+
 ---
 
 ## 4. ⚠️ 반드시 확인 — Workshop 버전을 끈다
@@ -155,6 +161,16 @@ Harmony 패치가 두 번 적용된다. 감사 항목 상당수(중복 실행·�
 ```powershell
 python diff_logs.py runs\S1-baseline\host.log runs\S1-baseline\client.log
 ```
+
+WinRM 이 붙어 있으면 **PC-A 에서 한 번에** 끝난다 — 양쪽 스냅샷 + DLL 해시 대조 + differ:
+
+```powershell
+.\fetch-peer-logs.ps1 -PeerHost 192.168.0.42 -PeerUser <계정> -Label S1-baseline
+```
+
+`host.log` · `client.log` · 양쪽 `meta.json` · `diff.json` 이 `runs\S1-baseline\` 에 모이고,
+두 박스의 `modDllSha256` 이 다르면 **differ 를 돌리지 않고 실패시킨다** (어긋난 쌍은 조사 중인
+버그와 똑같은 증상을 내므로 그 실행은 해석 불가다). exit code 는 `diff_logs.py` 의 것을 그대로 낸다.
 
 세션이 **도는 동안** 상태를 보려면 (다른 사람·에이전트가 같이 볼 때):
 
