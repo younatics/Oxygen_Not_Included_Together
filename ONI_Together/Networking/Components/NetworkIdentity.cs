@@ -69,7 +69,10 @@ namespace ONI_Together.Networking.Components
 
 		public static void NoteLazyIdentity(GameObject go)
 		{
-			string prefab = go == null ? "?" : go.name;
+			// Grouped by kind, not by instance. Unity names a clone
+			// "LadderPreview(193236)_visualizer", so counting raw names produced
+			// a list of one-offs and hid that they were all the same thing.
+			string prefab = StripInstanceId(go == null ? "?" : go.name);
 			_lazyIdentities.TryGetValue(prefab, out int n);
 			_lazyIdentities[prefab] = n + 1;
 
@@ -84,6 +87,15 @@ namespace ONI_Together.Networking.Components
 		}
 
 		public static void ClearLazyIdentities() => _lazyIdentities.Clear();
+
+		private static string StripInstanceId(string name)
+		{
+			int open = name.IndexOf('(');
+			if (open < 0) return name;
+			int close = name.IndexOf(')', open);
+			if (close < 0) return name.Substring(0, open);
+			return name.Substring(0, open) + name.Substring(close + 1);
+		}
 
 		public static void ResetPreviewCounters()
 		{
