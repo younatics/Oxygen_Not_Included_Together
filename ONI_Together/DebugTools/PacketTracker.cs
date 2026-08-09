@@ -186,6 +186,12 @@ namespace ONI_Together.DebugTools
                 long recvB = i != null ? i.TotalBytes : 0;
                 DebugConsole.Log($"{tag} {name}|sent={sent}|recv={recv}|sentBytes={sentB}|recvBytes={recvB}");
             }
+            DebugConsole.Log(
+                $"{tag} previewsCreated={Networking.Components.NetworkIdentity.PreviewsCreated}" +
+                $"|previewsAdopted={Networking.Components.NetworkIdentity.PreviewsAdopted}" +
+                $"|registry={Networking.NetworkIdentityRegistry.Count}" +
+                $"|lookupFails={Networking.NetworkIdentityRegistry.LookupFailCount}" +
+                $"|collisions={Networking.NetworkIdentityRegistry.CollisionCount}");
             DebugConsole.Log($"{tag} END");
         }
 

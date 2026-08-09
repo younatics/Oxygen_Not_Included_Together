@@ -21,6 +21,21 @@ namespace ONI_Together.Networking.Components
 		[SkipSaveFileSerialization]
 		public bool IsClientPreview { get; private set; }
 
+		/// <summary>
+		/// How many previews were drawn and how many were later named by the
+		/// host. A gap between them is the count of objects a client can see but
+		/// cannot address, which is otherwise only visible as failed lookups
+		/// somewhere else entirely.
+		/// </summary>
+		public static int PreviewsCreated { get; private set; }
+		public static int PreviewsAdopted { get; private set; }
+
+		public static void ResetPreviewCounters()
+		{
+			PreviewsCreated = 0;
+			PreviewsAdopted = 0;
+		}
+
 		public override void OnSpawn()
 		{
 			using var _ = Profiler.Scope();
@@ -31,7 +46,10 @@ namespace ONI_Together.Networking.Components
 			// KInstantiate call that set it, and only objects that carry a
 			// NetworkIdentity care.
 			if (KInstantiatePatch.ConsumeClientPreviewFlag())
+			{
 				IsClientPreview = true;
+				PreviewsCreated++;
+			}
 
 			RegisterIdentity();
 		}
@@ -111,7 +129,11 @@ namespace ONI_Together.Networking.Components
 			using var _ = Profiler.Scope();
 
 			// The host has named this object, so it is no longer a preview.
-			IsClientPreview = false;
+			if (IsClientPreview)
+			{
+				IsClientPreview = false;
+				PreviewsAdopted++;
+			}
 
 			// Unregister old NetId
 			NetworkIdentityRegistry.Unregister(NetId, this);
