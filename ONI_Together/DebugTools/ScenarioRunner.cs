@@ -210,6 +210,11 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                case "packets":
+                    PacketTracker.DumpCounts();
+                    DebugConsole.Log($"{Tag} OK packets");
+                    break;
+
                 case "runtests":
                 {
                     var categories = parts.Skip(1).ToArray();

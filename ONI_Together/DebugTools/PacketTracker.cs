@@ -155,6 +155,40 @@ namespace ONI_Together.DebugTools
             RecordBw(_instance._inBw, data.packet.GetType().Name, data.size);
         }
 
+        /// <summary>
+        /// Write per-type sent and received counts to the log.
+        ///
+        /// The tracker has counted these all along but only ever showed them in
+        /// ImGui, so nothing outside the running game could read them. Inferring
+        /// packet flow from log greps instead led to the wrong conclusion that
+        /// DigCompletePacket and the deconstruct packets were never sent: they
+        /// are sent, they simply do not log. Absence of a log line is not
+        /// absence of a packet, and this is the number that settles it.
+        /// </summary>
+        public static void DumpCounts(string tag = "[PACKETS]")
+        {
+            if (_instance == null)
+            {
+                DebugConsole.LogWarning($"{tag} tracker not initialised");
+                return;
+            }
+
+            var names = new SortedSet<string>();
+            foreach (var k in _instance._outBw.Keys) names.Add(k);
+            foreach (var k in _instance._inBw.Keys) names.Add(k);
+
+            DebugConsole.Log($"{tag} BEGIN types={names.Count}");
+            foreach (var name in names)
+            {
+                long sent = _instance._outBw.TryGetValue(name, out var o) ? o.TotalCount : 0;
+                long recv = _instance._inBw.TryGetValue(name, out var i) ? i.TotalCount : 0;
+                long sentB = o != null ? o.TotalBytes : 0;
+                long recvB = i != null ? i.TotalBytes : 0;
+                DebugConsole.Log($"{tag} {name}|sent={sent}|recv={recv}|sentBytes={sentB}|recvBytes={recvB}");
+            }
+            DebugConsole.Log($"{tag} END");
+        }
+
         public void Clear()
         {
             using var _ = Profiler.Scope();
