@@ -3,6 +3,7 @@ using ONI_Together.DebugTools;
 using System.Collections.Generic;
 using System.IO;
 using Shared.Profiling;
+using UnityEngine;
 
 namespace ONI_Together.Networking.Components
 {
@@ -52,6 +53,37 @@ namespace ONI_Together.Networking.Components
 		private static int _reservedNetId;
 
 		public static void ReserveNextNetId(int netId) => _reservedNetId = netId;
+
+		/// <summary>
+		/// Objects that only got an identity because somebody was about to send
+		/// a packet about them, counted per prefab.
+		///
+		/// A lazily attached identity is one-sided by construction: the sender
+		/// asks and gets one, the receiver holds the same object, never asks,
+		/// and so has nothing to resolve the packet against. Anything appearing
+		/// here should be attached at spawn on both peers instead.
+		/// </summary>
+		private static readonly Dictionary<string, int> _lazyIdentities = new Dictionary<string, int>();
+
+		public static IReadOnlyDictionary<string, int> LazyIdentities => _lazyIdentities;
+
+		public static void NoteLazyIdentity(GameObject go)
+		{
+			string prefab = go == null ? "?" : go.name;
+			_lazyIdentities.TryGetValue(prefab, out int n);
+			_lazyIdentities[prefab] = n + 1;
+
+			// Once per prefab, not once per object - the point is which kinds of
+			// thing are missing a spawn-time identity, not how many there were.
+			if (n == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[NetworkIdentity] '{prefab}' had no identity until a packet needed one; " +
+					"the other peer will not have given it the same address");
+			}
+		}
+
+		public static void ClearLazyIdentities() => _lazyIdentities.Clear();
 
 		public static void ResetPreviewCounters()
 		{

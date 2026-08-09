@@ -48,10 +48,30 @@ namespace ONI_Together.Patches.World
 
         private static void HandlePostfix(Building building)
         {
+            var go = building.gameObject;
+
+            // A building site needs an address as much as a finished building.
+            //
+            // Work progress on a Constructable is reported by NetId, and the
+            // host gets one for free: sending the packet calls GetNetId(), which
+            // attaches a NetworkIdentity on demand. The client never sends
+            // progress, so it never asked, so its own copy of the same building
+            // site had no identity and no registry entry - and every progress
+            // packet for it was dropped. One live client failed to resolve 221
+            // distinct Constructables, 2523 times, and neither peer had ever
+            // registered a single one.
+            //
+            // Both peers create the site at the same cell from the same prefab,
+            // so GetDeterministicBuildingId gives them the same answer without
+            // any exchange.
+            if (building is BuildingUnderConstruction)
+            {
+                go.AddOrGet<NetworkIdentity>().RegisterIdentity();
+                return;
+            }
+
             if (building is not BuildingComplete)
                 return;
-
-            var go = building.gameObject;
 
             if (!RequiresNetworkIdentity(go))
                 return;

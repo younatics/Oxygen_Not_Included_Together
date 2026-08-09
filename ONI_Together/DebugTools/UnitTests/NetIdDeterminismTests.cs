@@ -193,6 +193,29 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"all {total} creatures carry an id");
         }
 
+        [UnitTest(name: "No identity was minted just to send a packet", category: "NetId")]
+        public static UnitTestResult NoLazyIdentities()
+        {
+            // A lazily attached identity is one-sided by construction. The peer
+            // about to send asks for one and gets it; the peer holding the same
+            // object never asks, so it has no address to resolve the packet
+            // against, and everything sent about that object is dropped.
+            //
+            // Building sites were exactly this: 221 distinct Constructables
+            // unresolvable on a client, 2523 times, while neither peer had ever
+            // registered one. Anything listed here wants attaching at spawn on
+            // both peers, the way BuildingSpawnPatch does it.
+            var lazy = NetworkIdentity.LazyIdentities;
+            if (lazy.Count == 0)
+                return UnitTestResult.Pass("every identity was attached at spawn");
+
+            var worst = lazy.OrderByDescending(kvp => kvp.Value)
+                            .Take(5)
+                            .Select(kvp => $"{kvp.Key} x{kvp.Value}");
+            return UnitTestResult.Fail(
+                $"{lazy.Count} prefabs only got an identity when a packet needed one: {string.Join(", ", worst)}");
+        }
+
         [UnitTest(name: "No registry lookup failures", category: "NetId")]
         public static UnitTestResult NoLookupFailures()
         {

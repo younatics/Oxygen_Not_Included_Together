@@ -35,6 +35,19 @@ namespace ONI_Together.Networking
 			if (go.TryGetComponent<NetworkIdentity>(out var identity))
 				return identity;
 
+			// Attaching an identity here is a last resort, and it is worth
+			// noticing when it happens. Only the peer that asks gets one: the
+			// host asks because it is about to send something addressed by
+			// NetId, and the other peer, holding the same object, never asks and
+			// so never gives it an address. Every packet about that object is
+			// then dropped on arrival.
+			//
+			// That is exactly how building sites went unsynced - 221 distinct
+			// Constructables unresolvable on a client, 2523 times, while neither
+			// peer had registered any of them. Anything that shows up in this
+			// count wants attaching at spawn on both peers instead, the way
+			// BuildingSpawnPatch does it.
+			NetworkIdentity.NoteLazyIdentity(go);
 			return go.AddComponent<NetworkIdentity>();
 		}
 
