@@ -249,6 +249,9 @@ namespace ONI_Together
 			InitializeAllIntegrations(); // All mods should be loaded, now find and initialize any integrations
 #if DEBUG
             UnitTestRegistry.DiscoverTests();
+            // Must outlive scene loads: the first command of a run is usually
+            // "load", and Game does not exist at the main menu.
+            ScenarioRunner.Install();
 #endif
 			// For now default to the steam transport
 			NetworkConfig.UpdateTransport(NetworkConfig.NetworkTransport.STEAMWORKS);

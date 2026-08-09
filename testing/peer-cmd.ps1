@@ -19,7 +19,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('ping', 'pull-mod', 'push-log', 'stop-oni', 'start-oni', 'quit')]
+    [ValidateSet('ping', 'pull-mod', 'push-log', 'run-tests', 'scenario', 'stop-oni', 'start-oni', 'quit')]
     [string]$Verb,
     [string]$Label,
     [string]$Share = 'C:\ONI_MP_Share',
@@ -39,7 +39,16 @@ $donePath = Join-Path $cmdDir "$id.done.json"
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 while ((Get-Date) -lt $deadline) {
     if (Test-Path $donePath) {
-        $reply = Get-Content $donePath -Raw | ConvertFrom-Json
+        # The agent may still be writing it; the file appears before it is closed.
+        $reply = $null
+        foreach ($attempt in 1..10) {
+            try { $reply = Get-Content $donePath -Raw -ErrorAction Stop | ConvertFrom-Json; break }
+            catch { Start-Sleep -Milliseconds 300 }
+        }
+        if (-not $reply) {
+            Write-Host "[peer-cmd] FAIL reply file never became readable: $donePath" -ForegroundColor Red
+            exit 1
+        }
         Remove-Item $donePath -Force -ErrorAction SilentlyContinue
         $reply | ConvertTo-Json -Depth 6
         if (-not $reply.ok) { exit 1 }

@@ -144,6 +144,23 @@ while ($running) {
                     }
                     'pull-mod'  { $reply.result = Invoke-PullMod }
                     'push-log'  { $reply.result = Invoke-PushLog $req.label }
+                    'run-tests' {
+                        # UnitTestRunner.Tick polls this path from Game.Update,
+                        # so the game must have a colony loaded for it to fire.
+                        $trigger = Join-Path $env:TEMP 'oni_together_runtests'
+                        if ($req.label) { Set-Content $trigger $req.label -Encoding UTF8 }
+                        else { Set-Content $trigger '' -Encoding UTF8 }
+                        $reply.result = @{ trigger = $trigger; categories = $req.label }
+                    }
+                    'scenario' {
+                        # ScenarioRunner validates the verb set; this only drops
+                        # the file. Label carries the command lines, ; separated.
+                        if (-not $req.label) { throw 'scenario needs a command in -Label' }
+                        $f = Join-Path $env:TEMP 'oni_together_cmd'
+                        ($req.label -split ';') | ForEach-Object { $_.Trim() } |
+                            Where-Object { $_ } | Set-Content $f -Encoding UTF8
+                        $reply.result = @{ file = $f; commands = (Get-Content $f) }
+                    }
                     'stop-oni'  {
                         $p = Get-OniProcess
                         if ($p) { $p | Stop-Process -Force; Start-Sleep -Seconds 3 }
