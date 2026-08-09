@@ -171,6 +171,10 @@ namespace ONI_Together.Networking
 
 			identities.Clear();
 			_lookupFailCount = 0;
+			// Carried over from the previous session before, so a clean run
+			// inherited the last one's collisions and the counter stopped
+			// meaning "this session".
+			_collisionCount = 0;
 			// TODO Rope into 1
 			GroundItemPickedUpPacket.ClearPending();
 			StorageItemPacket.ClearPending();
