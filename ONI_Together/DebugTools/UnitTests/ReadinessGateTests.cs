@@ -89,6 +89,29 @@ namespace ONI_Together.DebugTools.UnitTests
         }
 
         /// <summary>
+        /// What the missing-entity resolver actually did.
+        ///
+        /// Not an assertion so much as a reading. A run where the failure count
+        /// dropped sharply and the resolver had sent nothing would mean the
+        /// improvement came from somewhere else, and crediting the wrong change
+        /// is how a fix gets kept that does not work - this session has already
+        /// spent days on one counter that measured the wrong thing.
+        /// </summary>
+        [UnitTest(name: "Missing-entity resolver activity", category: "Readiness")]
+        public static UnitTestResult ResolverActivity()
+        {
+            var resolver = Networking.Components.MissingEntityResolver.Instance;
+            if (resolver.IsNullOrDestroyed())
+                return UnitTestResult.Fail("no MissingEntityResolver - unresolved ids are only counted, never fixed");
+
+            if (!MultiplayerSession.IsClient)
+                return UnitTestResult.Skip("only a client asks");
+
+            return UnitTestResult.Pass(
+                resolver.Describe() + $" registryFails={NetworkIdentityRegistry.LookupFailCount}");
+        }
+
+        /// <summary>
         /// Live check: nobody is still held behind the gate. A client stuck in
         /// Loading receives no world state at all, which would be a far worse
         /// bug than the warnings the gate removes - so it is worth asserting on

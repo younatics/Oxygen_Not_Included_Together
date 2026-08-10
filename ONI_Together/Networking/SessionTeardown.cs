@@ -48,6 +48,7 @@ namespace ONI_Together.Networking
 			// already sent damage that the new peer never received - the same
 			// shape of bug as recording a send that never happened.
 			Step("building damage", ClearDamageMemory);
+			Step("missing-entity queue", ClearResolverQueue);
 			// Pruned, never cleared. These track WORLD objects, and the world
 			// outlives the session - hosting starts by calling Clear() with a
 			// colony fully loaded, and nothing re-adds a plant that is already
@@ -59,6 +60,13 @@ namespace ONI_Together.Networking
 			// its own plants as phantoms. Session state and world state are not
 			// the same thing, and only the first belongs here.
 			Step("world trackers", PruneWorldTrackers);
+		}
+
+		private static void ClearResolverQueue()
+		{
+			var resolver = MissingEntityResolver.Instance;
+			if (resolver.IsNullOrDestroyed()) return;
+			resolver.ResetForNewSession();
 		}
 
 		private static void ClearDamageMemory()

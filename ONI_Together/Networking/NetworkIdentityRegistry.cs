@@ -289,6 +289,12 @@ namespace ONI_Together.Networking
 			{
 				_lookupFailCount++;
 				Blame(_failuresByCaller, caller, callerFile);
+
+				// The same signal that counts the divergence can also close it.
+				// A id that keeps arriving and resolves to nothing is an object
+				// this peer is missing, and the host can send it. Bounded and
+				// rate limited on the other side; this only names the id.
+				Components.MissingEntityResolver.Report(netId);
 				if (_lookupFailCount <= 3 || _lookupFailCount % 500 == 0 || Time.unscaledTime - _lastFailLogTime > 1f)
 				{
 					_lastFailLogTime = Time.unscaledTime;
