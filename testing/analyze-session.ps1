@@ -188,6 +188,13 @@ Head 'exact NetId comparison (netid_compare.py)'
 & $Python (Join-Path $root 'netid_compare.py') $hostLog $clientLog --json (Join-Path $dest 'netid.json')
 $netidCode = $LASTEXITCODE
 
+Head 'cross-peer state comparison (state_compare.py)'
+# The only check that answers "do the two peers agree about the world?". Every
+# other gate is a local invariant and cannot see the other box. Damage in
+# particular is what a player notices first and what stayed wrong longest.
+& $Python (Join-Path $root 'state_compare.py') $hostLog $clientLog
+$stateCode = $LASTEXITCODE
+
 Head 'single-log audit #3 gate (selfcheck_log.py)'
 $selfCodes = @{}
 foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
@@ -203,11 +210,12 @@ Say ("  client log   {0} MB, {1} mod lines" -f $clientMeta.playerLogMB, $clientM
 Say ("  diff_logs      exit {0}  {1}" -f $diffCode,   $(if ($diffCode   -eq 1) { 'DIVERGENCE CONFIRMED' } elseif ($diffCode   -eq 0) { 'clean' } else { 'error' }))
 Say ("  netid_compare  exit {0}  {1}" -f $netidCode,  $(if ($netidCode  -eq 1) { 'PEERS DISAGREE ON IDS' } elseif ($netidCode -eq 0) { 'ids agree' } else { 'no dump - was runtests triggered?' }))
 Say ("  selfcheck      host exit {0}, client exit {1}" -f $selfCodes['host'], $selfCodes['client'])
+Say ("  state_compare  exit {0}  {1}" -f $stateCode, $(if ($stateCode -eq 1) { 'PEERS DISAGREE ABOUT WORLD STATE' } elseif ($stateCode -eq 0) { 'state agrees' } else { 'no dump - was runtests triggered?' }))
 Say ''
 Say "  artifacts: $dest"
 
 $verdict -join "`r`n" | Set-Content (Join-Path $dest 'verdict.txt') -Encoding UTF8
 
 if ($Mode -eq 'live') { exit 0 }
-if ($diffCode -eq 1 -or $netidCode -eq 1) { exit 1 }
+if ($diffCode -eq 1 -or $netidCode -eq 1 -or $stateCode -eq 1) { exit 1 }
 exit 0
