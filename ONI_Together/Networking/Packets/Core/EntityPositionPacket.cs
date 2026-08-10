@@ -54,9 +54,15 @@ public class EntityPositionPacket : IPacket, IViewportCullable
 
 		if (NetworkIdentityRegistry.TryGet(NetId, out var entity))
 		{
+			// The registry-miss branch below reports itself; this one did not,
+			// so an entity that is registered but never got a handler was frozen
+			// at its spawn position and invisible to every diagnostic.
 			EntityPositionHandler handler = entity.GetComponent<EntityPositionHandler>();
 			if (!handler)
+			{
+				ThrottledLog.Warn($"[Packets] '{entity.name}' has no position handler; it cannot follow the host");
 				return;
+			}
 
 			if (handler.serverTimestamp > Timestamp)
 				return;

@@ -97,7 +97,12 @@ public class PlayAnimPacket : IPacket
 		// Keep the last event time per entity so older anim packets cannot rewind newer state.
 		if (LastIdUpdates.TryGetValue(NetId, out var lastTimeStamp) && lastTimeStamp > TimeStamp)
 			return;
-		LastIdUpdates[NetId] = TimeStamp;
+		// Deliberately NOT stamped yet. This used to record the timestamp here,
+		// before the packet had been applied - so a drop further down (no
+		// animation controller, an empty anim list) still moved the watermark
+		// forward, and the resend that would have repaired it was then rejected
+		// as stale. The entity stayed frozen on its last animation with the
+		// retry path quietly disarmed. It is stamped once something was done.
 
 
 		if (!AnimHashes.Any())
@@ -124,7 +129,12 @@ public class PlayAnimPacket : IPacket
 
 		//// Fallback: direct animation control for non-duplicant entities
 		if (!go.TryGetComponent(out KBatchedAnimController kbac))
+		{
+			ThrottledLog.Warn($"[PlayAnim] '{go.name}' has no animation controller");
 			return;
+		}
+
+		LastIdUpdates[NetId] = TimeStamp;
 
 		if (MultipleAnims)
 		{

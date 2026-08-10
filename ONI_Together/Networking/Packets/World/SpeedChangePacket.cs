@@ -47,8 +47,16 @@ namespace ONI_Together.Networking.Packets.World
 		{
 			using var _ = Profiler.Scope();
 
+			// Speed is not cosmetic: a client that misses a pause keeps
+			// simulating while the host is stopped, and the two worlds drift
+			// apart at their own rates. The screen is routinely absent during a
+			// load, which is exactly when the host is most likely to be paused,
+			// so this drop lands at the worst moment.
 			if (SpeedControlScreen.Instance == null)
+			{
+				ThrottledLog.Warn($"[SpeedChange] no speed control yet; {Speed} was not applied");
 				return;
+			}
 
 			SpeedControlScreen_SendSpeedPacketPatch.IsSyncing = true;
 			try

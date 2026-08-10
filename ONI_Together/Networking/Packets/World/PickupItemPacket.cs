@@ -15,6 +15,11 @@ namespace ONI_Together.Networking.Packets.World
     /// </summary>
     public class PickupItemPacket : IPacket, IBulkablePacket
     {
+		private static readonly PendingRemovals Pending = new PendingRemovals("PendingPickupItem");
+
+		public static bool TryConsumePending(int netId) => Pending.TryConsume(netId);
+		public static void ClearPending() => Pending.Clear();
+
         public int NetId;
 
         public int MaxPackSize => 500;
@@ -38,7 +43,16 @@ namespace ONI_Together.Networking.Packets.World
             using var _ = Profiler.Scope();
 
             if (!NetworkIdentityRegistry.TryGetComponent<Pickupable>(NetId, out var pickupable))
-                return; // skip
+            {
+                // Its two siblings - GroundItemPickedUpPacket and
+                // StorageItemPacket - both hold a notice that arrives before
+                // the thing it refers to. This one dropped it, so a client that
+                // heard about the pickup first kept the item on the ground for
+                // good.
+                Pending.Queue(NetId);
+                ThrottledLog.Warn("[PickupItemPacket] pickup arrived for an item this peer does not have");
+                return;
+            }
 
             DisplayFX(pickupable.gameObject);
             Util.KDestroyGameObject(pickupable.gameObject);

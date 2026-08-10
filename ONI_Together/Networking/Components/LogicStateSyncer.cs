@@ -206,7 +206,19 @@ namespace ONI_Together.Networking.Components
         public void SendStateToClient(ulong playerId, int netId)
         {
             if (!_tracked.TryGetValue(netId, out var entry))
-                return;
+            {
+                // The host side of the same staleness. A client whose logic
+                // state has gone quiet asks for it here; an entry stranded
+                // under its old key meant the answer never came, and the client
+                // asked again at every cooldown with nothing to show for it on
+                // either side.
+                if (!NetworkIdentityRegistry.TryGet(netId, out var identity) || identity == null ||
+                    !TryRekey(identity.gameObject, netId, out entry))
+                {
+                    ThrottledLog.Warn($"[LogicState] cannot answer a request for NetId {netId}: not tracked here");
+                    return;
+                }
+            }
 
             if (entry.go.IsNullOrDestroyed())
                 return;

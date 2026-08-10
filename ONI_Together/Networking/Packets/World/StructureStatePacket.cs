@@ -1,3 +1,4 @@
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System.IO;
 using Shared.Profiling;
@@ -75,6 +76,17 @@ namespace ONI_Together.Networking.Packets.World
             if(NetworkIdentityRegistry.TryGet(NetId, out var identity))
             {
                 var syncers = identity.GetComponents<StructureSyncerBase>();
+                // An identity with no structure syncer swallows the whole
+                // snapshot - battery charge, generator fuel, storage contents,
+                // toilet fill, reactor state and the damage reconciliation with
+                // it - and did so without a word.
+                if (syncers == null || syncers.Length == 0)
+                {
+                    ThrottledLog.Warn(
+                        $"[StructureState] '{identity.name}' has no structure syncer; its state cannot be applied");
+                    return;
+                }
+
                 foreach (var syncer in syncers)
                 {
                     syncer.HandlePacket(this);
