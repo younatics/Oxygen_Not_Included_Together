@@ -70,7 +70,8 @@ namespace ONI_Together.DebugTools.UnitTests
                     "damage cannot be replicated: " + string.Join(", ", unaddressable.Take(8)));
             }
 
-            string traffic = " :: " + Networking.Packets.World.BuildingDamagePacket.Describe();
+            string traffic = " :: " + Networking.Packets.World.BuildingDamagePacket.Describe()
+                + " :: " + Patches.World.BuildingHP_OnDoBuildingDamage_Patch.Describe();
             return damaged == 0
                 ? UnitTestResult.Pass("nothing damaged" + traffic)
                 : UnitTestResult.Pass($"{damaged} damaged buildings, all addressable" + traffic);

@@ -39,13 +39,71 @@ namespace ONI_Together.Patches.World
 
         public static void ResetForNewSession() => _suppressed = 0;
 
+        /// <summary>Damage this patch let through because the mod asked for it.</summary>
+        public static long AllowedCount { get; private set; }
+
+        /// <summary>What the last few blocked events said their source was.</summary>
+        public static string LastBlockedSource { get; private set; } = "none";
+
+        public static string Describe() =>
+            $"suppressed={_suppressed} allowed={AllowedCount} lastBlockedSource={LastBlockedSource}";
+
+        /// <summary>
+        /// True while this mod is applying the host's hit points.
+        ///
+        /// The source string was the original test and it never once matched.
+        /// BoxingTrigger does not hand the event its payload directly - it wraps
+        /// it, and the argument arriving here is a Boxed&lt;T&gt;, so
+        /// "data is DamageSourceInfo" was false for every event in the session.
+        /// Measured: allowed=0 against suppressed=205. This patch was not
+        /// filtering local damage, it was blocking all damage including the
+        /// corrections it exists to let through, which is why every corrective
+        /// packet ran and changed nothing - applied=0, ineffective=26 - and why
+        /// building damage never converged however many times I fixed the sender.
+        ///
+        /// A flag set around the call does not care how the payload is wrapped.
+        /// The trigger is synchronous, so the window is exactly the one call.
+        /// </summary>
+        private static bool _applyingHostDamage;
+
+        public static bool ApplyingHostDamage => _applyingHostDamage;
+
+        /// <summary>Marks a block of code as "this damage came from the host, let it through".</summary>
+        public static System.IDisposable HostDamageScope() => new Scope();
+
+        private sealed class Scope : System.IDisposable
+        {
+            private readonly bool _previous;
+            public Scope() { _previous = _applyingHostDamage; _applyingHostDamage = true; }
+            public void Dispose() { _applyingHostDamage = _previous; }
+        }
+
         public static bool Prefix(object data)
         {
             if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
                 return true;
 
-            if (data is BuildingHP.DamageSourceInfo info && info.source == MultiplayerSource)
+            if (_applyingHostDamage)
+            {
+                AllowedCount++;
                 return true;
+            }
+
+            // Kept as a second chance in case a caller sets the source without
+            // going through the scope. It has never fired; see above.
+            if (data is BuildingHP.DamageSourceInfo info && info.source == MultiplayerSource)
+            {
+                AllowedCount++;
+                return true;
+            }
+
+            // Records what it saw, because "the correction ran and changed
+            // nothing" has two very different causes - this patch refusing it,
+            // or the game's own handler declining it - and they are
+            // indistinguishable from the receiver's side.
+            LastBlockedSource = data is BuildingHP.DamageSourceInfo blocked
+                ? (blocked.source ?? "null") + $" dmg={blocked.damage}"
+                : "not-a-DamageSourceInfo:" + (data?.GetType().Name ?? "null");
 
             // Counted rather than logged per event. A meteor shower or a
             // flooded room produces these by the hundred, and a line each would

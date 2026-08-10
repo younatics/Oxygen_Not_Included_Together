@@ -56,14 +56,17 @@ namespace ONI_Together.Networking.Packets.World
         public static int Applied { get; private set; }
         public static int AlreadyEqual { get; private set; }
 
+        /// <summary>Corrections that ran and changed nothing - the interesting failure.</summary>
+        public static int Ineffective { get; private set; }
+
         public static void ResetForNewSession()
         {
-            Received = Unresolved = NoHitPoints = Applied = AlreadyEqual = 0;
+            Received = Unresolved = NoHitPoints = Applied = AlreadyEqual = Ineffective = Forced = 0;
         }
 
         public static string Describe() =>
-            $"received={Received} applied={Applied} same={AlreadyEqual} " +
-            $"unresolved={Unresolved} nohp={NoHitPoints}";
+            $"received={Received} applied={Applied} forced={Forced} ineffective={Ineffective} same={AlreadyEqual} " +
+            $"unresolved={Unresolved} nohp={NoHitPoints} via={ForcedVia}";
 
         public void OnDispatched()
         {
@@ -99,8 +102,115 @@ namespace ONI_Together.Networking.Packets.World
                 return;
             }
 
+            // Counted from the effect, not the call.
+            //
+            // "applied=15" was incremented on reaching Apply, which says nothing
+            // about whether the hit points moved - and this session has already
+            // lost days to a counter that measured intent. If the correction is
+            // being refused downstream, that has to show up here rather than
+            // read as success.
+            int before = hp.HitPoints;
             Apply(hp, HitPoints);
-            Applied++;
+
+            if (hp.HitPoints == before)
+                Ineffective++;
+            else
+                Applied++;
+        }
+
+        /// <summary>Repairs applied by writing the value, because the event declined them.</summary>
+        public static int Forced { get; private set; }
+
+        /// <summary>Which member the write went through, or why it could not.</summary>
+        public static string ForcedVia { get; private set; } = "not needed";
+
+        private static System.Reflection.PropertyInfo _hitPointsProperty;
+        private static System.Reflection.FieldInfo _hitPointsField;
+        private static bool _lookedUp;
+
+        /// <summary>
+        /// Last resort for the one case the damage event will not do: raising hit
+        /// points. It names the member it found so the next reader does not have
+        /// to guess whether reflection is doing anything.
+        /// </summary>
+        private static void ForceHitPoints(BuildingHP buildingHP, int hostHp)
+        {
+            if (!_lookedUp)
+            {
+                _lookedUp = true;
+                var type = typeof(BuildingHP);
+                const System.Reflection.BindingFlags any =
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic;
+
+                _hitPointsProperty = type.GetProperty("HitPoints", any);
+                if (_hitPointsProperty != null && !_hitPointsProperty.CanWrite)
+                    _hitPointsProperty = null;
+
+                if (_hitPointsProperty == null)
+                {
+                    // "hitpoints" - all lower case, which is why three plausible
+                    // camel-cased guesses found nothing and the enumeration below
+                    // had to be written to answer it.
+                    foreach (var name in new[] { "hitpoints", "hitPoints", "_hitPoints", "<HitPoints>k__BackingField" })
+                    {
+                        _hitPointsField = type.GetField(name, any);
+                        if (_hitPointsField != null && _hitPointsField.FieldType == typeof(int)) break;
+                        _hitPointsField = null;
+                    }
+                }
+
+                if (_hitPointsProperty != null)
+                {
+                    ForcedVia = "property HitPoints";
+                }
+                else if (_hitPointsField != null)
+                {
+                    ForcedVia = "field " + _hitPointsField.Name;
+                }
+                else
+                {
+                    // Names it rather than reporting a dead end. Three guesses at
+                    // a field name found nothing, and one more round of guessing
+                    // is exactly the loop this session keeps paying for - so it
+                    // lists what is actually there and the next run reads it.
+                    var candidates = new System.Collections.Generic.List<string>();
+                    foreach (var f in type.GetFields(any))
+                        if (f.FieldType == typeof(int) || f.FieldType == typeof(float))
+                            candidates.Add($"f:{f.Name}:{f.FieldType.Name}");
+                    foreach (var p in type.GetProperties(any))
+                        if (p.PropertyType == typeof(int) || p.PropertyType == typeof(float))
+                            candidates.Add($"p:{p.Name}:{p.PropertyType.Name}{(p.CanWrite ? "(w)" : "")}");
+
+                    ForcedVia = "none of the guesses; numeric members are [" +
+                        string.Join(" ", candidates) + "]";
+                }
+            }
+
+            try
+            {
+                if (_hitPointsProperty != null) _hitPointsProperty.SetValue(buildingHP, hostHp);
+                else if (_hitPointsField != null) _hitPointsField.SetValue(buildingHP, hostHp);
+                else return;
+
+                Forced++;
+
+                // No follow-up event, deliberately.
+                //
+                // Writing the number alone can leave a stale repair errand and
+                // overlay, which is normally the reason to go through the game's
+                // own event rather than the field. It does not matter here: this
+                // only runs on a client, and a client's chore system is switched
+                // off - the host owns every errand in the colony. There is also
+                // no GameHashes entry for a repair to trigger, and guessing at a
+                // hash name is a worse failure than a stale icon.
+
+            }
+            catch (System.Exception ex)
+            {
+                ForcedVia = "failed: " + ex.GetType().Name;
+            }
         }
 
         /// <summary>
@@ -123,12 +233,32 @@ namespace ONI_Together.Networking.Packets.World
 
             // Positive delta: this peer is healthier than the host, so damage it
             // by the difference. Negative: the host repaired, so heal by it.
-            buildingHP.gameObject.BoxingTrigger((int)GameHashes.DoBuildingDamage, new BuildingHP.DamageSourceInfo
+            //
+            // Inside the scope, because on a client the mod refuses locally
+            // simulated damage and the source string it used to check by never
+            // survived BoxingTrigger's wrapper - so this correction was being
+            // refused along with the local damage it was meant to override.
+            using (Patches.World.BuildingHP_OnDoBuildingDamage_Patch.HostDamageScope())
             {
-                damage = delta,
-                source = "Multiplayer",
-                popString = string.Empty,
-            });
+                buildingHP.gameObject.BoxingTrigger((int)GameHashes.DoBuildingDamage, new BuildingHP.DamageSourceInfo
+                {
+                    damage = delta,
+                    source = Patches.World.BuildingHP_OnDoBuildingDamage_Patch.MultiplayerSource,
+                    popString = string.Empty,
+                });
+            }
+
+            // Healing needs a different route.
+            //
+            // The damage event subtracts, and a negative amount is not a repair
+            // as far as the game is concerned - it declines it. So a building the
+            // host repaired stayed broken on the client forever, while damage in
+            // the other direction worked: two corrections per run that ran and
+            // moved nothing. The event is still the right first choice because it
+            // updates Damaged, queues the repair errand and sets the overlay; this
+            // only steps in when it demonstrably did nothing.
+            if (buildingHP.HitPoints != hostHp)
+                ForceHitPoints(buildingHP, hostHp);
         }
     }
 }

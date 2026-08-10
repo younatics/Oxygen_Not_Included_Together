@@ -316,9 +316,25 @@ namespace ONI_Together.Networking
 				}
 				else
 				{
-					DebugConsole.Log("[GameClient] Hard sync in progress, sending ready status");
-					// Tell the host we're ready
-					ReadyManager.SendReadyStatusPacket(ClientReadyState.Ready);
+					// Loading, not Ready - this branch runs in the main menu.
+					//
+					// It used to report Ready from here, which is the opposite of
+					// true: the client is sitting in the menu waiting for a hard
+					// sync and has no world, no grid and an empty identity
+					// registry. Nothing structural depended on the value - the
+					// host only counts Ready players for the lobby text - but two
+					// things read it and were misled.
+					//
+					// The send gate for NetId-addressed packets opens on anything
+					// that is not Loading, so it opened here and world state went
+					// to a peer that could not apply a word of it. And the damage
+					// syncer re-asserts when a peer becomes ready: it fired twice
+					// per session, once against this phantom Ready and once
+					// against the real one, and the first batch of 36 packets was
+					// the "unresolved=36" that appeared in every run and that I
+					// spent four iterations failing to explain.
+					DebugConsole.Log("[GameClient] Hard sync in progress, reporting Loading");
+					ReadyManager.SendReadyStatusPacket(ClientReadyState.Loading);
 				}
 			}
 			else if (Utils.IsInGame())
