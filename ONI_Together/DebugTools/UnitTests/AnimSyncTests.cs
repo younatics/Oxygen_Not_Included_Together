@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ONI_Together.Networking;
@@ -126,22 +127,53 @@ namespace ONI_Together.DebugTools.UnitTests
 		[UnitTest(name: "Anim sync: non-minion entities discoverable", category: "Animation")]
 		public static UnitTestResult NonMinionAnimEntitiesDiscoverable()
 		{
-			var identities = NetworkIdentityRegistry.AllIdentities;
-			foreach (var id in identities)
-			{
-				if (id.gameObject.GetComponent<KPrefabID>()?.HasTag(GameTags.BaseMinion) ?? false)
-					continue;
-				if (!id.gameObject.TryGetComponent<KBatchedAnimController>(out var _))
-					continue;
-				if (!id.gameObject.TryGetComponent<AnimStateSyncer>(out var _))
-					return UnitTestResult.Fail($"Entity '{id.gameObject.name}' is missing AnimStateSyncer");
-				if (!AnimSyncEligibility.IsAnimatedNonMinion(id.gameObject))
-					return UnitTestResult.Fail($"Entity '{id.gameObject.name}' should not have AnimStateSyncer");
+			// Eligibility decides, and it is checked before the component is
+			// demanded rather than after.
+			//
+			// This used to require an AnimStateSyncer on anything registered that
+			// had a KBatchedAnimController and was not a duplicant - which is
+			// nearly every visible object, ore included. Ore is not anim-synced and
+			// should not be, so the first ineligible object the enumeration reached
+			// failed the test. It surfaced when a change to stored-item ids altered
+			// what came first: a copper ore instead of a critter.
+			//
+			// It also returned on the very first object it looked at, pass or fail,
+			// so a test named for every non-minion entity examined exactly one. Both
+			// halves are checked now, in both directions, across all of them.
+			var missing = new List<string>();
+			var extra = new List<string>();
+			int eligible = 0;
 
-				return UnitTestResult.Pass($"Entity '{id.gameObject.name}' is sync-eligible");
+			foreach (var id in NetworkIdentityRegistry.AllIdentities)
+			{
+				if (id.IsNullOrDestroyed() || id.gameObject.IsNullOrDestroyed()) continue;
+
+				var go = id.gameObject;
+				if (go.GetComponent<KPrefabID>()?.HasTag(GameTags.BaseMinion) ?? false)
+					continue;
+
+				bool shouldSync = AnimSyncEligibility.IsAnimatedNonMinion(go);
+				bool hasSyncer = go.TryGetComponent<AnimStateSyncer>(out var _);
+
+				if (shouldSync) eligible++;
+
+				if (shouldSync && !hasSyncer) missing.Add(go.name);
+				else if (!shouldSync && hasSyncer) extra.Add(go.name);
 			}
 
-			return UnitTestResult.Skip("no non-minion animated network entities in the scene");
+			if (missing.Count > 0 || extra.Count > 0)
+			{
+				var parts = new List<string>();
+				if (missing.Count > 0)
+					parts.Add($"{missing.Count} eligible without a syncer: {string.Join(", ", missing.Take(5))}");
+				if (extra.Count > 0)
+					parts.Add($"{extra.Count} ineligible carrying one: {string.Join(", ", extra.Take(5))}");
+				return UnitTestResult.Fail(string.Join("; ", parts));
+			}
+
+			return eligible == 0
+				? UnitTestResult.Skip("no non-minion animated network entities in the scene")
+				: UnitTestResult.Pass($"{eligible} eligible entities, all carrying a syncer, none carrying one they should not");
 		}
 
 		[UnitTest(name: "Anim resync request packet: roundtrip", category: "Animation")]

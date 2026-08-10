@@ -94,7 +94,28 @@ namespace ONI_Together.DebugTools
             try
             {
                 if (!File.Exists(path)) return;
-                lines = File.ReadAllLines(path);
+
+                // Opened so a concurrent writer does not lock us out.
+                //
+                // File.ReadAllLines asks for exclusive-ish access, and the writer
+                // here is another process entirely - the peer agent, dropping a
+                // command in. When the two met, every poll failed with "Sharing
+                // violation" and kept failing, so the client sat at the main menu
+                // ignoring every command it was sent and the run died at the join
+                // step with "peer never reached an in-session state". Nothing was
+                // wrong with the session; the two processes were fighting over one
+                // small text file.
+                var read = new List<string>();
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                                   FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                        read.Add(line);
+                }
+                lines = read.ToArray();
+
                 // Delete before executing: a command that throws must not be
                 // retried forever, and "load" tears down the scene under us.
                 File.Delete(path);

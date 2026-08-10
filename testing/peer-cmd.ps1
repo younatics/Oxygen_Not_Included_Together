@@ -33,20 +33,54 @@ New-Item -ItemType Directory -Force -Path $cmdDir | Out-Null
 # Ticks rather than a random id: sortable, and the agent processes oldest first.
 $id  = "$Verb-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))"
 $req = [ordered]@{ id = $id; verb = $Verb; label = $Label; issuedUtc = (Get-Date).ToUniversalTime().ToString('o') }
-$req | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $cmdDir "$id.req.json") -Encoding UTF8
+# Written aside and renamed, so the agent never picks up a half-written request.
+# The agent polls for *.req.json and parses whatever it finds; a file that exists
+# before it is complete parses as nothing and comes back as a spurious failure.
+# A rename is atomic - the file either is not there or is whole.
+$reqTemp  = Join-Path $cmdDir "$id.req.writing"
+$reqFinal = Join-Path $cmdDir "$id.req.json"
+$req | ConvertTo-Json -Depth 4 | Set-Content $reqTemp -Encoding UTF8
+Move-Item -LiteralPath $reqTemp -Destination $reqFinal -Force
 
 $donePath = Join-Path $cmdDir "$id.done.json"
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 while ((Get-Date) -lt $deadline) {
     if (Test-Path $donePath) {
         # The agent may still be writing it; the file appears before it is closed.
+        #
+        # This used to try ten times over three seconds and then declare permanent
+        # failure, with minutes still left on the caller's own timeout. Over a
+        # share, a file being written stays unreadable for longer than that, and
+        # the cost of giving up early is not a retry - it is reporting a command
+        # that succeeded as failed. A push-log did exactly that: the caller was
+        # told it had failed, went on to collect, and found nothing, while the
+        # agent finished writing client.log and client.meta.json seventeen seconds
+        # later. Both files were there the whole time; the run was thrown away for
+        # a read that stopped waiting.
+        #
+        # Shared read access as well, because exclusive access against a live
+        # writer is the same fight in a different place.
         $reply = $null
-        foreach ($attempt in 1..10) {
-            try { $reply = Get-Content $donePath -Raw -ErrorAction Stop | ConvertFrom-Json; break }
-            catch { Start-Sleep -Milliseconds 300 }
+        while ($null -eq $reply -and (Get-Date) -lt $deadline) {
+            try {
+                $fs = [System.IO.File]::Open($donePath, [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read,
+                        [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                try {
+                    $sr = New-Object System.IO.StreamReader($fs)
+                    try { $text = $sr.ReadToEnd() } finally { $sr.Dispose() }
+                } finally { $fs.Dispose() }
+
+                # A truncated read parses as nothing, which is indistinguishable
+                # from a write still in progress - so treat it as "not yet".
+                if ($text) { $reply = $text | ConvertFrom-Json }
+            } catch {
+                $reply = $null
+            }
+            if ($null -eq $reply) { Start-Sleep -Milliseconds 400 }
         }
         if (-not $reply) {
-            Write-Host "[peer-cmd] FAIL reply file never became readable: $donePath" -ForegroundColor Red
+            Write-Host "[peer-cmd] FAIL reply never became readable within ${TimeoutSeconds}s: $donePath" -ForegroundColor Red
             exit 1
         }
         Remove-Item $donePath -Force -ErrorAction SilentlyContinue

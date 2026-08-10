@@ -284,8 +284,19 @@ while ($running) {
                 Warn "<- failed: $($_.Exception.Message)"
             }
             $reply.completedUtc = (Get-Date).ToUniversalTime().ToString('o')
-            $reply | ConvertTo-Json -Depth 6 |
-                Set-Content (Join-Path $cmdDir "$id.done.json") -Encoding UTF8
+
+            # Written to one side and renamed into place, so the host never sees a
+            # half-written reply.
+            #
+            # Set-Content straight to the final name means the file exists before it
+            # is complete, and the reader on the other end of a share cannot tell
+            # "still being written" from "corrupt". The reader was giving up on that
+            # and reporting successful commands as failures. A rename is atomic, so
+            # the file either is not there or is whole.
+            $finalPath = Join-Path $cmdDir "$id.done.json"
+            $tempPath  = Join-Path $cmdDir "$id.done.writing"
+            $reply | ConvertTo-Json -Depth 6 | Set-Content $tempPath -Encoding UTF8
+            Move-Item -LiteralPath $tempPath -Destination $finalPath -Force
             Remove-Item $r.FullName -Force -ErrorAction SilentlyContinue
         }
     } catch {
