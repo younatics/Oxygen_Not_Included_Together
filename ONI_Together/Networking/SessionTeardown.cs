@@ -38,16 +38,36 @@ namespace ONI_Together.Networking
 			Step("packet handler", PacketHandler.ResetForNewSession);
 			Step("packet sender", PacketSender.ResetForNewSession);
 			Step("identity statics", NetworkIdentity.ResetForNewSession);
-			Step("anim syncers", AnimSyncCoordinator.ResetForNewSession);
+			Step("anim syncers", AnimSyncCoordinator.PruneDestroyed);
 			Step("status subscriptions", StatusBroadcaster.ResetForNewSession);
 			Step("chore subscriptions", DuplicantChoreBroadcaster.ResetForNewSession);
 			Step("navigator overrides", NavigatorExtensions.ResetForNewSession);
-			Step("world trackers", () =>
+			// Pruned, never cleared. These track WORLD objects, and the world
+			// outlives the session - hosting starts by calling Clear() with a
+			// colony fully loaded, and nothing re-adds a plant that is already
+			// standing because they only register on Growing.OnSpawn.
+			//
+			// Wiping them was a real and destructive mistake: the host's plant
+			// sweep went out empty, 22 packets of nothing but header, and the
+			// client reconciles that sweep by absence - so it destroyed 294 of
+			// its own plants as phantoms. Session state and world state are not
+			// the same thing, and only the first belongs here.
+			Step("world trackers", PruneWorldTrackers);
+		}
+
+		/// <summary>
+		/// Drop entries whose objects are gone, keep the ones still standing. A
+		/// destroyed Unity object stays in a HashSet because the set keys on the
+		/// reference, not on the fake-null the == operator reports.
+		/// </summary>
+		private static void PruneWorldTrackers()
+		{
+			MopTracker.MopPlacers.RemoveWhere(go => go.IsNullOrDestroyed());
+			DisinfectTracker.Disinfectables.RemoveWhere(d => d.IsNullOrDestroyed());
+			lock (PlantTracker.AllPlants)
 			{
-				MopTracker.MopPlacers.Clear();
-				PlantTracker.AllPlants.Clear();
-				DisinfectTracker.Disinfectables.Clear();
-			});
+				PlantTracker.AllPlants.RemoveWhere(g => g.IsNullOrDestroyed());
+			}
 		}
 
 		private static void Step(string what, System.Action action)

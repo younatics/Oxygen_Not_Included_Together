@@ -262,6 +262,27 @@ namespace ONI_Together.Networking.Components
 						remoteByCell[plant.Cell] = plant;
 				}
 
+				// An empty sweep is not an instruction to destroy every plant.
+				//
+				// Reconciling by absence means the sweep is the whole truth, so a
+				// sweep that arrives empty because the SENDER lost track of its
+				// plants reads as "the colony has none" and the receiver dutifully
+				// razes it. That happened: clearing the host's plant tracker on a
+				// session boundary made it send 22 sweeps of nothing but header,
+				// and a client destroyed 294 of its own plants.
+				//
+				// A colony really can reach zero plants, so this is not a refusal
+				// - it is a refusal to do it silently and all at once. The sender
+				// is the one that has to be fixed, and it cannot be fixed if the
+				// damage is invisible.
+				if (sweepPlants.Count == 0 && PlantTracker.AllPlants.Count > 0)
+				{
+					DebugConsole.LogError(
+						$"[PlantGrowthSyncer] refusing an empty sweep while holding {PlantTracker.AllPlants.Count} " +
+						"plants - the sender has lost its plant tracking, and applying this would destroy them all");
+					return;
+				}
+
 				var matchedPlantIds = new HashSet<int>();
 				var matchedReceptacleIds = new HashSet<int>();
 				var matchedCells = new HashSet<int>();

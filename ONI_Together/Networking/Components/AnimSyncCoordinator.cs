@@ -36,7 +36,7 @@ namespace ONI_Together.Networking.Components
 		/// on every hard sync, and the per-tick walk dragged the accumulated
 		/// corpses along with it forever.
 		/// </summary>
-		public static void ResetForNewSession() => TrackedSyncers.Clear();
+		public static void PruneDestroyed() => TrackedSyncers.RemoveWhere(s => s.IsNullOrDestroyed());
 
 		public static AnimSyncCoordinator Instance { get; private set; }
 
