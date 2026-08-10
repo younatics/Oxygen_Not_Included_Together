@@ -193,7 +193,19 @@ namespace ONI_Together.Networking
 		/// became the most frequent exception in a host's log.
 		/// </summary>
 		private static string SafeName(NetworkIdentity identity)
-			=> identity.IsNullOrDestroyed() ? "destroyed" : identity.name;
+		{
+			if (identity.IsNullOrDestroyed()) return "destroyed";
+
+			// Name plus which object and which component, because the name alone
+			// cannot answer the question these lines get read for.
+			//
+			// A live colony logged "NetId reassigned from ColdWheat to ColdWheat"
+			// two hundred times in twenty minutes - three plants flipping between
+			// an id and that id plus one, once per sweep, forever. Whether that is
+			// one plant carrying two identity components or two plants sharing a
+			// cell decides which bug it is, and both read identically here.
+			return $"{identity.name}#{identity.gameObject.GetInstanceID()}/{identity.GetInstanceID()}";
+		}
 
 
 
