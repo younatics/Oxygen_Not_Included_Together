@@ -90,10 +90,6 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
             if (changed)
             {
-                lastSentValue = currentValue;
-                lastSentActive = currentActive;
-                lastOptionalValues = optionalValues;
-
                 var identity = gameObject.GetNetIdentity();
                 if (identity.NetId == 0)
                 {
@@ -110,17 +106,41 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                     OptionalValues = optionalValues,
                 };
 
+                int delivered = 0;
+
                 if (cullByViewport && WorldStateSyncer.Instance != null)
                 {
                     WorldStateSyncer.Instance.GetClientsViewingCell(cell, _viewportScratch, 2);
                     foreach (var playerId in _viewportScratch)
                     {
-                        PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable);
+                        if (PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable))
+                            delivered++;
                     }
                 }
                 else
                 {
-                    PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+                    delivered = PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+                }
+
+                // Only call it sent if it was sent.
+                //
+                // This used to record the new value the moment the change was
+                // detected, before the send - so a change that happened while no
+                // client was looking at that cell was marked delivered and never
+                // re-evaluated. The next tick saw no difference and stayed quiet,
+                // for good. A tile took damage off screen on the host and the
+                // client had it whole for the rest of the session, across two
+                // consecutive runs, creeping from 43/100 to 44/100 on one peer
+                // while the other read undamaged. Unlike position there is no
+                // heartbeat here to paper over it.
+                //
+                // Leaving the record unchanged costs one more comparison per
+                // tick and sends the moment somebody looks.
+                if (delivered > 0 || MultiplayerSession.ConnectedPlayers.Count <= 1)
+                {
+                    lastSentValue = currentValue;
+                    lastSentActive = currentActive;
+                    lastOptionalValues = optionalValues;
                 }
             }
         }
@@ -222,14 +242,14 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             int delta = buildingHP.HitPoints - hostHp;
             if (delta == 0) return;
 
-            // Positive delta: this peer is healthier than the host, so damage it
-            // by the difference. Negative: the host repaired, so heal by it.
-            gameObject.BoxingTrigger((int)GameHashes.DoBuildingDamage, new BuildingHP.DamageSourceInfo
-            {
-                damage = delta,
-                source = "Multiplayer",
-                popString = string.Empty,
-            });
+            // BuildingDamageSyncer owns damage now, because this path only ever
+            // covered buildings that have a syncer and only when that syncer's
+            // other state changed - a tile has no syncer at all. This stays as a
+            // second, earlier trigger for the buildings it does cover, and
+            // delegates so there is one implementation of the correction rather
+            // than two that can drift apart. Applying it twice is harmless: the
+            // second call computes a delta of zero.
+            BuildingDamagePacket.Apply(buildingHP, hostHp);
 
             // Leaves a trace, because a correction that works silently cannot be
             // told apart from one that never runs. The first attempt at this

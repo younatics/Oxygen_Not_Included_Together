@@ -146,6 +146,7 @@ namespace ONI_Together
 				go.AddComponent<AnimResyncRequester>();
 				go.AddComponent<BulkPacketMonitor>();
 				go.AddComponent<LogicStateSyncer>();
+				go.AddComponent<BuildingDamageSyncer>();
 
 				// CHECKPOINT 5
 				System.IO.File.AppendAllText(logPath, "[Trace] Checkpoint 5: Pre-Listeners\n");

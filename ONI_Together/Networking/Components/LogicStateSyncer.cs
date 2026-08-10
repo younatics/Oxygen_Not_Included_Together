@@ -101,10 +101,6 @@ namespace ONI_Together.Networking.Components
                 if (!changed)
                     continue;
 
-                entry.lastValue = value;
-                entry.lastActive = active;
-                entry.lastOptional = optional;
-
                 int cell = Grid.PosToCell(entry.go);
 
                 var packet = new LogicStatePacket
@@ -116,15 +112,34 @@ namespace ONI_Together.Networking.Components
                     OptionalValues = optional,
                 };
 
+                int delivered = 0;
+
                 if (WorldStateSyncer.Instance != null)
                 {
                     WorldStateSyncer.Instance.GetClientsViewingCell(cell, _viewportScratch, 2);
                     foreach (var playerId in _viewportScratch)
-                        PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable);
+                    {
+                        if (PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable))
+                            delivered++;
+                    }
                 }
                 else
                 {
-                    PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+                    delivered = PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
+                }
+
+                // Recorded after the send, and only if it went somewhere - the
+                // same reason as StructureSyncerBase. A wire that changes state
+                // while nobody is looking at it was being marked delivered and
+                // never sent again, so the client kept the old signal until
+                // something else happened to that circuit. Logic state is where
+                // this is least forgivable: a wire nobody watches is the normal
+                // case, and a stale signal reads as a broken automation.
+                if (delivered > 0 || MultiplayerSession.ConnectedPlayers.Count <= 1)
+                {
+                    entry.lastValue = value;
+                    entry.lastActive = active;
+                    entry.lastOptional = optional;
                 }
             }
 
