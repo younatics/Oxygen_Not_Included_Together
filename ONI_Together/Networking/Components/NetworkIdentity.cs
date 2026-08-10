@@ -88,6 +88,19 @@ namespace ONI_Together.Networking.Components
 
 		public static void ClearLazyIdentities() => _lazyIdentities.Clear();
 
+		/// <summary>
+		/// A reservation that was claimed but never consumed is the dangerous
+		/// one: the next identity to spawn - in the next session, belonging to
+		/// something else entirely - takes the id that was set aside for an
+		/// object that never arrived.
+		/// </summary>
+		public static void ResetForNewSession()
+		{
+			_reservedNetId = 0;
+			ClearLazyIdentities();
+			ResetPreviewCounters();
+		}
+
 		private static string StripInstanceId(string name)
 		{
 			int open = name.IndexOf('(');

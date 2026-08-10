@@ -71,6 +71,25 @@ namespace ONI_Together.Networking
 		/// <summary>Reset on session teardown so a new session does not inherit a high water mark.</summary>
 		public static void ResetSequence() => _sequence = 0;
 
+		/// <summary>
+		/// The bulk queues are keyed by connection object. A peer that goes away
+		/// with packets still queued leaves its serialized payloads rooted for
+		/// the life of the process, and the sequence counter - which handlers use
+		/// to refuse messages older than what they already applied - carried a
+		/// high-water mark into a fresh session where the other side starts at
+		/// zero, making every comparison between them meaningless.
+		/// </summary>
+		public static void ResetForNewSession()
+		{
+			ResetSequence();
+			UpdateRunners.Clear();
+			WaitingBulkPacketsPerReceiver.Clear();
+			WaitingBulkPacketBytes.Clear();
+			DragToolBulkPacketIds.Clear();
+			_undeliverable.Clear();
+			_undeliverableFlushTime = 0f;
+		}
+
         public static byte[] SerializePacketForSending(IPacket packet)
 		{
 			using var _ = Profiler.Scope();

@@ -8,6 +8,14 @@ namespace ONI_Together.Patches.Navigation
 	{
 		private static readonly Dictionary<Navigator, bool> canAdvanceMap = new Dictionary<Navigator, bool>();
 
+		/// <summary>
+		/// Keyed by a Navigator, and entries only leave when someone explicitly
+		/// sets the flag false. A duplicant destroyed by a world reload with the
+		/// flag still true leaves a strong reference to a dead component behind,
+		/// and a recycled instance can read the stale value.
+		/// </summary>
+		public static void ResetForNewSession() => canAdvanceMap.Clear();
+
 		private static readonly FieldInfo tacticField =
 				typeof(Navigator).GetField("tactic", BindingFlags.NonPublic | BindingFlags.Instance);
 

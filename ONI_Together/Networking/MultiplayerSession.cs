@@ -55,6 +55,11 @@ namespace ONI_Together.Networking
 			// So a count never spans two sessions and reads as one long retry
 			// loop when it was two short ones.
 			ThrottledLog.Reset();
+			// Everything else that must not outlive a session. A session boundary
+			// is not a process boundary here - players rejoin and the host hard
+			// syncs several times an evening - and state that survives it
+			// produces bugs that only appear on the second or third session.
+			SessionTeardown.ClearAll();
 			DebugConsole.Log("[MultiplayerSession] Session cleared.");
 		}
 

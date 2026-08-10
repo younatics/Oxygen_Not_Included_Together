@@ -87,6 +87,18 @@ namespace ONI_Together.Misc.World
 
 		private static readonly Dictionary<string, InProgressSave> InProgress = new Dictionary<string, InProgressSave>();
 
+		/// <summary>
+		/// An interrupted download leaves isDownloading set and the partial save
+		/// alive. The buffer is the dangerous half: InProgress is keyed by file
+		/// name, the next hard sync reuses the same name, and new chunks were
+		/// merged into the previous session's half-finished save.
+		/// </summary>
+		public static void ResetForNewSession()
+		{
+			isDownloading = false;
+			InProgress.Clear();
+		}
+
 		public static void ReceiveChunk(SaveFileChunkPacket chunk)
 		{
 			using var _ = Profiler.Scope();

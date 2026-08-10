@@ -15,6 +15,21 @@ namespace ONI_Together.Networking
 		private static bool hardSyncInProgress = false;
 		private static int numberOfClientsAtTimeOfSync = 0;
 
+		/// <summary>
+		/// A hard sync that was interrupted leaves this set, and PerformHardSync
+		/// refuses to start while it is - so one dropped session disabled hard
+		/// syncing for the rest of the process, silently, logging only "already
+		/// in progress". hardSyncDoneThisCycle is worse in a quieter way: it
+		/// resets on a cycle rollover, and a reloaded save can carry the same
+		/// cycle number, so the daily sync stays used up.
+		/// </summary>
+		public static void ResetForNewSession()
+		{
+			hardSyncInProgress = false;
+			hardSyncDoneThisCycle = false;
+			numberOfClientsAtTimeOfSync = 0;
+		}
+
 		public static bool IsHardSyncInProgress
 		{
 

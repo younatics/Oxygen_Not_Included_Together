@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Animation;
@@ -28,6 +28,15 @@ namespace ONI_Together.Networking.Components
 		private const long QueueTimeBackoffUsec = 100000;
 
 		private static readonly HashSet<AnimStateSyncer> TrackedSyncers = [];
+
+		/// <summary>
+		/// A world teardown destroys the syncers, but a HashSet still keys on a
+		/// destroyed Unity object - the null check that skips them does not
+		/// remove them. The set therefore grew by roughly the whole entity count
+		/// on every hard sync, and the per-tick walk dragged the accumulated
+		/// corpses along with it forever.
+		/// </summary>
+		public static void ResetForNewSession() => TrackedSyncers.Clear();
 
 		public static AnimSyncCoordinator Instance { get; private set; }
 

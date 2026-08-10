@@ -14,6 +14,14 @@ namespace ONI_Together.Networking.Components
 		public static readonly HashSet<int> SubscribedNetIds = new();
 		public static readonly HashSet<int> PendingImmediate = new();
 
+		/// <summary>Same hazard as the status subscriptions: an id left over from
+		/// a session belongs to a different duplicant in the next one.</summary>
+		public static void ResetForNewSession()
+		{
+			SubscribedNetIds.Clear();
+			PendingImmediate.Clear();
+		}
+
 		private const float BroadcastIntervalSeconds = 0.5f;
 
 		[MyCmpGet] private NetworkIdentity identity;

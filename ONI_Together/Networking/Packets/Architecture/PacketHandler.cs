@@ -34,6 +34,19 @@ namespace ONI_Together.Networking.Packets.Architecture
 		/// </summary>
 		public static int CurrentSequence { get; private set; }
 
+		/// <summary>
+		/// readyToProcess is turned off before a client loads a world and turned
+		/// back on when it reconnects. A load that aborts leaves it off, and
+		/// every inbound packet of the next session is dropped until a 60 second
+		/// self-heal notices. The self-heal was masking this, not fixing it.
+		/// </summary>
+		public static void ResetForNewSession()
+		{
+			_readyToProcess = true;
+			_notReadySince = float.MaxValue;
+			CurrentSequence = 0;
+		}
+
 		public static void HandleIncoming(byte[] data)
 		{
 			using var _ = Profiler.Scope();

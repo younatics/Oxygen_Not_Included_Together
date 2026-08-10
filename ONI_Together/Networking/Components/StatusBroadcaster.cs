@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using Shared.Profiling;
 using System;
@@ -11,6 +11,20 @@ namespace ONI_Together.Networking.Components
     {
         public static readonly HashSet<int> SubscribedNetIds = new();
         public static readonly HashSet<int> PendingImmediate = new();
+
+        /// <summary>
+        /// Subscriptions are added when a client opens a details panel and
+        /// removed when it closes one. A client that disconnects with a panel
+        /// open never sends the close, and after the next load those ids belong
+        /// to different objects - so the host broadcasts status for things
+        /// nobody is looking at, to a client that will apply them to the wrong
+        /// entity.
+        /// </summary>
+        public static void ResetForNewSession()
+        {
+            SubscribedNetIds.Clear();
+            PendingImmediate.Clear();
+        }
 
         private const float SoftSyncInterval = 0.5f;
         private const float HardSyncInterval = 5f;
