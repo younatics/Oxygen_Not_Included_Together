@@ -30,6 +30,7 @@ namespace ONI_Together.Networking
 		private const int BuildingSalt = 0x42D1D501;
 		private const int WorkableSalt = 0x7A6B1E03;
 		private const int EntitySalt   = 0x13C7F905;
+		private const int StoredItemSalt = 0x5701ED07;
 
 		public static int GetDeterministicBuildingId(GameObject go)
 		{
@@ -146,6 +147,37 @@ namespace ONI_Together.Networking
 			return hash + breakoff;
 		}
 
+		/// <summary>
+		/// An id for an item that is inside something, keyed off the container
+		/// rather than off a map position it does not have.
+		///
+		/// Several identical items in one container still land on the same base
+		/// value and are separated by the probe, which two peers have no reason to
+		/// walk in the same order - so this is not perfect. It is strictly better
+		/// than the alternative it replaces, where every stored item in the colony
+		/// shared one cell and collided with buildings as well as with each other.
+		/// </summary>
+		private static int GetStoredItemId(GameObject go, Storage container, Workable workable)
+		{
+			int containerCell = Grid.PosToCell(container.gameObject);
+
+			int hash = StableHash(go.PrefabID().ToString());
+			hash = Mix(hash, StableHash(container.gameObject.PrefabID().ToString()));
+			hash = Mix(hash, containerCell);
+			hash = Mix(hash, StableHash(workable.GetType().Name));
+			hash = Mix(hash, StoredItemSalt);
+
+			int breakoff = 0;
+			while (NetworkIdentityRegistry.Exists(hash + breakoff))
+				breakoff++;
+			hash += breakoff;
+
+			DebugConsole.Log(
+				$"Registered stored {go.PrefabID()} with id: {hash} inside " +
+				$"{container.gameObject.PrefabID()} at cell {containerCell}");
+			return hash;
+		}
+
 		public static int GetDeterministicWorkableId(GameObject go)
 		{
 			using var _ = Profiler.Scope();
@@ -162,6 +194,29 @@ namespace ONI_Together.Networking
 
 			if (!go.TryGetComponent<Workable>(out var workable))
 				return 0;
+
+			// An item inside a container has no place on the map, and cell 0 is a
+			// real cell, so the guard above lets it through and every stored item
+			// hashes as though it were standing in the top-left corner of the
+			// asteroid.
+			//
+			// They then collide with each other and with whatever else happens to
+			// land on that value. A real colony showed it plainly: NetId 1776225777
+			// was an Atmo_Suit at "cell 0" on the host and a SuitLocker at 51570 on
+			// the client, and the same locker turned up under two ids with its
+			// damage on opposite sides. Earlier runs produced Iron and SandStone in
+			// the same role - all of them items sitting in storage.
+			//
+			// Hashing from the container instead gives a stored item somewhere real
+			// to hang off, and the container's own id is a pure function of prefab
+			// and cell, so both peers still reach the same answer without talking.
+			if (go.TryGetComponent<Pickupable>(out var pickupable)
+				&& !pickupable.IsNullOrDestroyed()
+				&& pickupable.storage != null
+				&& !pickupable.storage.IsNullOrDestroyed())
+			{
+				return GetStoredItemId(go, pickupable.storage, workable);
+			}
 
 			// Identity and location only. Two things used to break this:
 			//

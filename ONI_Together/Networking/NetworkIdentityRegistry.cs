@@ -382,5 +382,16 @@ namespace ONI_Together.Networking
 		}
 
 		public static IEnumerable<NetworkIdentity> AllIdentities => identities.Values;
+
+		/// <summary>
+		/// Keys as well as values, so a diagnostic can say which id an object is
+		/// filed under rather than only which id it believes it has.
+		///
+		/// Those two can disagree, and the difference is the whole question when a
+		/// duplicate turns up: one object filed twice under different keys and one
+		/// id claimed by two objects both read as "NetId X has 2 identities", and
+		/// they are different bugs.
+		/// </summary>
+		public static IEnumerable<KeyValuePair<int, NetworkIdentity>> AllEntries => identities;
 	}
 }

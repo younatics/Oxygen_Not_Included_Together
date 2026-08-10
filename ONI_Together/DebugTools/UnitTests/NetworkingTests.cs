@@ -46,14 +46,55 @@ namespace ONI_Together.DebugTools.UnitTests
         [UnitTest(name: "Check for duplicate network identities", category: "Networking")]
         public static UnitTestResult CheckForDuplicateNetworkIdentities()
         {
-            var identities = NetworkIdentityRegistry.AllIdentities;
-            foreach(var identity in identities)
+            // Report the key, the object and the component, not just the count.
+            //
+            // "NetId X has 2 identities" covers two different bugs that need
+            // different fixes: one object filed under two keys, and one key
+            // claimed by two objects. A count cannot tell them apart, and a
+            // colony carrying a collision baked into its save produced exactly
+            // this line for several runs with no way to say which it was.
+            var byId = new Dictionary<int, List<string>>();
+
+            foreach (var entry in NetworkIdentityRegistry.AllEntries)
             {
-                int id = identity.NetId;
-                var matches = identities.Where(x => x.NetId == id).ToList();
-                if (matches.Count > 1)
-                    return UnitTestResult.Fail($"NetId {identity.NetId} has {matches.Count} identities");
+                var identity = entry.Value;
+                if (identity.IsNullOrDestroyed()) continue;
+
+                string where;
+                try
+                {
+                    var go = identity.gameObject;
+                    where = $"{go.PrefabID()}@{Grid.PosToCell(go)} obj#{go.GetInstanceID()} cmp#{identity.GetInstanceID()} filedUnder={entry.Key}";
+                }
+                catch
+                {
+                    where = $"unreadable filedUnder={entry.Key}";
+                }
+
+                if (!byId.TryGetValue(identity.NetId, out var list))
+                {
+                    list = new List<string>();
+                    byId[identity.NetId] = list;
+                }
+                list.Add(where);
             }
+
+            foreach (var kv in byId)
+            {
+                if (kv.Value.Count <= 1) continue;
+
+                // Same component twice means one object filed under two keys;
+                // different components mean two objects sharing an id.
+                bool sameComponent = kv.Value
+                    .Select(s => s.Substring(s.IndexOf("cmp#", StringComparison.Ordinal)))
+                    .Distinct().Count() == 1;
+
+                return UnitTestResult.Fail(
+                    $"NetId {kv.Key} has {kv.Value.Count} identities " +
+                    $"({(sameComponent ? "one object filed under two keys" : "two objects sharing one id")}): " +
+                    string.Join(" | ", kv.Value));
+            }
+
             return UnitTestResult.Pass("No duplicate network identities found");
         }
 
