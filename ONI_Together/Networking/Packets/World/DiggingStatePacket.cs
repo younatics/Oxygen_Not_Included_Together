@@ -72,7 +72,7 @@ namespace ONI_Together.Networking.Packets.World
 			SweepId = reader.ReadInt32();
 			BatchIndex = reader.ReadInt32();
 			BatchCount = reader.ReadInt32();
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "DiggingStatePacket.Digs");
 			Digs = new List<DigEntry>(count);
 			for (int i = 0; i < count; i++)
 			{

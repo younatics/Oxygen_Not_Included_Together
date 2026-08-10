@@ -37,7 +37,7 @@ namespace ONI_Together.Networking.Packets.Social
 
             Name = reader.ReadString();
             Blocks.Clear();
-            int blocks_count = reader.ReadInt32();
+            int blocks_count = PacketList.ReadCount(reader, "ScheduleAddPacket.Blocks");
             for(int i = 0; i < blocks_count; i++)
             {
                 string blockName = reader.ReadString();

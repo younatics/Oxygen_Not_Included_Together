@@ -65,7 +65,7 @@ namespace ONI_Together.Networking.Packets.Handshake
 			using var _ = Profiler.Scope();
 
 			ClientId = reader.ReadUInt64();
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "GameStateRequestPacket.ActiveDlcIds");
 			ActiveDlcIds = new HashSet<string>(count);
 			for (int i = 0; i < count; i++)
 			{

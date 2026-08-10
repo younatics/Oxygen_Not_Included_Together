@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Packets.Architecture;
+﻿using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
 using Shared.Profiling;
@@ -34,7 +34,7 @@ namespace ONI_Together.Networking.Packets.World
 		{
 			using var _ = Profiler.Scope();
 
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "PrioritizeStatePacket.Priorities");
 			Priorities = new List<PriorityData>(count);
 			for (int i = 0; i < count; i++)
 			{

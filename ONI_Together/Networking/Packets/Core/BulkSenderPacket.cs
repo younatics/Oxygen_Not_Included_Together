@@ -48,7 +48,7 @@ namespace ONI_Together.Networking.Packets.Core
 			using var _ = Profiler.Scope();
 
 			InnerPacketId = reader.ReadInt32();
-			int packetCount = reader.ReadInt32();
+			int packetCount = PacketList.ReadCount(reader, "BulkSenderPacket.SerializedInnerPackets");
 			SerializedInnerPackets = new List<byte[]>(packetCount);
 			for (int i = 0; i < packetCount; i++)
 			{

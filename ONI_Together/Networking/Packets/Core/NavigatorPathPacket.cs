@@ -74,24 +74,70 @@ namespace ONI_Together.Networking.Packets.Core
 			}
 		}
 
+		/// <summary>A path is a route across one asteroid; anything larger is not a path.</summary>
+		private const int MaxSteps = 4096;
+
+		/// <summary>Chunking splits anything bigger, so one frame cannot legitimately exceed this.</summary>
+		private const int MaxCompressedBytes = 64 * 1024;
+
+		/// <summary>Five bytes a step, so an order of magnitude above the largest real path.</summary>
+		private const int MaxDecompressedBytes = 256 * 1024;
+
+		/// <summary>
+		/// Copies at most <paramref name="limit"/> bytes and then stops.
+		/// Stream.CopyTo has no ceiling, which is what makes a decompression bomb
+		/// possible: the cost is set by the sender, not by the receiver.
+		/// </summary>
+		private static void CopyBounded(Stream from, Stream to, int limit)
+		{
+			var buffer = new byte[8192];
+			int total = 0;
+			int read;
+			while ((read = from.Read(buffer, 0, buffer.Length)) > 0)
+			{
+				total += read;
+				if (total > limit)
+				{
+					ThrottledLog.Warn($"[NavigatorPath] path expanded past {limit} bytes; truncating");
+					break;
+				}
+				to.Write(buffer, 0, read);
+			}
+		}
+
 		public void Deserialize(BinaryReader reader)
 		{
 			using var _ = Profiler.Scope();
 
+			// Three bounds, because this is the only packet on the wire that
+			// decompresses, and a compressed payload is the one place where a
+			// small number of received bytes can cost an unbounded amount of
+			// memory. The length was believed as given, the bytes were read
+			// against it, and the gzip stream was copied out with no ceiling at
+			// all - a few hundred bytes of zeroes expand to gigabytes.
 			int compressedLength = reader.ReadInt32();
+			if (compressedLength < 0 || compressedLength > MaxCompressedBytes)
+			{
+				ThrottledLog.Warn(
+					$"[NavigatorPath] refusing a path claiming {compressedLength} compressed bytes " +
+					$"(limit {MaxCompressedBytes})");
+				Steps.Clear();
+				return;
+			}
+
 			byte[] compressedBytes = reader.ReadBytes(compressedLength);
 
 			using (var compressed = new MemoryStream(compressedBytes))
 			using (var gzip = new GZipStream(compressed, CompressionMode.Decompress))
 			using (var decompressed = new MemoryStream())
 			{
-				gzip.CopyTo(decompressed);
+				CopyBounded(gzip, decompressed, MaxDecompressedBytes);
 				decompressed.Position = 0;
 
 				using (var tempReader = new BinaryReader(decompressed))
 				{
 					NetId = tempReader.ReadInt32();
-					int count = tempReader.ReadInt32();
+					int count = PacketList.ReadCount(tempReader, "NavigatorPathPacket.Steps", MaxSteps);
 
 					Steps.Clear();
 					for (int i = 0; i < count; i++)

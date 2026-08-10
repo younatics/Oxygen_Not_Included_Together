@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Components;
+﻿using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using Shared.Profiling;
 using System.Collections.Generic;
@@ -55,7 +55,7 @@ namespace ONI_Together.Networking.Packets.Social
 			float b = reader.ReadSingle();
 			PlayerColor = new Color(r, g, b, 1f);
 			IsNewStroke = reader.ReadBoolean();
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "TrailPointsPacket.Points");
 			Points = new List<Vector2>(count);
 			for (int i = 0; i < count; i++)
 			{

@@ -69,7 +69,7 @@ namespace ONI_Together.Networking.Packets.World
 		{
 			using var _ = Profiler.Scope();
 
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "ConduitContentsPacket.Updates");
 			Updates = new List<ConduitCellUpdate>(count);
 			for (int i = 0; i < count; i++)
 			{

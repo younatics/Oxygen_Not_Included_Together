@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System;
 using System.Collections.Generic;
@@ -40,14 +40,14 @@ namespace ONI_Together.Networking.Packets.World
 		{
 			using var _ = Profiler.Scope();
 
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "ResearchStatePacket.UnlockedTechIds");
 			UnlockedTechIds = new List<string>(count);
 			for (int i = 0; i < count; i++)
 			{
 				UnlockedTechIds.Add(reader.ReadString());
 			}
 
-			int queueCount = reader.ReadInt32();
+			int queueCount = PacketList.ReadCount(reader, "ResearchStatePacket.QueuedTechIds");
 			QueuedTechIds = new List<string>(queueCount);
 			for (int i = 0; i < queueCount; i++)
 			{

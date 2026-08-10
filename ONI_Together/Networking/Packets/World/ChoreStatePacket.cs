@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Components;
+﻿using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
@@ -38,7 +38,7 @@ namespace ONI_Together.Networking.Packets.World
 		{
 			using var _ = Profiler.Scope();
 
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "ChoreStatePacket.Chores");
 			Chores = new List<ChoreData>(count);
 			for (int i = 0; i < count; i++)
 			{

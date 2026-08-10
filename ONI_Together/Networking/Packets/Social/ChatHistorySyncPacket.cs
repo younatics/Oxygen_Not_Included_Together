@@ -1,4 +1,4 @@
-using ONI_Together.UI;
+﻿using ONI_Together.UI;
 using System.Collections.Generic;
 using System.IO;
 using ONI_Together.Networking.Packets.Architecture;
@@ -37,7 +37,7 @@ namespace ONI_Together.Networking.Packets.Social
 		{
 			using var _ = Profiler.Scope();
 
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "ChatHistorySyncPacket.Messages");
 			Messages = new List<ChatScreen.PendingMessage>(count);
 			for (int i = 0; i < count; i++)
 			{

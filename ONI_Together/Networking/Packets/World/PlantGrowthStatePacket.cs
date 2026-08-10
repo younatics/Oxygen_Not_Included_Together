@@ -93,7 +93,7 @@ namespace ONI_Together.Networking.Packets.World
 			SweepId = reader.ReadInt32();
 			BatchIndex = reader.ReadInt32();
 			BatchCount = reader.ReadInt32();
-			int count = reader.ReadInt32();
+			int count = PacketList.ReadCount(reader, "PlantGrowthStatePacket.Plants");
 			Plants = new List<PlantData>(count);
 
 			for (int i = 0; i < count; i++)

@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Packets.Architecture;
+﻿using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
 using Shared.Profiling;
@@ -83,7 +83,7 @@ namespace ONI_Together.Networking.Packets.World
             BatchIndex = reader.ReadInt32();
             BatchCount = reader.ReadInt32();
 
-            int count = reader.ReadInt32();
+            int count = PacketList.ReadCount(reader, "BuildingStatePacket.Buildings");
             Buildings = new List<BuildingState>(count);
 
             for (int i = 0; i < count; i++)

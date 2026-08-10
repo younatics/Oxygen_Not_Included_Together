@@ -57,7 +57,7 @@ namespace ONI_Together.Networking.Packets.World
 			using (var deflate = new DeflateStream(ms, CompressionMode.Decompress))
 			using (var reader = new BinaryReader(deflate))
 			{
-				int count = reader.ReadInt32();
+				int count = PacketList.ReadCount(reader, "WorldUpdatePacket.Updates");
 				Updates = new List<CellUpdate>(count);
 				for (int i = 0; i < count; i++)
 				{
