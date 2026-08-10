@@ -52,6 +52,7 @@ namespace ONI_Together.Networking
 			Step("malformed-count counter", Packets.Architecture.PacketList.ResetForNewSession);
 			Step("payload size records", PacketSender.ResetPayloadSizes);
 			Step("missing-entity queue", ClearResolverQueue);
+			Step("damage watcher", ClearDamageWatcher);
 			// Pruned, never cleared. These track WORLD objects, and the world
 			// outlives the session - hosting starts by calling Clear() with a
 			// colony fully loaded, and nothing re-adds a plant that is already
@@ -63,6 +64,13 @@ namespace ONI_Together.Networking
 			// its own plants as phantoms. Session state and world state are not
 			// the same thing, and only the first belongs here.
 			Step("world trackers", PruneWorldTrackers);
+		}
+
+		private static void ClearDamageWatcher()
+		{
+			var watcher = ClientDamageWatcher.Instance;
+			if (watcher.IsNullOrDestroyed()) return;
+			watcher.ResetForNewSession();
 		}
 
 		private static void ClearResolverQueue()

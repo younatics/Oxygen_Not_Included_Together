@@ -148,6 +148,7 @@ namespace ONI_Together
 				go.AddComponent<LogicStateSyncer>();
 				go.AddComponent<BuildingDamageSyncer>();
 				go.AddComponent<MissingEntityResolver>();
+				go.AddComponent<ClientDamageWatcher>();
 
 				// CHECKPOINT 5
 				System.IO.File.AppendAllText(logPath, "[Trace] Checkpoint 5: Pre-Listeners\n");

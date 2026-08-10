@@ -71,7 +71,10 @@ namespace ONI_Together.DebugTools.UnitTests
             }
 
             string traffic = " :: " + Networking.Packets.World.BuildingDamagePacket.Describe()
-                + " :: " + Patches.World.BuildingHP_OnDoBuildingDamage_Patch.Describe();
+                + " :: " + Patches.World.BuildingHP_OnDoBuildingDamage_Patch.Describe()
+                + " :: " + (Networking.Components.ClientDamageWatcher.Instance.IsNullOrDestroyed()
+                    ? "watcher=absent"
+                    : Networking.Components.ClientDamageWatcher.Instance.Describe());
             return damaged == 0
                 ? UnitTestResult.Pass("nothing damaged" + traffic)
                 : UnitTestResult.Pass($"{damaged} damaged buildings, all addressable" + traffic);

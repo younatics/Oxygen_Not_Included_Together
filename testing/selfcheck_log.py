@@ -129,20 +129,36 @@ def main():
     # A key registered more times than it has distinct ids has re-registered
     # something; a key with as many ids as registrations is simply that many
     # objects sharing a cell.
-    unstable = {k: v for k, v in by_key.items()
-                if len(v) > len(set(v)) and len(set(v)) > 1}
+    churned = {k: v for k, v in by_key.items()
+               if len(v) > len(set(v)) and len(set(v)) > 1}
     multi_id = {k: v for k, v in by_key.items() if len(set(v)) > 1}
-    rate = 100.0 * len(unstable) / len(by_key)
+    rate = 100.0 * len(churned) / len(by_key)
     print(f"  distinct keys                        : {len(by_key)}")
     print(f"  keys holding several objects         : {len(multi_id)}  (normal - stacked items)")
-    print(f"  keys that re-registered under a new id: {len(unstable)}  ({rate:.1f}%)")
-    if unstable:
-        confirmed = True
-        report["confirmed"].append({"finding": "netid_unstable_within_run",
-                                    "keys": len(by_key), "unstable": len(unstable)})
-        print("\n  >>> CONFIRMED: one object was addressed by several different NetIds")
-        print("      over the run. Packets sent under an older id hit nothing.\n")
-        for k, v in list(unstable.items())[: args.max_examples]:
+    print(f"  keys with id reuse across the run    : {rate:.1f}%  ({len(churned)})")
+
+    # Reported, not confirmed - and this is the third premise this section has
+    # had. It started by calling any cell with two ids unstable, which is normal
+    # for items that stack; then by calling more registrations than ids a
+    # re-registration, which is also normal. A pile of clay is destroyed and
+    # another spawns in the same cell, computes the same hash from (prefab, cell,
+    # type) because the id is a pure function of what and where, finds the slot
+    # free, and takes it. Three registrations with two ids is that, not one object
+    # answering to two addresses.
+    #
+    # The log cannot tell the two apart: it records registrations, never object
+    # lifetimes. So this prints the shape and stops there. The property it was
+    # reaching for is checked where it can be checked soundly - the in-game suite
+    # asserts no two live objects share an id and that each object in a cell owns
+    # its own, and netid_compare settles cross-peer agreement exactly. A heuristic
+    # that cannot tell a correct implementation from a broken one is worse than no
+    # test, which this file already says about the check below it.
+    if churned:
+        print("\n  Not treated as a finding. Reuse is expected: the id is a pure function of")
+        print("  prefab, cell and workable type, so a replacement object in the same cell")
+        print("  legitimately receives the id its predecessor had. Live-object uniqueness is")
+        print("  asserted in-game; cross-peer agreement is settled by netid_compare.\n")
+        for k, v in list(churned.items())[: args.max_examples]:
             ids = sorted(set(v))
             print(f"      {k[0][:24]:<25} {k[1][:14]:<15} cell {k[2]:<7} "
                   f"registrations={len(v)} ids={ids[:6]}")
