@@ -247,12 +247,24 @@ namespace ONI_Together.Networking
 			if (_diagnosticDepth > 0) _diagnosticDepth--;
 		}
 
-		private static void Blame(Dictionary<string, int> counts, string caller, string callerFile)
-		{
-			string where = string.IsNullOrEmpty(callerFile)
+		/// <summary>
+		/// File plus method, because the method alone does not discriminate.
+		///
+		/// Almost every caller here is named OnDispatched - one per packet type -
+		/// so a log line saying "from OnDispatched" names nothing. It cost a real
+		/// investigation: a live session logged three packets arriving with no id
+		/// set and the line could not say which packet, even though the file path
+		/// had been captured all along and was being used for the grouped counts
+		/// but not for the message.
+		/// </summary>
+		private static string Describe(string caller, string callerFile)
+			=> string.IsNullOrEmpty(callerFile)
 				? (caller ?? "unknown")
 				: System.IO.Path.GetFileNameWithoutExtension(callerFile) + "." + (caller ?? "?");
 
+		private static void Blame(Dictionary<string, int> counts, string caller, string callerFile)
+		{
+			string where = Describe(caller, callerFile);
 			counts.TryGetValue(where, out int n);
 			counts[where] = n + 1;
 		}
@@ -278,7 +290,7 @@ namespace ONI_Together.Networking
 					if (_unsetIdLookupCount <= 3 || _unsetIdLookupCount % 500 == 0)
 					{
 						DebugConsole.LogWarning(
-							$"[Registry] lookup for NetId 0 (#{_unsetIdLookupCount}) from {caller} - a packet was sent with no id set");
+							$"[Registry] lookup for NetId 0 (#{_unsetIdLookupCount}) from {Describe(caller, callerFile)} - a packet was sent with no id set");
 					}
 				}
 				return false;
@@ -298,7 +310,7 @@ namespace ONI_Together.Networking
 				if (_lookupFailCount <= 3 || _lookupFailCount % 500 == 0 || Time.unscaledTime - _lastFailLogTime > 1f)
 				{
 					_lastFailLogTime = Time.unscaledTime;
-					DebugConsole.LogWarning($"[Registry] Lookup failed (#{_lookupFailCount}): NetId {netId} not found, asked by {caller}. Count: {identities.Count}");
+					DebugConsole.LogWarning($"[Registry] Lookup failed (#{_lookupFailCount}): NetId {netId} not found, asked by {Describe(caller, callerFile)}. Count: {identities.Count}");
 				}
 			}
 			
