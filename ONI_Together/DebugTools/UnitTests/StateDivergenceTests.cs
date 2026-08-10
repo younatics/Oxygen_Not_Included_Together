@@ -88,6 +88,7 @@ namespace ONI_Together.DebugTools.UnitTests
                     $"active={go.activeInHierarchy}|handler={(handler != null)}|" +
                     $"enabled={(handler != null && handler.isActiveAndEnabled)}|recv={stamp}|" +
                     $"sent={(handler == null ? -1 : handler.SentCount)}|" +
+                    $"culled={(handler == null ? -1 : handler.CulledCount)}|" +
                     $"lastsend={(handler == null ? 0f : handler.LastSendTime):0.0}|now={Time.unscaledTime:0.0}|" +
                     // The last unknown. The host sends under the id its own
                     // GetNetId() returns, which is the FIRST NetworkIdentity on

@@ -2,6 +2,7 @@
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
+using System;
 using System.IO;
 using Shared.Profiling;
 using UnityEngine;
@@ -16,8 +17,23 @@ public class EntityPositionPacket : IPacket, IViewportCullable
 	public NavType NavType;
 	public long Timestamp;
 
+	/// <summary>
+	/// Set by the sender for things that must be reported whether or not a
+	/// client is looking at them - duplicants and critters. Host side only and
+	/// deliberately not serialized: it decides who to send to, and once the
+	/// packet has arrived that decision is spent.
+	/// </summary>
+	[NonSerialized] public bool AlwaysSend;
+
     public int GetViewportCell()
     {
+		// Negative disables culling. An out-of-world position lands here too,
+		// and broadcasting one is the better failure: the receiver ignores a
+		// position it cannot place, while dropping it silently strands the
+		// object at wherever it was last seen.
+		if (AlwaysSend)
+			return -1;
+
 		var cell = Grid.PosToCell(Position);
 		return cell;
     }

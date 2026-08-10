@@ -364,72 +364,85 @@ namespace ONI_Together.Networking
 			}
 		}
 
-		/// Original single-exclude overload
-		public static void SendToAll(IPacket packet, ulong? exclude = null, PacketSendMode sendType = PacketSendMode.Reliable)
+		/// <summary>
+		/// True when this packet asks to be culled AND the world can answer the
+		/// question. A negative cell is the interface's opt-out; see
+		/// <see cref="IViewportCullable"/>.
+		/// </summary>
+		private static bool WantsCulling(IPacket packet, out int cell)
+		{
+			cell = -1;
+			if (WorldStateSyncer.Instance == null) return false;
+			if (!(packet is IViewportCullable vp)) return false;
+			cell = vp.GetViewportCell();
+			return cell >= 0;
+		}
+
+		/// Original single-exclude overload.
+		/// <returns>How many peers it actually went to.</returns>
+		public static int SendToAll(IPacket packet, ulong? exclude = null, PacketSendMode sendType = PacketSendMode.Reliable)
 		{
 			using var _ = Profiler.Scope();
 
             // Only send this packet if its being observed by a someone
-            if (packet is IViewportCullable vp && WorldStateSyncer.Instance != null)
-            {
-                int cell = vp.GetViewportCell();
-                foreach (var player in MultiplayerSession.ConnectedPlayers.Values)
-                {
-                    if (exclude.HasValue && player.PlayerId == exclude.Value) continue;
-                    if (!CanBroadcastTo(player)) continue;
-                    if (WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))
-                        TrySendToConnection(player, packet, sendType);
-                }
-                return;
-            }
+            bool cull = WantsCulling(packet, out int cell);
+            int sent = 0;
 
             foreach (var player in MultiplayerSession.ConnectedPlayers.Values)
 			{
 				if (exclude.HasValue && player.PlayerId == exclude.Value)
 					continue;
 
-				if (CanBroadcastTo(player))
-					TrySendToConnection(player, packet, sendType);
+				if (!CanBroadcastTo(player))
+					continue;
+
+				if (cull && !WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))
+					continue;
+
+				TrySendToConnection(player, packet, sendType);
+				sent++;
 			}
+
+			return sent;
 		}
 
-		public static void SendToAllClients(IPacket packet, PacketSendMode sendType = PacketSendMode.Reliable)
+		/// <returns>How many clients it actually went to.</returns>
+		public static int SendToAllClients(IPacket packet, PacketSendMode sendType = PacketSendMode.Reliable)
 		{
 			using var _ = Profiler.Scope();
 
 			if (!MultiplayerSession.IsHost)
 			{
 				DebugConsole.LogWarning("[PacketSender] Only the host can send to all clients. Tried sending: " + packet.GetType());
-				return;
+				return 0;
 			}
-			SendToAll(packet, MultiplayerSession.HostUserID, sendType);
+			return SendToAll(packet, MultiplayerSession.HostUserID, sendType);
 		}
 
-		public static void SendToAllExcluding(IPacket packet, HashSet<ulong> excludedIds, PacketSendMode sendType = PacketSendMode.Reliable)
+		/// <returns>How many peers it actually went to.</returns>
+		public static int SendToAllExcluding(IPacket packet, HashSet<ulong> excludedIds, PacketSendMode sendType = PacketSendMode.Reliable)
 		{
 			using var _ = Profiler.Scope();
 
-            if (packet is IViewportCullable vp && WorldStateSyncer.Instance != null)
-            {
-                int cell = vp.GetViewportCell();
-                foreach (var player in MultiplayerSession.ConnectedPlayers.Values)
-                {
-                    if (excludedIds != null && excludedIds.Contains(player.PlayerId)) continue;
-                    if (!CanBroadcastTo(player)) continue;
-                    if (WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))
-                        TrySendToConnection(player, packet, sendType);
-                }
-                return;
-            }
+            bool cull = WantsCulling(packet, out int cell);
+            int sent = 0;
 
             foreach (var player in MultiplayerSession.ConnectedPlayers.Values)
 			{
 				if (excludedIds != null && excludedIds.Contains(player.PlayerId))
 					continue;
 
-				if (CanBroadcastTo(player))
-					TrySendToConnection(player, packet, sendType);
+				if (!CanBroadcastTo(player))
+					continue;
+
+				if (cull && !WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))
+					continue;
+
+				TrySendToConnection(player, packet, sendType);
+				sent++;
 			}
+
+			return sent;
 		}
 
 		/// <summary>

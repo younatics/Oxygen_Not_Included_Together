@@ -19,11 +19,20 @@ namespace ONI_Together.Networking.Components
 		/// client is not receiving" and "the host never sent" look identical
 		/// from the client, and telling them apart by reasoning has now cost
 		/// several rounds.
+		///
+		/// Counted from what the sender reports it delivered, not from reaching
+		/// the send call. The first version counted attempts, so a handler whose
+		/// every packet was culled one layer below still read "sent=79" - which
+		/// is precisely the reading that sent me looking at the receiver for the
+		/// bug that was in the sender. A counter that cannot distinguish success
+		/// from failure is worse than none, because it is trusted.
 		/// </summary>
 		public int SentCount { get; private set; }
-		public float LastSendTime => lastSendTime;
 
-		private static readonly System.Collections.Generic.HashSet<ulong> _viewportScratch = new System.Collections.Generic.HashSet<ulong>();
+		/// <summary>Reached the sender and went to nobody, almost always viewport culling.</summary>
+		public int CulledCount { get; private set; }
+
+		public float LastSendTime => lastSendTime;
 
 
 		private const float PositionThreshold = 0.05f;
@@ -139,6 +148,13 @@ namespace ONI_Together.Networking.Components
 		        if (navigator != null && navigator.CurrentNavType != NavType.NumNavTypes)
 			        navType = navigator.CurrentNavType;
 
+		        // Asked every time, not cached. Caching it looked free and was not:
+		        // the answer is taken the first time this runs, and a duplicant
+		        // whose tags were not applied yet at that instant cached "cull me"
+		        // and was culled for the rest of the session. HasTag is a hash
+		        // lookup against a set; it is not worth a bug.
+		        bool alwaysSend = gameObject.HasTag(GameTags.BaseMinion) || gameObject.HasTag(GameTags.Creature);
+
 		        var packet = new EntityPositionPacket
 		        {
 			        NetId = this.GetNetId(),
@@ -146,10 +162,12 @@ namespace ONI_Together.Networking.Components
 			        FlipX = kbac != null && kbac.FlipX,
 			        FlipY = kbac != null && kbac.FlipY,
 			        NavType = navType,
-			        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+			        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+			        AlwaysSend = alwaysSend,
 		        };
 
-		        // Only to peers that can see where this thing is.
+		        // Only to peers that can see where this thing is - decided by the
+		        // sender, not here.
 		        //
 		        // Spawns are culled to a client's viewport; position was not, so
 		        // the host reported where objects were to clients that had never
@@ -161,40 +179,25 @@ namespace ONI_Together.Networking.Components
 		        // A moving object that leaves a client's view simply stops being
 		        // reported to it, which is correct: it cannot be drawn there, and
 		        // the heartbeat resumes the moment it comes back into view.
-		        // Duplicants and critters are never culled. The saving comes from
-		        // the numerous and cheap - ore, gas, plants were 361 of the 460
-		        // ids a client could not resolve - and duplicants are twenty
-		        // objects the player watches constantly. Culling them cost a
-		        // real thing: a duplicant off screen never received a position at
-		        // all, so it had nothing to draw with the moment the camera
-		        // reached it, and the sync test said so on the first run.
-		        // Asked every time, not cached. Caching it looked free and was not:
-		        // the answer is taken the first time this runs, and a duplicant
-		        // whose tags were not applied yet at that instant cached "cull
-		        // me" and was culled for the rest of the session. That is exactly
-		        // one duplicant out of twenty two never receiving a position,
-		        // standing still at the same cell across four runs while the
-		        // other twenty one moved. HasTag is a hash lookup against a set;
-		        // it is not worth a bug.
-		        int posCell = Grid.PosToCell(currentPosition);
-		        bool alwaysSend = gameObject.HasTag(GameTags.BaseMinion) || gameObject.HasTag(GameTags.Creature);
+		        // Duplicants and critters opt out via AlwaysSend, because an off
+		        // screen duplicant that never received a position has nothing to
+		        // draw with the moment the camera reaches it.
+		        //
+		        // This used to cull here as well, and that second layer is what
+		        // made the opt-out a lie: EntityPositionPacket is IViewportCullable,
+		        // so the "send to everyone" branch went to SendToAllClients and was
+		        // culled one level down anyway. One duplicant out of twenty two
+		        // never received a position - the only one that never moved, so the
+		        // only one that never wandered into the client's view. It cost
+		        // several rounds of investigation because from up here it looked
+		        // like the packet had been sent.
+		        int recipients = PacketSender.SendToAllClients(packet, sendType: PacketSendMode.Unreliable);
 
-		        if (!alwaysSend && Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
-		        {
-			        _viewportScratch.Clear();
-			        WorldStateSyncer.Instance.GetClientsViewingCell(posCell, _viewportScratch, 4);
-			        if (_viewportScratch.Count > 0)
-			        {
-				        foreach (var playerId in _viewportScratch)
-					        PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable);
-			        }
-		        }
+		        if (recipients > 0)
+			        SentCount++;
 		        else
-		        {
-			        PacketSender.SendToAllClients(packet, sendType: PacketSendMode.Unreliable);
-		        }
+			        CulledCount++;
 
-		        SentCount++;
 		        lastSentPosition = currentPosition;
 		        lastSendTime = currentTime;
 	        }

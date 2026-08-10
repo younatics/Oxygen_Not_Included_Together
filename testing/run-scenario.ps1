@@ -77,8 +77,30 @@ function Wait-PeerStatus([string]$pattern, [int]$timeoutSeconds) {
 }
 
 Step 'waiting for ScenarioRunner on this box'
+
+# The process first, because the log cannot answer this. Player.log is not
+# truncated between runs, so searching it from the beginning finds the previous
+# run's "installed" line and reports a runner that is not there - which is what
+# it did with the game closed, passing this step and then failing the next one
+# with a misleading message. A check that cannot fail is not a check.
+if (-not (Get-Process -Name OxygenNotIncluded -ErrorAction SilentlyContinue)) {
+    Step 'ONI is not running, launching it'
+    Start-Process 'steam://rungameid/457140'
+    $deadline = (Get-Date).AddSeconds(180)
+    while ((Get-Date) -lt $deadline -and -not (Get-Process -Name OxygenNotIncluded -ErrorAction SilentlyContinue)) {
+        Start-Sleep -Seconds 5
+    }
+    if (-not (Get-Process -Name OxygenNotIncluded -ErrorAction SilentlyContinue)) { Die 'ONI did not start' }
+    Ok 'process up'
+}
+
+# Ask, rather than look for a line that may be from last time. A status reply
+# written after this mark can only have come from a runner that is alive now.
 $mark = HostLogLines
-if (-not (Wait-HostLog '\[SCENARIO\] installed' 180 0)) { Die 'ScenarioRunner never installed - is ONI running with the dev mod?' }
+Send-Host 'status'
+if (-not (Wait-HostLog '\[SCENARIO\] (OK|FAIL) status' 240 $mark)) {
+    Die 'ScenarioRunner did not answer - is ONI running with the dev mod?'
+}
 Ok 'runner up'
 
 Step "loading $Save"
