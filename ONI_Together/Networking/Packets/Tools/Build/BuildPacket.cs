@@ -212,7 +212,10 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             if (gameObject == null)
                 return;
 
-            Prioritizable prioritizable = gameObject?.GetComponent<Prioritizable>();
+            // A GameObject destroyed earlier in this handler is not caught by
+            // ?., and GetComponent on it throws.
+            if (gameObject.IsNullOrDestroyed()) return;
+            Prioritizable prioritizable = gameObject.GetComponent<Prioritizable>();
             prioritizable?.SetMasterPriority(Priority);
         }
 

@@ -1,4 +1,4 @@
-using Database;
+﻿using Database;
 using Klei.AI;
 using ONI_Together.Networking.Packets.World;
 using Shared.Profiling;
@@ -47,7 +47,12 @@ namespace ONI_Together.Networking.Components
             using var _ = Profiler.Scope();
             LastApplyTime = Time.unscaledTime;
 
-            var group = selectable?.GetStatusItemGroup();
+            // Not selectable?. - Unity reports a destroyed component as null
+            // through operator== but member access on it still throws, and this
+            // runs on entities that can die between the sweep arriving and being
+            // applied.
+            if (selectable.IsNullOrDestroyed()) return;
+            var group = selectable.GetStatusItemGroup();
             if (group == null) return;
 
             var toRemove = new List<Guid>();

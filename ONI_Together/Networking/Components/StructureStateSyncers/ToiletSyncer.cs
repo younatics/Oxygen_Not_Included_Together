@@ -32,13 +32,13 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             active = false;
             optionalValues = new Dictionary<string, Variant>();
             BuildingUtils.EncodeStorageContents(storage, optionalValues);
-            optionalValues["is_operational"] = operational?.IsOperational ?? true;
+            optionalValues["is_operational"] = operational.IsNullOrDestroyed() || operational.IsOperational;
 
             // Hit points are sampled by StructureSyncerBase for every structure,
             // not here - a toilet was only where the disagreement was noticed.
             if (flushToilet != null)
             {
-                value = storage?.MassStored() ?? 0f;
+                value = storage.IsNullOrDestroyed() ? 0f : storage.MassStored();
                 GetTotalWater(out float totalWater, out float totalWaste, out float totalGunk);
                 optionalValues["total_water"] = totalWater;
                 optionalValues["total_waste"] = totalWaste;

@@ -38,9 +38,11 @@ namespace ONI_Together.Networking.Packets.Core
             {
                 NetId = NetId,
                 Position = handler.transform.position,
-                FlipX = handler.kbac?.FlipX ?? false,
-                FlipY = handler.kbac?.FlipY ?? false,
-                NavType = handler.navigator?.CurrentNavType ?? NavType.Floor,
+                // The entity may have died between the client asking and the
+                // host answering, and ?. does not catch a destroyed component.
+                FlipX = !handler.kbac.IsNullOrDestroyed() && handler.kbac.FlipX,
+                FlipY = !handler.kbac.IsNullOrDestroyed() && handler.kbac.FlipY,
+                NavType = handler.navigator.IsNullOrDestroyed() ? NavType.Floor : handler.navigator.CurrentNavType,
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 

@@ -32,7 +32,9 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
         protected override void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues)
         {
-            value = storage?.MassStored() ?? 0f;
+            // Sampled twice a second on a building that can be deconstructed
+            // between ticks, and ?. does not protect against a destroyed one.
+            value = storage.IsNullOrDestroyed() ? 0f : storage.MassStored();
             active = false;
             optionalValues = new Dictionary<string, Variant>();
             BuildingUtils.EncodeStorageContents(storage, optionalValues);
