@@ -54,7 +54,25 @@ namespace ONI_Together.Networking.Packets.Architecture
 			{
                 if (_PacketTypes.ContainsKey(id))
 				{
-					DebugConsole.LogWarning($"[PacketRegistry] Packet {packageType.Name} was already registered with {id}");
+					// Two very different situations shared one message. Seeing
+					// the same type twice is harmless; two DIFFERENT types
+					// hashing alike means one of them is unroutable for the
+					// whole session - every packet of the loser is decoded as
+					// the winner, which corrupts whatever it touches. A warning
+					// that reads "already registered" invites you to skip past
+					// the second case.
+					var incumbent = _PacketTypes[id];
+					if (incumbent == packageType)
+					{
+						DebugConsole.LogWarning($"[PacketRegistry] {packageType.Name} registered twice with id {id}");
+					}
+					else
+					{
+						DebugConsole.LogError(
+							$"[PacketRegistry] ID COLLISION on {id}: '{incumbent.Name}' and '{packageType.Name}' " +
+							$"hash alike. '{packageType.Name}' cannot be sent or received, and anything it " +
+							"carried will be decoded as the other type.");
+					}
                     return;
                 }
 
