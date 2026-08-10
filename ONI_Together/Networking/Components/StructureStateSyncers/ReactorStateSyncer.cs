@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using ONI_Together.Misc;
 using ONI_Together.Networking.Packets.World;
 using UnityEngine;
@@ -119,7 +119,12 @@ public class ReactorStateSyncer : StructureSyncerBase
 
             BuildingUtils.RebuildStorageFromData(supplyStorage, opt, "supply_");
             BuildingUtils.RebuildStorageFromData(reactionStorage, opt, "reaction_");
-            if (opt.ContainsKey("reaction_capacityKg"))
+            // Keyed on what is actually sent. EncodeStorageContents writes one
+            // entry per storage - keyPrefix + "stor" - and capacityKg lives
+            // inside that blob, not beside it. So "reaction_capacityKg" was
+            // never present and this branch never ran once: the enriched
+            // uranium's temperature has never been replicated.
+            if (opt.ContainsKey("reaction_stor"))
             {
                 var fuel = reactionStorage.FindFirst(SimHashes.EnrichedUranium.CreateTag());
                 if (fuel != null)

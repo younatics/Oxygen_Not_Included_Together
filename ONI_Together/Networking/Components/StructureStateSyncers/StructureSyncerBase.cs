@@ -246,6 +246,18 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                 $"to match host: {buildingHP.HitPoints} -> {hostHp} of {buildingHP.MaxHitPoints}");
         }
 
+        /// <summary>
+        /// The keys this syncer would put on the wire right now, for tests that
+        /// check senders and readers still agree on names. Goes through the same
+        /// path the host uses, including the base's own additions, so it cannot
+        /// drift from what is really sent.
+        /// </summary>
+        public void SampleStateForDiagnostics(out Dictionary<string, Variant> optionalValues)
+        {
+            SampleState(out _, out _, out optionalValues);
+            AddHitPoints(ref optionalValues);
+        }
+
         protected abstract void SampleState(out Variant value, out bool active, out Dictionary<string, Variant> optionalValues);
         protected abstract void ApplyState(StructureStatePacket packet);
 
