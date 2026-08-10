@@ -61,6 +61,40 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"dumped {rows.Count} state values");
         }
 
+        [UnitTest(name: "Dump duplicant position state for cross-peer comparison", category: "Divergence")]
+        public static UnitTestResult DumpMinions()
+        {
+            // One duplicant out of twenty two never receives a position, and the
+            // ids match on both peers, so the usual explanations are already
+            // ruled out. Guessing further is what this project keeps paying for;
+            // this states what each peer holds so the two can be laid side by
+            // side.
+            int rows = 0;
+
+            foreach (var identity in NetworkIdentityRegistry.AllIdentities.ToList())
+            {
+                if (identity == null || identity.gameObject == null) continue;
+
+                var go = identity.gameObject;
+                if (!go.HasTag(GameTags.BaseMinion)) continue;
+
+                var handler = go.GetComponent<EntityPositionHandler>();
+                string stamp = handler == null
+                    ? "no-handler"
+                    : (handler.serverTimestamp == 0 ? "never" : handler.serverTimestamp.ToString());
+
+                DebugConsole.Log(
+                    $"[MINION] {identity.NetId}|{go.GetProperName()}|{Grid.PosToCell(go)}|" +
+                    $"active={go.activeInHierarchy}|handler={(handler != null)}|" +
+                    $"enabled={(handler != null && handler.isActiveAndEnabled)}|recv={stamp}");
+                rows++;
+            }
+
+            return rows == 0
+                ? UnitTestResult.Skip("no duplicants in the registry")
+                : UnitTestResult.Pass($"dumped {rows} duplicant(s)");
+        }
+
         [UnitTest(name: "Dump building damage for cross-peer comparison", category: "Divergence")]
         public static UnitTestResult DumpDamage()
         {

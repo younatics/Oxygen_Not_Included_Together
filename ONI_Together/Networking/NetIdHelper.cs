@@ -73,11 +73,51 @@ namespace ONI_Together.Networking
 			}
 		}
 
+		/// <summary>
+		/// A duplicant's id, derived from who it is rather than where it is.
+		///
+		/// Duplicants carry a Storage, and Storage is a Workable, so they went
+		/// down the workable path and hashed on their cell. They register during
+		/// load before they have been placed, so every one of them hashed from
+		/// the same cell, collided, and was separated by the breakoff probe in
+		/// arrival order - a live colony had six duplicants holding six
+		/// consecutive ids while standing in six unrelated cells.
+		///
+		/// That makes identity depend on load order, and when two of them end up
+		/// mapped to one id the registry returns only one: the other is
+		/// unreachable for the whole session. A live client had exactly one
+		/// duplicant out of twenty two that never received a position, standing
+		/// still while the other twenty one moved.
+		///
+		/// Name and arrival time are what a duplicant actually is, they are in
+		/// the save, and both peers read the same save - so both compute the
+		/// same id with nothing exchanged.
+		/// </summary>
+		private static int GetDuplicantId(GameObject go, MinionIdentity minion)
+		{
+			int hash = StableHash(go.PrefabID().ToString());
+			hash = Mix(hash, StableHash(minion.GetProperName() ?? "?"));
+			hash = Mix(hash, minion.arrivalTime.GetHashCode());
+			hash = Mix(hash, StableHash(minion.gender ?? ""));
+
+			int breakoff = 0;
+			while (NetworkIdentityRegistry.Exists(hash + breakoff))
+				breakoff++;
+
+			DebugConsole.Log($"Registered duplicant {minion.GetProperName()} with id: {hash + breakoff}");
+			return hash + breakoff;
+		}
+
 		public static int GetDeterministicWorkableId(GameObject go)
 		{
 			using var _ = Profiler.Scope();
 
 			if (go == null) return 0;
+
+			// Before anything cell-based: a duplicant's cell at registration is
+			// not yet its own.
+			if (go.TryGetComponent<MinionIdentity>(out var minion) && minion != null)
+				return GetDuplicantId(go, minion);
 
 			int cell = Grid.PosToCell(go);
 			if (!Grid.IsValidCell(cell)) return 0;

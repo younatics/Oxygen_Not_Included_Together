@@ -113,9 +113,26 @@ namespace ONI_Together.DebugTools.UnitTests
             {
                 var ids = group.Select(e => e.NetId).Distinct().ToList();
                 if (ids.Count > 1)
+                {
+                    // The gap between the ids says which mechanism produced
+                    // them. Consecutive means the breakoff probe stepped one
+                    // object past another that already held the slot - two
+                    // identical piles in one cell, which is the case the probe
+                    // exists for and is benign as long as both peers walk the
+                    // same order. Anything else is two different hashes landing
+                    // on one place, which is not.
+                    ids.Sort();
+                    bool consecutive = true;
+                    for (int i = 1; i < ids.Count; i++)
+                    {
+                        if (ids[i] != ids[i - 1] + 1) { consecutive = false; break; }
+                    }
+
                     return UnitTestResult.Fail(
                         $"{group.Key.Prefab} ({group.Key.Kind}) at cell {group.Key.Cell} " +
-                        $"has {ids.Count} ids: {string.Join(", ", ids)}");
+                        $"has {ids.Count} ids: {string.Join(", ", ids)} " +
+                        $"({(consecutive ? "consecutive - breakoff probe separated two identical objects" : "unrelated - two hashes collided on one cell")})");
+                }
             }
 
             return UnitTestResult.Pass($"every (prefab, kind, cell) owns exactly one id across {entries.Count} identities");
