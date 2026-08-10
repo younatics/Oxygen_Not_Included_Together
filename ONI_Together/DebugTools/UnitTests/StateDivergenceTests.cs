@@ -83,6 +83,19 @@ namespace ONI_Together.DebugTools.UnitTests
                     ? "no-handler"
                     : (handler.serverTimestamp == 0 ? "never" : handler.serverTimestamp.ToString());
 
+                // Why a duplicant is standing still, which the position fields
+                // above cannot answer.
+                //
+                // One duplicant sat at the same cell for every run of this
+                // scenario. The sync was genuinely broken and is fixed - it now
+                // receives positions like the other twenty one - but it still
+                // does not move, and it does not move on the host either, which
+                // means the remaining question is about the colony rather than
+                // the network. A duplicant with no chore is idle; one that is
+                // incapacitated or cannot reach anything is stuck; and those
+                // look identical from outside.
+                DebugConsole.Log($"[MINION-WHY] {identity.NetId}|{go.GetProperName()}|{DescribeWhyIdle(go)}");
+
                 DebugConsole.Log(
                     $"[MINION] {identity.NetId}|{go.GetProperName()}|{Grid.PosToCell(go)}|" +
                     $"active={go.activeInHierarchy}|handler={(handler != null)}|" +
@@ -106,6 +119,65 @@ namespace ONI_Together.DebugTools.UnitTests
             return rows == 0
                 ? UnitTestResult.Skip("no duplicants in the registry")
                 : UnitTestResult.Pass($"dumped {rows} duplicant(s)");
+        }
+
+        /// <summary>
+        /// A one-line account of what a duplicant is currently doing and what
+        /// might be stopping it. Every read is guarded on its own: this runs on
+        /// live objects mid-session and a diagnostic that throws takes the whole
+        /// dump with it.
+        /// </summary>
+        private static string DescribeWhyIdle(GameObject go)
+        {
+            var parts = new List<string>();
+
+            try
+            {
+                var driver = go.GetComponent<ChoreDriver>();
+                var chore = driver == null ? null : driver.GetCurrentChore();
+                parts.Add("chore=" + (chore == null ? "none" : chore.choreType?.Id ?? chore.GetType().Name));
+            }
+            catch { parts.Add("chore=?"); }
+
+            try
+            {
+                var consumer = go.GetComponent<ChoreConsumer>();
+                parts.Add("consumer=" + (consumer == null ? "missing" : (consumer.enabled ? "on" : "off")));
+            }
+            catch { parts.Add("consumer=?"); }
+
+            try
+            {
+                var nav = go.GetComponent<Navigator>();
+                if (nav == null) parts.Add("nav=missing");
+                else
+                {
+                    parts.Add("nav=" + nav.CurrentNavType);
+                    parts.Add("moving=" + nav.IsMoving());
+                    // Whether the pathfinder can leave this cell at all. A
+                    // duplicant sealed into a pocket reports no valid moves and
+                    // will stand there forever with nothing to do.
+                    parts.Add("reachable=" + nav.NavGrid?.NavTable?.IsValid(Grid.PosToCell(go), nav.CurrentNavType));
+                }
+            }
+            catch { parts.Add("nav=?"); }
+
+            try
+            {
+                var health = go.GetComponent<Health>();
+                parts.Add("hp=" + (health == null ? "?" : $"{health.hitPoints:0}/{health.maxHitPoints:0}"));
+                parts.Add("incapacitated=" + (health != null && health.State == Health.HealthState.Invincible ? "invincible" : (go.HasTag(GameTags.Incapacitated) ? "yes" : "no")));
+            }
+            catch { parts.Add("hp=?"); }
+
+            try
+            {
+                parts.Add("dead=" + go.HasTag(GameTags.Dead));
+                parts.Add("asleep=" + go.HasTag(GameTags.Asleep));
+            }
+            catch { }
+
+            return string.Join("|", parts);
         }
 
         [UnitTest(name: "Dump building damage for cross-peer comparison", category: "Divergence")]
