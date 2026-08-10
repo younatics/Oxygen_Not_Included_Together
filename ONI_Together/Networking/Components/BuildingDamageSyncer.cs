@@ -79,7 +79,15 @@ namespace ONI_Together.Networking.Components
             _lastClientCount = 0;
             _lastReadyCount = 0;
             _reassertDamaged = false;
+            // So a client that reconnects asks again: it has a fresh world, and
+            // the host has had time to repair things while it was away.
+            _asked = false;
         }
+
+        /// <summary>Has this client already asked the host about its damaged buildings?</summary>
+        private bool _asked;
+
+        public bool HasAsked => _asked;
 
         private void Update()
         {
@@ -87,6 +95,12 @@ namespace ONI_Together.Networking.Components
 
             if (!MultiplayerSession.InSession)
                 return;
+
+            if (MultiplayerSession.IsClient)
+            {
+                AskAboutOwnDamageOnce();
+                return;
+            }
 
             if (!MultiplayerSession.IsHost)
                 return;
@@ -96,6 +110,62 @@ namespace ONI_Together.Networking.Components
             _nextSweep = Time.unscaledTime + SweepInterval;
 
             Sweep();
+        }
+
+        /// <summary>
+        /// One query, naming the buildings this peer believes are broken.
+        ///
+        /// The host cannot volunteer this: a building it repaired before the
+        /// client joined is at full health, so nothing on its side changed and
+        /// nothing gets sent, while the client keeps the damage its save came
+        /// with. That was the last measured disagreement - one tile at 68 of 100
+        /// on the client, untouched on the host.
+        ///
+        /// Waits for a registry before asking. An earlier version fired as soon
+        /// as a grid existed, which is enough to compose the question - the
+        /// buildings are there with the ids their save came with - and not enough
+        /// to match the answers, because the registry is a separate table and was
+        /// still empty. A question you cannot hear the answer to is worse than no
+        /// question, because it looks like it worked.
+        /// </summary>
+        private void AskAboutOwnDamageOnce()
+        {
+            if (_asked) return;
+            if (Grid.WidthInCells == 0) return;
+            if (NetworkIdentityRegistry.Count == 0) return;
+
+            var ids = new List<int>();
+            foreach (var hp in Object.FindObjectsByType<BuildingHP>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (hp.IsNullOrDestroyed() || hp.gameObject.IsNullOrDestroyed()) continue;
+                if (hp.HitPoints >= hp.MaxHitPoints) continue;
+
+                var identity = hp.gameObject.GetExistingNetIdentity();
+                if (identity == null || identity.NetId == 0) continue;
+
+                // Only ask about ids this peer can actually resolve later. One
+                // that is not in the registry cannot be matched to the reply, and
+                // asking anyway is what produced 36 unanswerable answers a run.
+                if (!NetworkIdentityRegistry.Exists(identity.NetId)) continue;
+
+                ids.Add(identity.NetId);
+                if (ids.Count >= DamagedBuildingsQueryPacket.MaxIds) break;
+            }
+
+            // Marked asked either way. With nothing damaged there is nothing to
+            // ask, and retrying every frame would be a busy loop over four
+            // thousand components.
+            _asked = true;
+            if (ids.Count == 0) return;
+
+            PacketSender.SendToHost(new DamagedBuildingsQueryPacket
+            {
+                RequesterId = MultiplayerSession.LocalUserID,
+                NetIds = ids,
+            });
+
+            DebugConsole.Log($"[BuildingDamage] asked the host about {ids.Count} building(s) this peer shows as damaged");
         }
 
         /// <summary>
