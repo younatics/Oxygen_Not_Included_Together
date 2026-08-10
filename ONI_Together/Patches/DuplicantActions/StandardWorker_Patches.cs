@@ -1,4 +1,5 @@
-﻿using HarmonyLib;
+﻿using ONI_Together.Networking.Components;
+using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Misc;
 using ONI_Together.Networking;
@@ -35,6 +36,8 @@ namespace ONI_Together.Patches.DuplicantActions
 				typeof(ClusterTelescopeIdentifyMeteorWorkable)
             };
 
+			private static readonly HashSet<ulong> _viewportScratch = new HashSet<ulong>();
+
 			public static void Postfix(StandardWorker __instance, StartWorkInfo start_work_info)
 			{
 				using var _ = Profiler.Scope();
@@ -54,7 +57,27 @@ namespace ONI_Together.Patches.DuplicantActions
                         return;
                 }
 
-                PacketSender.SendToAllClients(new StandardWorker_WorkingState_Packet(__instance, start_work_info.workable, true));
+                // Only to peers that hold the workable. Spawns are culled to a
+                // client's viewport and this was not, so a duplicant starting
+                // work on something the client was never told about produced a
+                // packet that could only fail - 1176 unresolvable workables on
+                // one client, against none on the host. WorkableProgressPacket
+                // is culled the same way.
+                var packet = new StandardWorker_WorkingState_Packet(__instance, start_work_info.workable, true);
+                int workCell = Grid.PosToCell(start_work_info.workable);
+                if (Grid.IsValidCell(workCell) && WorldStateSyncer.Instance != null)
+                {
+                    _viewportScratch.Clear();
+                    WorldStateSyncer.Instance.GetClientsViewingCell(workCell, _viewportScratch, 2);
+                    if (_viewportScratch.Count == 0)
+                        return;
+
+                    foreach (var playerId in _viewportScratch)
+                        PacketSender.SendToPlayer(playerId, packet);
+                    return;
+                }
+
+                PacketSender.SendToAllClients(packet);
 			}
 		}
 

@@ -142,7 +142,12 @@ namespace ONI_Together.Networking.Components
 		{
 			using var _ = Profiler.Scope();
 
-			if (IsRegistered)
+			// "Registered" only counts if it produced an address. A previous
+			// attempt can mark this and still leave NetId at 0 - the grid was
+			// not ready, or an eviction sent it looking for a new slot and found
+			// none - and without this the object is stuck at zero for good,
+			// because nothing else ever calls back.
+			if (IsRegistered && NetId != 0)
 				return;
 
 			// A client-side preview draws immediately so the game stays

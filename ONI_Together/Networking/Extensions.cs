@@ -33,7 +33,17 @@ namespace ONI_Together.Networking
 			}
 
 			if (go.TryGetComponent<NetworkIdentity>(out var identity))
+			{
+				// Having the component is not the same as having an address.
+				// Registration can be skipped - the grid was not ready, an
+				// eviction left it homeless - and nothing comes back to finish
+				// the job, so the object keeps a NetId of 0 and every caller
+				// that asks gets zero. A host logged 32 of those for pacu
+				// juveniles alone, all of which had an identity attached.
+				if (identity.NetId == 0)
+					identity.RegisterIdentity();
 				return identity;
+			}
 
 			// Attaching an identity here is a last resort, and it is worth
 			// noticing when it happens. Only the peer that asks gets one: the
