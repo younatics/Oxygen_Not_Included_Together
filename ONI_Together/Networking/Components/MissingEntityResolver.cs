@@ -47,6 +47,44 @@ namespace ONI_Together.Networking.Components
         public int GaveUpOn { get; private set; }
 
         /// <summary>
+        /// Ids the host answered for by saying it has no such object either.
+        ///
+        /// These are not gaps. A ground item can spawn, be picked up and be gone
+        /// from both peers before anyone asks about it, and the one unresolved id
+        /// left in an otherwise clean run was exactly that. Counting a dead object
+        /// as something this peer is missing made the divergence gate fire on a
+        /// session where nothing had diverged.
+        /// </summary>
+        public int ConfirmedGone { get; private set; }
+
+        private readonly HashSet<int> _gone = new HashSet<int>();
+
+        /// <summary>Ids already counted as given up on, so the count can be corrected if the host later answers.</summary>
+        private readonly HashSet<int> _gaveUpIds = new HashSet<int>();
+
+        /// <summary>Called when the host reports that an id does not exist on its side.</summary>
+        public static void NoteConfirmedGone(int netId)
+        {
+            var instance = Instance;
+            if (instance.IsNullOrDestroyed()) return;
+
+            if (instance._gone.Add(netId))
+                instance.ConfirmedGone++;
+
+            // The answer can arrive after this id was already written off, because
+            // the attempt is counted when the question goes out rather than when it
+            // comes back. Move it out of the failure count instead of leaving it in
+            // both - a gap the host has explicitly denied is not a gap.
+            if (instance._gaveUpIds.Remove(netId) && instance.GaveUpOn > 0)
+                instance.GaveUpOn--;
+
+            // Stop asking. Without this the id runs to the attempt limit and is
+            // then recorded as given up on, which reads as a real gap.
+            instance._attempts[netId] = MaxAttemptsPerId;
+            instance._queued.Remove(netId);
+        }
+
+        /// <summary>
         /// Where Update stopped, counted.
         ///
         /// The first version of this queued 119 ids and sent none, and every
@@ -61,7 +99,7 @@ namespace ONI_Together.Networking.Components
         public int SkippedAlreadyPresent { get; private set; }
 
         public string Describe() =>
-            $"ticks={Ticks} sent={RequestsSent} pending={_pending.Count} gaveup={GaveUpOn} " +
+            $"ticks={Ticks} sent={RequestsSent} pending={_pending.Count} gaveup={GaveUpOn} gone={ConfirmedGone} " +
             $"skip[session={SkippedNotInSession} world={SkippedNoWorld} " +
             $"idle={SkippedEmptyOrTooSoon} present={SkippedAlreadyPresent}]";
 
@@ -79,6 +117,9 @@ namespace ONI_Together.Networking.Components
             _attempts.Clear();
             RequestsSent = 0;
             GaveUpOn = 0;
+            ConfirmedGone = 0;
+            _gone.Clear();
+            _gaveUpIds.Clear();
         }
 
         /// <summary>
@@ -98,6 +139,9 @@ namespace ONI_Together.Networking.Components
             if (netId == 0) return;
             if (!MultiplayerSession.IsClient) return;
 
+            // Already asked to the limit, or the host has said it does not exist.
+            if (_gone.Contains(netId))
+                return;
             if (_attempts.TryGetValue(netId, out int tried) && tried >= MaxAttemptsPerId)
                 return;
 
@@ -152,6 +196,7 @@ namespace ONI_Together.Networking.Components
             if (tried + 1 >= MaxAttemptsPerId)
             {
                 GaveUpOn++;
+                _gaveUpIds.Add(netId);
                 ThrottledLog.Warn(
                     $"[MissingEntityResolver] gave up on NetId {netId} after {MaxAttemptsPerId} requests - " +
                     "the host either does not have it either, or it is not a loose item");

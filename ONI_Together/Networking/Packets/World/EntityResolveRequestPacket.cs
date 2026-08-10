@@ -44,6 +44,12 @@ namespace ONI_Together.Networking.Packets.World
             RequesterId = reader.ReadUInt64();
         }
 
+        /// <summary>Sends an answer back to whoever asked, or names the drop.</summary>
+        private void Reply(IPacket packet)
+        {
+            PacketSender.SendToPlayer(RequesterId, packet, PacketSendMode.Reliable);
+        }
+
         public void OnDispatched()
         {
             using var _ = Profiler.Scope();
@@ -60,12 +66,24 @@ namespace ONI_Together.Networking.Packets.World
                 return;
             }
 
+            // Silence used to mean two different things - "I have it and will not
+            // send it" and "it does not exist any more" - and the client counted
+            // both as an object it was missing. The one unresolved id left in a
+            // clean run was a ground item that spawned, was picked up, and was
+            // gone from both peers before anyone asked. Saying so ends the asking
+            // and stops a dead object being reported as a divergence.
             if (!NetworkIdentityRegistry.TryGet(NetId, out var identity) || identity.IsNullOrDestroyed())
-                return;   // The host does not have it either. Nothing to say.
+            {
+                Reply(new EntityUnknownPacket { NetId = NetId });
+                return;
+            }
 
             var go = identity.gameObject;
             if (go.IsNullOrDestroyed())
+            {
+                Reply(new EntityUnknownPacket { NetId = NetId });
                 return;
+            }
 
             // Only loose items. A building or a duplicant the client is missing
             // is a different and much larger problem, and spawning one from here

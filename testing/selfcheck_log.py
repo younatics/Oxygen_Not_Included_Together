@@ -108,15 +108,34 @@ def main():
         print("     session ran. Host a LAN game and dig a few tiles, then re-run.")
         return 0
 
-    # --- A. id instability for one key ------------------------------------
-    print(h("A. SAME (prefab, type, cell) -> DIFFERENT id  (id is not stable)"))
+    # --- A. one object addressed by two ids -------------------------------
+    #
+    # This used to call any key with two ids a divergence, which is the same
+    # wrong invariant the in-game suite carried until it was fixed there: a cell
+    # holds two piles of sand whenever they were not allowed to merge, and each
+    # one rightly has its own id. It failed on both peers, every run, naming two
+    # Sand ids in one cell as proof of instability - and both peers reported the
+    # same pair across six consecutive runs, which is agreement, not instability.
+    #
+    # What is worth confirming is fewer ids than registrations for a key: the
+    # same object re-registered under a new id, so anything addressed to the old
+    # one lands nowhere. Two registrations with two ids is two objects; two
+    # registrations with one id is the bug.
+    print(h("A. SAME (prefab, type, cell) REGISTERED AGAIN UNDER A NEW id"))
     by_key = defaultdict(list)
     for prefab, wtype, cell, nid in workables:
         by_key[(prefab, wtype, cell)].append(nid)
-    unstable = {k: v for k, v in by_key.items() if len(set(v)) > 1}
+
+    # A key registered more times than it has distinct ids has re-registered
+    # something; a key with as many ids as registrations is simply that many
+    # objects sharing a cell.
+    unstable = {k: v for k, v in by_key.items()
+                if len(v) > len(set(v)) and len(set(v)) > 1}
+    multi_id = {k: v for k, v in by_key.items() if len(set(v)) > 1}
     rate = 100.0 * len(unstable) / len(by_key)
     print(f"  distinct keys                        : {len(by_key)}")
-    print(f"  keys that got more than one id       : {len(unstable)}  ({rate:.1f}%)")
+    print(f"  keys holding several objects         : {len(multi_id)}  (normal - stacked items)")
+    print(f"  keys that re-registered under a new id: {len(unstable)}  ({rate:.1f}%)")
     if unstable:
         confirmed = True
         report["confirmed"].append({"finding": "netid_unstable_within_run",
@@ -125,7 +144,8 @@ def main():
         print("      over the run. Packets sent under an older id hit nothing.\n")
         for k, v in list(unstable.items())[: args.max_examples]:
             ids = sorted(set(v))
-            print(f"      {k[0][:24]:<25} {k[1][:14]:<15} cell {k[2]:<7} ids={ids[:6]}")
+            print(f"      {k[0][:24]:<25} {k[1][:14]:<15} cell {k[2]:<7} "
+                  f"registrations={len(v)} ids={ids[:6]}")
 
     # --- B. cell absent from the hash -------------------------------------
     print(h("B. CONSECUTIVE ids ACROSS DIFFERENT CELLS  (id comes from arrival order)"))

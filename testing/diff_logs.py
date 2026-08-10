@@ -232,13 +232,47 @@ def main():
     print(h("3. REGISTRY LOOKUP FAILURES  (downstream symptom of #3 / #8)"))
     for s in (host, client):
         print(f"  {s.name:<7} highest counter = {s.lookup_fail_max:<8} distinct missing NetIds = {len(s.lookup_fail_ids)}")
-    if client.lookup_fail_max > 100 or host.lookup_fail_max > 100:
+    # A miss is not automatically a divergence, and treating it as one made this
+    # section fire on every healthy run.
+    #
+    # The mod's resolver re-checks each unresolved id a fraction of a second later
+    # and asks the host about the ones still missing. Measured on a live session:
+    # 412 of them were already in the registry by the time it looked, and not one
+    # had to be asked about. So the bulk of these are packets arriving just ahead
+    # of the object they name - an ordering race that closes itself - and the only
+    # ones that mean two peers disagree are the ones the host could not supply.
+    #
+    # The mod says so in the log, so this reads that rather than guessing from a
+    # count. The raw numbers stay printed above, because they are still the right
+    # thing to look at when the shape changes.
+    unresolved_re = re.compile(r"(\d+) NetIds could not be resolved even after asking the host")
+    persistent = {}
+    for s in (host, client):
+        worst = 0
+        try:
+            with open(s.path, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    m = unresolved_re.search(line)
+                    if m:
+                        worst = max(worst, int(m.group(1)))
+        except OSError:
+            # Unreadable is not the same as clean, and must not read as zero.
+            worst = -1
+        persistent[s.name] = worst
+        shown = "unreadable" if worst < 0 else str(worst)
+        print(f"  {s.name:<7} ids the host could not supply = {shown}")
+
+    if any(v > 0 for v in persistent.values()):
         confirmed = True
         report["confirmed"].append({"finding": "registry_lookup_failures",
                                     "host": host.lookup_fail_max,
-                                    "client": client.lookup_fail_max})
-        print("\n  >>> CONFIRMED: sustained lookup failures. Packets are arriving for objects")
-        print("      the receiver has never registered. Cross-check section 1.")
+                                    "client": client.lookup_fail_max,
+                                    "persistent": persistent})
+        print("\n  >>> CONFIRMED: ids that stayed missing after the host was asked. These are")
+        print("      objects one peer genuinely does not have. Cross-check section 1.")
+    elif client.lookup_fail_max > 100 or host.lookup_fail_max > 100:
+        print("\n  transient only: every unresolved id resolved itself or was answered.")
+        print("      A high count here with nothing persistent is arrival order, not divergence.")
 
     # --- 4. Save transfers -------------------------------------------------
     print(h("4. SAVE TRANSFERS  (audit #6 - transferId is derived from the world name)"))
