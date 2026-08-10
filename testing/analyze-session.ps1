@@ -203,6 +203,40 @@ foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
     $selfCodes[$side[0]] = $LASTEXITCODE
 }
 
+# --- 4b. what each peer complained about ------------------------------------
+#
+# Every analyser above answers a question somebody already thought to ask. This
+# answers the one that finds things nobody asked about: what did the mod actually
+# warn about, grouped, most frequent first.
+#
+# It is how nearly every defect in this work was first noticed, done by hand each
+# time - numbers get substituted out so 5881 repetitions of one missing entity
+# collapse into one line with a count, and a new kind of warning stands out
+# against the familiar ones instead of being buried by them. A long real session
+# is exactly where that matters and exactly where reading by eye stops working.
+Head 'what each peer warned about (grouped, most frequent first)'
+foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
+    Write-Host "--- $($side[0]) ---" -ForegroundColor DarkGray
+    if (-not (Test-Path $side[1])) { Write-Host '  (no log)'; continue }
+
+    $groups = Get-Content $side[1] |
+        Select-String -Pattern '\[(WARNING|ERROR)\]' |
+        ForEach-Object {
+            # Normalise so repetitions of the same complaint collapse: drop the
+            # timestamp, then any long number, cell, id or count.
+            $t = $_.Line -replace '^\[[\d:.]+\]\s*', ''
+            $t = $t -replace '\d{4,}', '<n>'
+            $t = $t -replace '\(#\d+\)', '(#N)'
+            $t = $t -replace 'x\d+ in the last', 'xN in the last'
+            if ($t.Length -gt 110) { $t = $t.Substring(0, 110) }
+            $t
+        } |
+        Group-Object | Sort-Object Count -Descending | Select-Object -First 12
+
+    if (-not $groups) { Write-Host '  nothing warned about' -ForegroundColor Green; continue }
+    foreach ($g in $groups) { Write-Host ("  {0,6}  {1}" -f $g.Count, $g.Name) }
+}
+
 # --- 5. verdict -------------------------------------------------------------
 Head "VERDICT  $Label"
 Say ("  host log     {0} MB, {1} mod lines" -f $hostMeta.playerLogMB, $hostMeta.modLogLines)
