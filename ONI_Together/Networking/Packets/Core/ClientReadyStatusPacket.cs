@@ -92,6 +92,12 @@ namespace ONI_Together.Networking.Packets.Core
 
 			if (Status == ClientReadyState.Loading)
 			{
+				// On the player as well as the transport. The transport's copy
+				// exists to match a reconnecting client to its old id and is
+				// Riptide-only; the broadcast path reads the player, and the
+				// player still said Ready throughout every load.
+				player.SetReadyState(ClientReadyState.Loading);
+
 				var server = NetworkConfig.TransportServer as RiptideServer;
 				server?.MarkClientLoading(SenderId);
 				return;

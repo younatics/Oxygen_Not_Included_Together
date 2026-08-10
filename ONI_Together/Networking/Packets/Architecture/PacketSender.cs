@@ -4,6 +4,7 @@ using ONI_Together.Misc;
 using ONI_Together.Networking.Packets;
 using ONI_Together.Networking.Packets.Architecture;
 using ONI_Together.Networking.Packets.Core;
+using ONI_Together.Networking.States;
 using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Steam;
 using Shared.Interfaces.Networking;
@@ -281,6 +282,14 @@ namespace ONI_Together.Networking
 				return false;
 			}
 
+			// Also here, not only in the broadcast loops. The periodic syncers
+			// that produced almost all of these failures send per-player, after
+			// doing their own viewport culling - WorkableProgressPacket alone
+			// accounted for 826 of a client's 904 failed lookups - so a gate that
+			// only covered SendToAll would have missed the traffic it was for.
+			if (NotReadyFor(player, packet))
+				return false;
+
 			return SendToConnection(player.Connection, packet, sendType);
 		}
 
@@ -311,6 +320,36 @@ namespace ONI_Together.Networking
 					$"-> player {kvp.Key.Substring(0, slash)} (not a connected player)");
 			}
 			_undeliverable.Clear();
+		}
+
+		/// <summary>
+		/// True when this packet cannot be applied by <paramref name="player"/> yet
+		/// because that peer is still loading its world.
+		///
+		/// Fails open, deliberately. A client that reports Loading and never
+		/// reports Ready would otherwise be cut off from world state for the rest
+		/// of the session, which is far worse than the warnings this avoids - so
+		/// after the host's own timeout the gate lifts on its own.
+		/// </summary>
+		private static bool NotReadyFor(MultiplayerPlayer player, IPacket packet)
+		{
+			if (!(packet is IRequiresLoadedWorld)) return false;
+			if (player.readyState != ClientReadyState.Loading) return false;
+
+			float waited = Time.unscaledTime - player.LoadingSince;
+			if (waited > Configuration.Instance.Host.TimeoutSeconds)
+			{
+				// Treat it as ready rather than starve it forever, and say so
+				// once - a client stuck in Loading is its own bug and should not
+				// be hidden by this one silently working around it.
+				DebugConsole.LogWarning(
+					$"[PacketSender] player {player.PlayerId} has been Loading for {waited:0}s - " +
+					"resuming world traffic to it anyway");
+				player.readyState = ClientReadyState.Ready;
+				return false;
+			}
+
+			return true;
 		}
 
 		private static bool CanBroadcastTo(MultiplayerPlayer player)
@@ -396,6 +435,9 @@ namespace ONI_Together.Networking
 				if (!CanBroadcastTo(player))
 					continue;
 
+				if (NotReadyFor(player, packet))
+					continue;
+
 				if (cull && !WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))
 					continue;
 
@@ -433,6 +475,9 @@ namespace ONI_Together.Networking
 					continue;
 
 				if (!CanBroadcastTo(player))
+					continue;
+
+				if (NotReadyFor(player, packet))
 					continue;
 
 				if (cull && !WorldStateSyncer.Instance.IsCellInPlayerViewport(player.PlayerId, cell))

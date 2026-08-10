@@ -93,7 +93,7 @@ namespace ONI_Together.Networking
 			if (player.PlayerId == MultiplayerSession.HostUserID)
 				return;
 
-			player.readyState = state;
+			player.SetReadyState(state);
 		}
 
 		public static void RefreshScreen()

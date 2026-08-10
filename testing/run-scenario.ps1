@@ -185,6 +185,30 @@ if ($mined -le 1) {
     Ok "ore spawned and replicated ($mined notices on the peer)"
 }
 
+# Stop the world before either box describes it.
+#
+# The suites do not run at the same instant - one run had them 4.2 s apart with
+# the game at speed 3 - and the cross-peer comparison treats the two dumps as
+# simultaneous. Four seconds of a running colony is a duplicant moving 0.8 kg
+# between two storages and a building being repaired, and that is exactly what
+# the comparison reported: two storage differences and two buildings damaged on
+# the peer that dumped first and whole on the peer that dumped second. Note the
+# direction - the *earlier* snapshot had the damage. Nothing had diverged; the
+# measurement was taken twice at different times and subtracted.
+Step 'pausing both boxes so the two snapshots describe the same moment'
+$mark = HostLogLines
+Send-Host 'pause'
+if (Wait-HostLog '\[SCENARIO\] (OK|FAIL) pause' 60 $mark) { Ok 'host paused' }
+else { Write-Host '    WARN host did not confirm pause - state comparison may drift' -ForegroundColor Yellow }
+Send-Peer 'pause'
+Start-Sleep -Seconds 3
+
 Step 'analysing'
 & (Join-Path $root 'analyze-session.ps1') -Label $Label -Share $Share
-exit $LASTEXITCODE
+$analysis = $LASTEXITCODE
+
+# Leave it as it was found, so a later step or a person can keep using the session.
+Send-Host "play $Speed"
+Send-Peer "play $Speed"
+
+exit $analysis

@@ -84,6 +84,14 @@ namespace ONI_Together.DebugTools
 
             foreach (var test in tests)
             {
+                // A test that asks the registry for an id that is not there is
+                // doing its job - checking a miss returns false rather than
+                // throwing - but those misses were landing in the live counters
+                // that other tests then assert on. Two of the host's failed
+                // lookups in a clean run were the suite reporting itself as a
+                // desync. Held around every test, so the next one written
+                // cannot reintroduce it.
+                NetworkIdentityRegistry.BeginDiagnosticScope();
                 try { test.Run(); }
                 catch (Exception ex)
                 {
@@ -92,6 +100,7 @@ namespace ONI_Together.DebugTools
                     DebugConsole.Log($"{Tag} RESULT FAIL | {test.Category} | {test.Name} | 0 | harness error: {OneLine(ex.ToString())}");
                     continue;
                 }
+                finally { NetworkIdentityRegistry.EndDiagnosticScope(); }
 
                 string state = test.State switch
                 {

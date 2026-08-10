@@ -84,12 +84,28 @@ namespace ONI_Together.DebugTools.UnitTests
             if (eligible == 0)
                 return UnitTestResult.Skip("no clients connected, so every count would be zero either way");
 
-            // Deliberately a cell no camera is looking at. Under the old double
-            // layer this arrived at nobody even with AlwaysSend set.
+            // A real duplicant, at the position it is already in.
+            //
+            // This test used to send NetId 0 from a zero position, which is the
+            // tidy-looking choice and was wrong twice over: the client logged a
+            // packet with no id set - a warning the suite itself then reported
+            // as a defect - and had it resolved, it would have teleported
+            // something to the corner of the map. A test that reaches the wire
+            // has to be safe on arrival; this one applies a position the
+            // receiver already believes.
+            var subject = Object.FindObjectsByType<MinionIdentity>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None).FirstOrDefault(m => !m.IsNullOrDestroyed());
+            if (subject == null)
+                return UnitTestResult.Skip("no duplicant to borrow an id from");
+
+            int netId = subject.gameObject.GetExistingNetIdentity()?.NetId ?? 0;
+            if (netId == 0)
+                return UnitTestResult.Skip("that duplicant has no id yet");
+
             var packet = new EntityPositionPacket
             {
-                NetId = 0,
-                Position = Vector3.zero,
+                NetId = netId,
+                Position = subject.transform.position,
                 AlwaysSend = true,
             };
 

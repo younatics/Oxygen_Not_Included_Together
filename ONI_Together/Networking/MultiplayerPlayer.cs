@@ -17,6 +17,29 @@ public class MultiplayerPlayer
 
 	public ClientReadyState readyState = ClientReadyState.Ready;
 
+	/// <summary>
+	/// When this player last reported that it was loading, so the send gate can
+	/// give up on a client that says Loading and never says Ready rather than
+	/// starving it for the rest of the session.
+	/// </summary>
+	public float LoadingSince;
+
+	/// <summary>
+	/// Records the state and the moment together, because the gate needs both.
+	///
+	/// The Loading report used to reach the Riptide server and stop there: the
+	/// host knew a client was loading for the purpose of matching up its
+	/// reconnect id, while the player object it broadcasts against still said
+	/// Ready - the default. So world packets kept flowing to a peer with no
+	/// world, and each one became a failed lookup on arrival.
+	/// </summary>
+	public void SetReadyState(ClientReadyState state)
+	{
+		readyState = state;
+		if (state == ClientReadyState.Loading)
+			LoadingSince = UnityEngine.Time.unscaledTime;
+	}
+
     public MultiplayerPlayer(ulong playerId)
 	{
 		PlayerId = playerId;

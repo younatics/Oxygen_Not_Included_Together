@@ -14,7 +14,7 @@ namespace ONI_Together.Networking.Packets.World
     /// <summary>
     /// Modified version of GroundItemPickedUpPacket
     /// </summary>
-    public class StorageItemPacket : IPacket, IBulkablePacket
+    public class StorageItemPacket : IPacket, IBulkablePacket, IRequiresLoadedWorld
     {
         private static readonly PendingRemovals Pending = new PendingRemovals("PendingStorage");
 

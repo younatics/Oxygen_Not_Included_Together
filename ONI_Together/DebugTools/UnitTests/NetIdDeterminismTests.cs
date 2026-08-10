@@ -277,18 +277,44 @@ namespace ONI_Together.DebugTools.UnitTests
             // Reported separately, because they are different bugs. A lookup
             // for id 0 is a sender that left a field unset; a lookup for a real
             // id that is not here is two peers disagreeing about an object.
+            // Both, not the first one found. Returning early on the id-0 case hid
+            // the real failures behind it for a whole run - the client reported
+            // one malformed packet and said nothing about its thirty-nine
+            // genuine misses, which were the more interesting number.
+            var problems = new List<string>();
+
             int unset = NetworkIdentityRegistry.UnsetIdLookupCount;
             if (unset > 0)
-                return UnitTestResult.Fail(
-                    $"{unset} packets arrived carrying NetId 0 - a sender is not filling the id in");
+                problems.Add(
+                    $"{unset} packets arrived carrying NetId 0 - a sender is not filling the id in" +
+                    Blame(NetworkIdentityRegistry.UnsetIdByCaller));
 
             int fails = NetworkIdentityRegistry.LookupFailCount;
             if (fails > 0)
-                return UnitTestResult.Fail(
+                problems.Add(
                     $"{fails} failed registry lookups - packets are arriving for NetIds this peer never " +
-                    $"registered (registry holds {NetworkIdentityRegistry.Count})");
+                    $"registered (registry holds {NetworkIdentityRegistry.Count})" +
+                    Blame(NetworkIdentityRegistry.FailuresByCaller));
+
+            if (problems.Count > 0)
+                return UnitTestResult.Fail(string.Join(" ;; ", problems));
 
             return UnitTestResult.Pass($"no failed lookups; registry holds {NetworkIdentityRegistry.Count}");
+        }
+
+        /// <summary>
+        /// Turns a count into somewhere to look. The registry records which
+        /// method asked for each id it could not find, so the failure message
+        /// can name it - a bare number told me an id was missing and nothing
+        /// about which packet carried it, and that gap cost several rounds.
+        /// </summary>
+        private static string Blame(IReadOnlyDictionary<string, int> byCaller)
+        {
+            if (byCaller == null || byCaller.Count == 0) return string.Empty;
+
+            var worst = byCaller.OrderByDescending(kv => kv.Value).Take(4)
+                                .Select(kv => $"{kv.Key} x{kv.Value}");
+            return ". Asked by: " + string.Join(", ", worst);
         }
     }
 }

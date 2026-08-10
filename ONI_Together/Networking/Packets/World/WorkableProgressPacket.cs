@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
+using Shared.Interfaces.Networking;
 using Shared.Profiling;
 using System.Collections;
 using System.IO;
@@ -8,7 +9,7 @@ using UnityEngine;
 
 namespace ONI_Together.Networking.Packets.World
 {
-	internal class WorkableProgressPacket : IPacket
+	internal class WorkableProgressPacket : IPacket, IRequiresLoadedWorld
 	{
 		private int TargetNetId;
 		private string TargetTypeName;

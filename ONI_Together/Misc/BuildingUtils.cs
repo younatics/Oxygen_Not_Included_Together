@@ -210,7 +210,22 @@ namespace ONI_Together.Misc
         private static void ClearStorage(Storage storage)
         {
             for (int i = storage.items.Count - 1; i >= 0; i--)
-                storage.items[i].DeleteObject();
+            {
+                var item = storage.items[i];
+
+                // A storage can hold an entry whose GameObject is already gone -
+                // the item was consumed or destroyed elsewhere this frame and the
+                // list has not caught up. DeleteObject reads a component off it,
+                // and Unity throws on member access to a destroyed object even
+                // though it compares equal to null, so the whole rebuild aborted
+                // partway through: the client dropped five StructureStatePackets
+                // with a NullReferenceException, each one leaving that storage
+                // half-cleared and never refilled.
+                if (item.IsNullOrDestroyed())
+                    continue;
+
+                item.DeleteObject();
+            }
             storage.items.Clear();
         }
         

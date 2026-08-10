@@ -8,7 +8,7 @@ using Shared.Profiling;
 using UnityEngine;
 using Shared.Interfaces.Networking;
 
-public class EntityPositionPacket : IPacket, IViewportCullable
+public class EntityPositionPacket : IPacket, IViewportCullable, IRequiresLoadedWorld
 {
 	public int NetId;
 	public Vector3 Position;

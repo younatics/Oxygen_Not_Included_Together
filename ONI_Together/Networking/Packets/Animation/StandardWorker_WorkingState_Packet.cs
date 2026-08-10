@@ -8,13 +8,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Shared.Interfaces.Networking;
 using Shared.Profiling;
 using UnityEngine;
 using static RancherChore;
 
 namespace ONI_Together.Networking.Packets.Animation
 {
-	internal class StandardWorker_WorkingState_Packet : IPacket
+	internal class StandardWorker_WorkingState_Packet : IPacket, IRequiresLoadedWorld
 	{
 		public StandardWorker_WorkingState_Packet() { }
 

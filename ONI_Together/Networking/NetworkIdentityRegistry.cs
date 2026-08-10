@@ -206,7 +206,60 @@ namespace ONI_Together.Networking
 		public static int UnsetIdLookupCount => _unsetIdLookupCount;
 		private static int _unsetIdLookupCount = 0;
 
-		public static bool TryGet(int netId, out NetworkIdentity entity)
+		/// <summary>
+		/// Failures grouped by who asked, so a count can be turned into a place
+		/// to look. A bare "NetId not found" says an id is missing and nothing
+		/// about which packet carried it, and chasing one of those without this
+		/// took several rounds. Filled from the caller attributes below, which
+		/// the compiler bakes in - the alternative, a stack trace per failure,
+		/// is what once froze a host solid.
+		/// </summary>
+		private static readonly Dictionary<string, int> _failuresByCaller = new Dictionary<string, int>();
+
+		public static IReadOnlyDictionary<string, int> FailuresByCaller => _failuresByCaller;
+
+		/// <summary>Same grouping for id-0 packets: it names the sender that left the field unset.</summary>
+		private static readonly Dictionary<string, int> _unsetIdByCaller = new Dictionary<string, int>();
+
+		public static IReadOnlyDictionary<string, int> UnsetIdByCaller => _unsetIdByCaller;
+
+		/// <summary>
+		/// While positive, failed lookups are neither counted nor logged.
+		///
+		/// The suite has to ask the registry for ids that are not there - that is
+		/// how you check a miss returns false instead of throwing - and those
+		/// misses were landing in the same counters the suite then asserts on.
+		/// Both of the host's "failed registry lookups" in a clean run came from
+		/// two of its own tests: one probing NetId -1, one dispatching a packet
+		/// for 424242. The gate was reporting the tests as a desync.
+		///
+		/// The runner holds this open around each test, so this is fixed for
+		/// every test written later as well, not just the two that did it.
+		/// </summary>
+		private static int _diagnosticDepth;
+
+		public static bool InDiagnosticScope => _diagnosticDepth > 0;
+
+		public static void BeginDiagnosticScope() => _diagnosticDepth++;
+
+		public static void EndDiagnosticScope()
+		{
+			if (_diagnosticDepth > 0) _diagnosticDepth--;
+		}
+
+		private static void Blame(Dictionary<string, int> counts, string caller, string callerFile)
+		{
+			string where = string.IsNullOrEmpty(callerFile)
+				? (caller ?? "unknown")
+				: System.IO.Path.GetFileNameWithoutExtension(callerFile) + "." + (caller ?? "?");
+
+			counts.TryGetValue(where, out int n);
+			counts[where] = n + 1;
+		}
+
+		public static bool TryGet(int netId, out NetworkIdentity entity,
+			[System.Runtime.CompilerServices.CallerMemberName] string caller = null,
+			[System.Runtime.CompilerServices.CallerFilePath] string callerFile = null)
 		{
 			using var _ = Profiler.Scope();
 
@@ -218,23 +271,28 @@ namespace ONI_Together.Networking
 			if (netId == 0)
 			{
 				entity = null;
-				_unsetIdLookupCount++;
-				if (_unsetIdLookupCount <= 3 || _unsetIdLookupCount % 500 == 0)
+				if (_diagnosticDepth == 0)
 				{
-					DebugConsole.LogWarning(
-						$"[Registry] lookup for NetId 0 (#{_unsetIdLookupCount}) - a packet was sent with no id set");
+					_unsetIdLookupCount++;
+					Blame(_unsetIdByCaller, caller, callerFile);
+					if (_unsetIdLookupCount <= 3 || _unsetIdLookupCount % 500 == 0)
+					{
+						DebugConsole.LogWarning(
+							$"[Registry] lookup for NetId 0 (#{_unsetIdLookupCount}) from {caller} - a packet was sent with no id set");
+					}
 				}
 				return false;
 			}
 
 			bool found = identities.TryGetValue(netId, out entity);
-			if (!found)
+			if (!found && _diagnosticDepth == 0)
 			{
 				_lookupFailCount++;
+				Blame(_failuresByCaller, caller, callerFile);
 				if (_lookupFailCount <= 3 || _lookupFailCount % 500 == 0 || Time.unscaledTime - _lastFailLogTime > 1f)
 				{
 					_lastFailLogTime = Time.unscaledTime;
-					DebugConsole.LogWarning($"[Registry] Lookup failed (#{_lookupFailCount}): NetId {netId} not found. Count: {identities.Count}");
+					DebugConsole.LogWarning($"[Registry] Lookup failed (#{_lookupFailCount}): NetId {netId} not found, asked by {caller}. Count: {identities.Count}");
 				}
 			}
 			
@@ -248,12 +306,16 @@ namespace ONI_Together.Networking
 			return found;
 		}
 
-		public static bool TryGetComponent<T>(int netId, out T component)
+		// Forwards its own caller rather than letting the attributes name this
+		// method, which would blame every failure in the mod on one helper.
+		public static bool TryGetComponent<T>(int netId, out T component,
+			[System.Runtime.CompilerServices.CallerMemberName] string caller = null,
+			[System.Runtime.CompilerServices.CallerFilePath] string callerFile = null)
 		{
 			using var _ = Profiler.Scope();
 
 			component = default(T);
-			if (!TryGet(netId, out var ni))
+			if (!TryGet(netId, out var ni, caller, callerFile))
 				return false;
 			if(ni.gameObject.IsNullOrDestroyed())
 				return false;
@@ -276,6 +338,8 @@ namespace ONI_Together.Networking
 			identities.Clear();
 			_lookupFailCount = 0;
 			_unsetIdLookupCount = 0;
+			_failuresByCaller.Clear();
+			_unsetIdByCaller.Clear();
 			// Carried over from the previous session before, so a clean run
 			// inherited the last one's collisions and the counter stopped
 			// meaning "this session".
