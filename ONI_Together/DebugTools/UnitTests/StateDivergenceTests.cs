@@ -86,7 +86,19 @@ namespace ONI_Together.DebugTools.UnitTests
                 DebugConsole.Log(
                     $"[MINION] {identity.NetId}|{go.GetProperName()}|{Grid.PosToCell(go)}|" +
                     $"active={go.activeInHierarchy}|handler={(handler != null)}|" +
-                    $"enabled={(handler != null && handler.isActiveAndEnabled)}|recv={stamp}");
+                    $"enabled={(handler != null && handler.isActiveAndEnabled)}|recv={stamp}|" +
+                    $"sent={(handler == null ? -1 : handler.SentCount)}|" +
+                    $"lastsend={(handler == null ? 0f : handler.LastSendTime):0.0}|now={Time.unscaledTime:0.0}|" +
+                    // The last unknown. The host sends under the id its own
+                    // GetNetId() returns, which is the FIRST NetworkIdentity on
+                    // the object; the receiver resolves through the registry.
+                    // If an object carries two identity components, or the
+                    // registry answers that id with a different object, those
+                    // two are not the same thing and every packet lands on the
+                    // wrong duplicant - silently, because the wrong one has a
+                    // handler too.
+                    $"components={go.GetComponents<NetworkIdentity>().Length}|" +
+                    $"resolves={(NetworkIdentityRegistry.TryGet(identity.NetId, out var back) && back != null ? (ReferenceEquals(back, identity) ? "self" : back.gameObject.GetProperName()) : "nothing")}");
                 rows++;
             }
 

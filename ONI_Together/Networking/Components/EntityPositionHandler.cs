@@ -13,10 +13,18 @@ namespace ONI_Together.Networking.Components
         private Vector3 lastSentPosition;
 		private float lastSendTime;
 
+		/// <summary>
+		/// How many position packets this handler has actually put on the wire,
+		/// and when. Read by the diagnostic dump: "the host is sending and the
+		/// client is not receiving" and "the host never sent" look identical
+		/// from the client, and telling them apart by reasoning has now cost
+		/// several rounds.
+		/// </summary>
+		public int SentCount { get; private set; }
+		public float LastSendTime => lastSendTime;
+
 		private static readonly System.Collections.Generic.HashSet<ulong> _viewportScratch = new System.Collections.Generic.HashSet<ulong>();
 
-		/// <summary>Whether this entity is one the player follows, cached because tags do not change.</summary>
-		private bool? _alwaysSend;
 
 		private const float PositionThreshold = 0.05f;
 		private const float MIN_DT = 0.016f;
@@ -160,11 +168,18 @@ namespace ONI_Together.Networking.Components
 		        // real thing: a duplicant off screen never received a position at
 		        // all, so it had nothing to draw with the moment the camera
 		        // reached it, and the sync test said so on the first run.
+		        // Asked every time, not cached. Caching it looked free and was not:
+		        // the answer is taken the first time this runs, and a duplicant
+		        // whose tags were not applied yet at that instant cached "cull
+		        // me" and was culled for the rest of the session. That is exactly
+		        // one duplicant out of twenty two never receiving a position,
+		        // standing still at the same cell across four runs while the
+		        // other twenty one moved. HasTag is a hash lookup against a set;
+		        // it is not worth a bug.
 		        int posCell = Grid.PosToCell(currentPosition);
-		        if (!_alwaysSend.HasValue)
-			        _alwaysSend = gameObject.HasTag(GameTags.BaseMinion) || gameObject.HasTag(GameTags.Creature);
+		        bool alwaysSend = gameObject.HasTag(GameTags.BaseMinion) || gameObject.HasTag(GameTags.Creature);
 
-		        if (!_alwaysSend.Value && Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
+		        if (!alwaysSend && Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
 		        {
 			        _viewportScratch.Clear();
 			        WorldStateSyncer.Instance.GetClientsViewingCell(posCell, _viewportScratch, 4);
@@ -179,6 +194,7 @@ namespace ONI_Together.Networking.Components
 			        PacketSender.SendToAllClients(packet, sendType: PacketSendMode.Unreliable);
 		        }
 
+		        SentCount++;
 		        lastSentPosition = currentPosition;
 		        lastSendTime = currentTime;
 	        }
