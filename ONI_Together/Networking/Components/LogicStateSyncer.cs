@@ -173,7 +173,29 @@ namespace ONI_Together.Networking.Components
             _lastPacketTime[packet.NetId] = Time.unscaledTime;
 
             if (!_tracked.TryGetValue(packet.NetId, out var entry))
-                return;
+            {
+                // The id is captured when the building registers and used as the
+                // key forever after. An identity that is rehoused later - and
+                // duplicates from a save are rehoused now - leaves its old key
+                // behind, so state for the new id lands here and is dropped.
+                // Silently, until now: a wire or switch that stopped following
+                // the host looked exactly like a wire that was never wired up.
+                //
+                // The registry still knows the object, so look it up and adopt
+                // the new key rather than losing the building.
+                if (!NetworkIdentityRegistry.TryGet(packet.NetId, out var identity) || identity == null)
+                {
+                    ThrottledLog.Warn($"[LogicState] no logic building for NetId {packet.NetId}");
+                    return;
+                }
+
+                if (!TryRekey(identity.gameObject, packet.NetId, out entry))
+                {
+                    ThrottledLog.Warn(
+                        $"[LogicState] '{identity.name}' answers to NetId {packet.NetId} but is not tracked here");
+                    return;
+                }
+            }
 
             if (entry.go.IsNullOrDestroyed())
                 return;
@@ -202,6 +224,33 @@ namespace ONI_Together.Networking.Components
                 IsActive = active,
                 OptionalValues = optional,
             }, PacketSendMode.ReliableImmediate);
+        }
+
+        /// <summary>
+        /// Move a tracked building to the id it now answers to.
+        ///
+        /// Tracking is keyed by the id a building had when it registered, and
+        /// that is not permanent - rehousing a duplicate changes it. Without
+        /// this the entry is stranded under a key nobody will ever send again.
+        /// </summary>
+        private bool TryRekey(GameObject go, int newNetId, out BuildingEntry entry)
+        {
+            entry = default;
+            if (go.IsNullOrDestroyed()) return false;
+
+            int stale = 0;
+            bool found = false;
+            foreach (var kvp in _tracked)
+            {
+                if (ReferenceEquals(kvp.Value.go, go)) { stale = kvp.Key; entry = kvp.Value; found = true; break; }
+            }
+            if (!found) return false;
+
+            _tracked.Remove(stale);
+            _lastPacketTime.Remove(stale);
+            _tracked[newNetId] = entry;
+            DebugConsole.Log($"[LogicState] '{go.name}' re-keyed from NetId {stale} to {newNetId}");
+            return true;
         }
 
         public void Register(GameObject go)
