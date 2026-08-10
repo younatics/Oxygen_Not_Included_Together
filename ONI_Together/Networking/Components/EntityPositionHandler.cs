@@ -13,6 +13,8 @@ namespace ONI_Together.Networking.Components
         private Vector3 lastSentPosition;
 		private float lastSendTime;
 
+		private static readonly System.Collections.Generic.HashSet<ulong> _viewportScratch = new System.Collections.Generic.HashSet<ulong>();
+
 		private const float PositionThreshold = 0.05f;
 		private const float MIN_DT = 0.016f;
 
@@ -136,7 +138,33 @@ namespace ONI_Together.Networking.Components
 			        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 		        };
 
-		        PacketSender.SendToAllClients(packet, sendType: PacketSendMode.Unreliable);
+		        // Only to peers that can see where this thing is.
+		        //
+		        // Spawns are culled to a client's viewport; position was not, so
+		        // the host reported where objects were to clients that had never
+		        // been given them. 361 of the 460 distinct ids a live client
+		        // failed to resolve were ore, gas and plants the host held and
+		        // the client had never been sent - every one of those packets
+		        // could only produce a warning.
+		        //
+		        // A moving object that leaves a client's view simply stops being
+		        // reported to it, which is correct: it cannot be drawn there, and
+		        // the heartbeat resumes the moment it comes back into view.
+		        int posCell = Grid.PosToCell(currentPosition);
+		        if (Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
+		        {
+			        _viewportScratch.Clear();
+			        WorldStateSyncer.Instance.GetClientsViewingCell(posCell, _viewportScratch, 4);
+			        if (_viewportScratch.Count > 0)
+			        {
+				        foreach (var playerId in _viewportScratch)
+					        PacketSender.SendToPlayer(playerId, packet, PacketSendMode.Unreliable);
+			        }
+		        }
+		        else
+		        {
+			        PacketSender.SendToAllClients(packet, sendType: PacketSendMode.Unreliable);
+		        }
 
 		        lastSentPosition = currentPosition;
 		        lastSendTime = currentTime;
