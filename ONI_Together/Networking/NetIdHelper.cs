@@ -17,6 +17,20 @@ namespace ONI_Together.Networking
 		/// </summary>
 		private const int UnderConstructionSalt = 0x5C0FF01D;
 
+		/// <summary>
+		/// One salt per id function, so the three do not draw from the same range.
+		///
+		/// They all end in an int and there is nothing to stop two of them landing on
+		/// the same value, but without salts they do it structurally rather than by
+		/// chance: same arithmetic, same inputs, overlapping output. A real colony
+		/// produced a building-versus-pickupable collision on nearly every run, and
+		/// the suite has a test named for exactly this - "The three id functions do
+		/// not overlap" - which is how it was found.
+		/// </summary>
+		private const int BuildingSalt = 0x42D1D501;
+		private const int WorkableSalt = 0x7A6B1E03;
+		private const int EntitySalt   = 0x13C7F905;
+
 		public static int GetDeterministicBuildingId(GameObject go)
 		{
 			using var _ = Profiler.Scope();
@@ -39,10 +53,34 @@ namespace ONI_Together.Networking
 			// of the object, so they reach the same answer without talking.
 			int phase = go.TryGetComponent<BuildingUnderConstruction>(out var underConstruction) && underConstruction != null ? UnderConstructionSalt : 0;
 
-			if (!go.TryGetComponent<Building>(out var building))
-				return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ phase;
+			// Mixed, not XORed, and salted apart from the other two id functions.
+			//
+			// This was `cell ^ prefabHash ^ layer ^ phase`, and XOR keeps the bits
+			// it is given. int.GetHashCode() is the int itself, so the cell went in
+			// undiffused: two prefabs whose hashes differ only in the low bit, in
+			// adjacent cells, produce exactly the same id. A real colony hit that
+			// on nearly every run - SuitMarker at 51571 and Iron at 51570 sharing
+			// one id, DreckoBaby and SandStone sharing another - and two objects
+			// under one id means half the packets about either land on the wrong
+			// one.
+			//
+			// The salt matters as much as the mixing. Workables hash through Mix
+			// already, so with no salt the two functions draw from the same
+			// structured range and collide with each other far more often than
+			// chance; separating the streams makes an overlap a genuine hash
+			// coincidence rather than an artefact of using the same arithmetic.
+			//
+			// Ids are [Serialize]d, so nothing already in a save is renumbered -
+			// only objects created from here on, and both peers run the same build.
+			int hash = StableHash(go.PrefabID().ToString());
+			hash = Mix(hash, cell);
+			hash = Mix(hash, phase);
+			hash = Mix(hash, BuildingSalt);
 
-			return cell.GetHashCode() ^ go.PrefabID().GetHashCode() ^ building.Def.ObjectLayer.GetHashCode() ^ phase;
+			if (!go.TryGetComponent<Building>(out var building))
+				return hash;
+
+			return Mix(hash, building.Def.ObjectLayer.GetHashCode());
 		}
 		/// <summary>
 		/// Stable string hash. string.GetHashCode() happens to be deterministic
@@ -149,6 +187,7 @@ namespace ONI_Together.Networking
 			int hash = StableHash(go.PrefabID().ToString());
 			hash = Mix(hash, cell);
 			hash = Mix(hash, StableHash(workable.GetType().Name));
+			hash = Mix(hash, WorkableSalt);
 
 			// Local uniqueness is not optional, and dropping this probe was a
 			// regression: two iron piles in one cell hashed alike, RegisterExisting
@@ -198,6 +237,7 @@ namespace ONI_Together.Networking
 				hash = Mix(hash, cell);
 			hash = Mix(hash, StableHash(go.GetProperName()));
 			hash = Mix(hash, (int)primaryElement.ElementID);
+			hash = Mix(hash, EntitySalt);
 
 			int breakoff = 0;
 			if (useBreakOff)
