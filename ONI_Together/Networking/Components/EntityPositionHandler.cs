@@ -15,6 +15,9 @@ namespace ONI_Together.Networking.Components
 
 		private static readonly System.Collections.Generic.HashSet<ulong> _viewportScratch = new System.Collections.Generic.HashSet<ulong>();
 
+		/// <summary>Whether this entity is one the player follows, cached because tags do not change.</summary>
+		private bool? _alwaysSend;
+
 		private const float PositionThreshold = 0.05f;
 		private const float MIN_DT = 0.016f;
 
@@ -150,8 +153,18 @@ namespace ONI_Together.Networking.Components
 		        // A moving object that leaves a client's view simply stops being
 		        // reported to it, which is correct: it cannot be drawn there, and
 		        // the heartbeat resumes the moment it comes back into view.
+		        // Duplicants and critters are never culled. The saving comes from
+		        // the numerous and cheap - ore, gas, plants were 361 of the 460
+		        // ids a client could not resolve - and duplicants are twenty
+		        // objects the player watches constantly. Culling them cost a
+		        // real thing: a duplicant off screen never received a position at
+		        // all, so it had nothing to draw with the moment the camera
+		        // reached it, and the sync test said so on the first run.
 		        int posCell = Grid.PosToCell(currentPosition);
-		        if (Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
+		        if (!_alwaysSend.HasValue)
+			        _alwaysSend = gameObject.HasTag(GameTags.BaseMinion) || gameObject.HasTag(GameTags.Creature);
+
+		        if (!_alwaysSend.Value && Grid.IsValidCell(posCell) && WorldStateSyncer.Instance != null)
 		        {
 			        _viewportScratch.Clear();
 			        WorldStateSyncer.Instance.GetClientsViewingCell(posCell, _viewportScratch, 4);

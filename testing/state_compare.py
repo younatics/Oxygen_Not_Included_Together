@@ -40,6 +40,52 @@ NOISY = {
     'input_mass',
 }
 
+def same_value(a, b):
+    """Equal enough to mean the peers agree.
+
+    Storage is emitted as element:mass pairs, and the two peers sample a running
+    simulation at slightly different instants - a toilet fills, a conduit moves
+    gas. The first run of this reported two storages as divergent over 0.1 kg in
+    one element out of fifteen, with everything else identical to the gram. That
+    is the sampling gap, not a desync, and a comparison that reports it is one
+    nobody will read twice.
+
+    Composition still has to match exactly: an element present on one side and
+    absent on the other is a real finding at any mass.
+    """
+    if a == b:
+        return True
+
+    ha, hb = parse_storage(a), parse_storage(b)
+    if ha is None or hb is None:
+        return False
+    if set(ha) != set(hb):
+        return False
+
+    for elem, mass_a in ha.items():
+        mass_b = hb[elem]
+        # A tenth of a kilogram, or a thousandth of the amount, whichever is
+        # larger - so a 10 tonne store is not judged to four decimal places.
+        tolerance = max(0.1, abs(mass_a) * 0.001)
+        if abs(mass_a - mass_b) > tolerance:
+            return False
+    return True
+
+
+def parse_storage(text):
+    """{element hash: mass} for a storage summary, or None if it is not one."""
+    if not text or ':' not in text or text in ('empty',):
+        return None
+    out = {}
+    for part in text.split(','):
+        elem, _, mass = part.partition(':')
+        try:
+            out[elem.strip()] = float(mass)
+        except ValueError:
+            return None
+    return out or None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('host'); ap.add_argument('client')
@@ -61,7 +107,7 @@ def main():
         h, c = hs.get(k), cs.get(k)
         if h is None:   client_only.append((k, c))
         elif c is None: host_only.append((k, h))
-        elif h != c:    differs.append((k, h, c))
+        elif not same_value(h, c): differs.append((k, h, c))
 
     print(f'structure state: host {len(hs)} values, client {len(cs)} values')
     print(f'  differ      {len(differs)}')

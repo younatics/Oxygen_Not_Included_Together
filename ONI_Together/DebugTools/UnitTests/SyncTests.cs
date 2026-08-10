@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
@@ -20,6 +20,7 @@ namespace ONI_Together.DebugTools.UnitTests
 			const float MaxCellDelta = 2f;
 
 			int minionsChecked = 0;
+			int minionsSkipped = 0;
 			foreach (var identity in NetworkIdentityRegistry.AllIdentities)
 			{
 				if (identity == null || identity.gameObject == null)
@@ -28,6 +29,19 @@ namespace ONI_Together.DebugTools.UnitTests
 				var prefabId = identity.gameObject.GetComponent<KPrefabID>();
 				if (prefabId == null || !prefabId.HasTag(GameTags.BaseMinion))
 					continue;
+
+				// A duplicant that is not in the world - dead, in a rocket, stored -
+				// is deactivated, and Unity does not run Update on an inactive
+				// object, so the host never sends a position for it and never
+				// should. Demanding one asserts something that cannot happen: this
+				// test failed for a colony of 21 duplicants whose save header says
+				// 21, because the registry also holds a 22nd that is not standing
+				// anywhere.
+				if (!identity.gameObject.activeInHierarchy)
+				{
+					minionsSkipped++;
+					continue;
+				}
 
 				if (!identity.gameObject.TryGetComponent<EntityPositionHandler>(out var handler))
 					return UnitTestResult.Fail($"Minion '{identity.gameObject.name}' has no EntityPositionHandler");
@@ -38,7 +52,9 @@ namespace ONI_Together.DebugTools.UnitTests
 					continue;
 
 				if (handler.serverTimestamp == 0)
-					return UnitTestResult.Fail($"Minion '{identity.gameObject.name}' has not received a position packet yet");
+					return UnitTestResult.Fail(
+						$"Minion '{identity.gameObject.name}' is in the world at cell " +
+						$"{Grid.PosToCell(identity.gameObject)} and has never received a position packet");
 
 				float delta = Vector3.Distance(identity.gameObject.transform.position, handler.serverPosition);
 				if (delta > MaxCellDelta)
@@ -49,7 +65,9 @@ namespace ONI_Together.DebugTools.UnitTests
 				return UnitTestResult.Fail("No minions found in registry");
 
 			string mode = MultiplayerSession.IsHost ? "host" : "client";
-			return UnitTestResult.Pass($"Checked {minionsChecked} minions ({mode})");
+			return UnitTestResult.Pass(
+				$"{minionsChecked} duplicant(s) in sync" +
+				(minionsSkipped > 0 ? $", {minionsSkipped} not in the world and skipped" : ""));
 		}
 
 		[UnitTest(name: "Build progress bar pipeline intact", category: "Sync")]

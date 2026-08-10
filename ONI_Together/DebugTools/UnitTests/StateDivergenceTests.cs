@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
@@ -89,6 +89,51 @@ namespace ONI_Together.DebugTools.UnitTests
                 : $"dumped {rows} damaged building(s)");
         }
 
+        /// <summary>
+        /// Total mass per element, rounded, in a fixed order. That is what the
+        /// two peers should agree about; how many separate chunks it is spread
+        /// across is an artefact of how it was rebuilt.
+        /// </summary>
+        private static string SummariseStorage(byte[] blob)
+        {
+            if (blob == null || blob.Length < 8) return "empty";
+
+            try
+            {
+                using var ms = new System.IO.MemoryStream(blob);
+                using var reader = new System.IO.BinaryReader(ms);
+
+                reader.ReadSingle();                 // capacity
+                int count = reader.ReadInt32();
+
+                var massByElement = new Dictionary<int, float>();
+                for (int i = 0; i < count; i++)
+                {
+                    int hash = reader.ReadInt32();
+                    float mass = reader.ReadSingle();
+                    reader.ReadSingle();             // temperature
+                    reader.ReadByte();               // disease index
+                    reader.ReadInt32();              // disease count
+
+                    massByElement.TryGetValue(hash, out float running);
+                    massByElement[hash] = running + mass;
+                }
+
+                if (massByElement.Count == 0) return "empty";
+
+                // Rounded to a tenth of a kilogram: the two peers sample at
+                // different instants and a toilet fills continuously, so exact
+                // equality would be noise, not a finding.
+                return string.Join(",", massByElement
+                    .OrderBy(kvp => kvp.Key)
+                    .Select(kvp => $"{kvp.Key}:{kvp.Value:0.0}"));
+            }
+            catch
+            {
+                return $"unreadable:{blob.Length}";
+            }
+        }
+
         private static string Describe(Misc.Variant v)
         {
             switch (v.Type)
@@ -98,9 +143,14 @@ namespace ONI_Together.DebugTools.UnitTests
                 case Misc.Variant.TypeCode.Byte:      return v.Byte.ToString();
                 case Misc.Variant.TypeCode.Boolean:   return v.Boolean ? "true" : "false";
                 case Misc.Variant.TypeCode.String:    return v.String ?? "";
-                // The blob's bytes legitimately differ between peers; its length
-                // does not, so that is what gets compared.
-                case Misc.Variant.TypeCode.ByteArray: return $"bytes:{v.ByteArray?.Length ?? 0}";
+                // Storage is summarised by what it holds, not by how it is
+                // packed. Length is the wrong comparison: Storage.AddElement
+                // merges a new chunk into an existing one of the same element,
+                // so a host holding two piles of water rebuilds on the client as
+                // one. Same contents, same mass, different item count - and
+                // comparing bytes reported that as a divergence on the first run
+                // this ever did. A comparison that cries wolf stops being read.
+                case Misc.Variant.TypeCode.ByteArray: return SummariseStorage(v.ByteArray);
                 default:                              return v.Type.ToString();
             }
         }

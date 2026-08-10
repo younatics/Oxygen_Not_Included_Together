@@ -28,6 +28,7 @@ namespace ONI_Together.DebugTools.UnitTests
             {
                 if (type.IsAbstract || type.IsInterface) continue;
                 if (!typeof(IPacket).IsAssignableFrom(type)) continue;
+                if (type.ContainsGenericParameters) continue;
 
                 int id = API_Helper.GetHashCode(type);
                 if (!byId.TryGetValue(id, out var list))
@@ -62,6 +63,11 @@ namespace ONI_Together.DebugTools.UnitTests
                 if (type.IsAbstract || type.IsInterface) continue;
                 if (!typeof(IPacket).IsAssignableFrom(type)) continue;
                 if (type.GetConstructor(Type.EmptyTypes) == null) continue;
+                // An open generic is a template, not a packet. ModApiPacket`1
+                // cannot be registered or instantiated until something closes
+                // it, so demanding a registration for it is the test being
+                // wrong rather than the code.
+                if (type.ContainsGenericParameters) continue;
 
                 if (!PacketRegistry.HasRegisteredPacket(type))
                     missing.Add(type.Name);
