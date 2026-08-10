@@ -117,6 +117,32 @@ namespace ONI_Together.Networking.Packets.World
 				return;
 			}
 
+			// Only rename it if it is the thing that was asked for.
+			//
+			// SpawnResource does not always hand back a new object: it can merge
+			// the mass into a pile that is already there, and it returns that pile.
+			// Renaming whatever comes back means the host's id can land on an
+			// unrelated object that happens to be at the same place - and it did.
+			// A cross-peer comparison found NetId -1258014647 held by Hydrogen at
+			// cell 52119 on the host and DirtyWater at 43903 on the client. The
+			// host's number is its own hash exactly; the client's DirtyWater hashes
+			// to something 174 million away, so it did not compute that id, it was
+			// given it here. Every packet the host then sent about its hydrogen was
+			// applied to the client's dirty water.
+			//
+			// Cheap to check, because the packet already says which element it is.
+			if (!dropped.TryGetComponent<PrimaryElement>(out var spawnedElement)
+				|| spawnedElement.ElementID != element.id)
+			{
+				DebugConsole.LogWarning(
+					$"[WorldDamageSpawnResource] refusing to put NetId {NetId} on " +
+					$"{dropped.PrefabID()} - asked for {element.id} and got " +
+					$"{(spawnedElement == null ? "no element" : spawnedElement.ElementID.ToString())}. " +
+					"SpawnResource returned something else, probably an existing pile.");
+				NetworkIdentity.ReserveNextNetId(0);
+				return;
+			}
+
 			if (identity.NetId != NetId)
 				identity.OverrideNetId(NetId);
 			DebugConsole.Log("[WorldDamageSpawnResourcePacket] Synchronized Network ID");
