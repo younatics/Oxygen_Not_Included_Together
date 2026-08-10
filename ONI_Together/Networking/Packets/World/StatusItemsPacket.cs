@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using Shared.Profiling;
@@ -78,8 +78,17 @@ namespace ONI_Together.Networking.Packets.World
                 return;
             if (!NetworkIdentityRegistry.TryGet(DupeNetId, out var entity))
                 return;
-            if (!entity.TryGetComponent<ClientReceiver_StatusItems>(out var receiver))
-                return;
+            // Losing one batch loses the whole sweep: the assembler waits
+            // for an index that will never arrive, so every other batch is
+            // discarded with it and the duplicant's panel stops updating
+            // for good. The receiver is a plain component with no ordering
+            // requirement, so attach it rather than drop the sweep.
+            var receiver = entity.gameObject.AddOrGet<ClientReceiver_StatusItems>();
+            if (receiver == null)
+            {
+            	ThrottledLog.Warn("[ClientReceiver_StatusItems] could not attach a receiver for " + entity.name);
+            	return;
+            }
 
             // Per entity, because the sweep is per entity: each one clears and
             // rebuilds only its own status items, so two entities' sweeps
