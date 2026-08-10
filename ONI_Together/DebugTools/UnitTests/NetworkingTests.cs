@@ -164,6 +164,39 @@ namespace ONI_Together.DebugTools.UnitTests
             if (transportClients.Count == 0)
                 return UnitTestResult.Fail("Transport reports zero connected clients");
 
+            // The two lists mean different things on the two roles, and this
+            // used to compare them as if they did not.
+            //
+            // A client's ConnectedPlayers holds the host and nothing else - that
+            // is deliberate, and RiptideClient says so where it builds it - while
+            // its transport list holds every peer including itself. So the
+            // comparison below could never pass on a client, and it failed on
+            // every single run with "Transport client 2 is missing from
+            // ConnectedPlayers". Two is the client itself.
+            //
+            // A permanently failing check is worse than no check: it is noise in
+            // the place where a real regression would have to appear, and by the
+            // end I was reading past it.
+            if (MultiplayerSession.IsClient)
+            {
+                if (!MultiplayerSession.ConnectedPlayers.ContainsKey(MultiplayerSession.HostUserID))
+                    return UnitTestResult.Fail("a client must know the host, and this one does not");
+
+                if (MultiplayerSession.ConnectedPlayers.Count != 1)
+                {
+                    return UnitTestResult.Fail(
+                        $"a client's ConnectedPlayers should hold only the host, this one holds " +
+                        $"{MultiplayerSession.ConnectedPlayers.Count}");
+                }
+
+                ulong self = RiptideClient.CLIENT_ID;
+                if (self != 0 && !transportClients.Contains(self))
+                    return UnitTestResult.Fail($"the transport does not list this client ({self}) among its peers");
+
+                return UnitTestResult.Pass(
+                    $"client knows the host; transport lists {transportClients.Count} peer(s)");
+            }
+
             int sessionCount = MultiplayerSession.ConnectedPlayers.Count;
             if (sessionCount != transportClients.Count)
                 return UnitTestResult.Fail($"Session has {sessionCount} players but transport reports {transportClients.Count}");
