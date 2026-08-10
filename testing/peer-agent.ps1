@@ -221,6 +221,27 @@ while ($running) {
                             workingSetMB = if ($p) { [math]::Round($p.WorkingSet64 / 1MB, 0) } else { $null }
                             privateMB    = if ($p) { [math]::Round($p.PrivateMemorySize64 / 1MB, 0) } else { $null }
                             freeRamMB    = [math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB, 0)
+
+                            # Is it alive, or only running?
+                            #
+                            # Twice the client's log stopped a minute into a
+                            # session with the process still listed and no
+                            # exception, no shutdown sequence and no Windows
+                            # event - and Unity's own lines stopped alongside the
+                            # mod's, so the game loop stopped, not just logging.
+                            # "oniRunning" cannot tell a frozen game from a
+                            # healthy one; Responding asks the window whether it
+                            # is still pumping messages, and CPU time separates a
+                            # deadlock from a busy loop.
+                            responding      = if ($p) { [bool]$p.Responding } else { $null }
+                            threads         = if ($p) { $p.Threads.Count } else { $null }
+                            cpuSeconds      = if ($p) { [math]::Round($p.TotalProcessorTime.TotalSeconds, 1) } else { $null }
+                            playerLogAgeSec = if (Test-Path $playerLog) {
+                                                  [math]::Round(((Get-Date).ToUniversalTime() - (Get-Item $playerLog).LastWriteTimeUtc).TotalSeconds, 0)
+                                              } else { $null }
+                            gpuDriverCrash  = (Get-WinEvent -LogName System -MaxEvents 200 -ErrorAction SilentlyContinue |
+                                               Where-Object { $_.Id -eq 4101 -or $_.ProviderName -match 'Display' } |
+                                               Select-Object -First 1 -ExpandProperty TimeCreated)
                         }
                     }
                     'pull-mod'  { $reply.result = Invoke-PullMod }

@@ -131,6 +131,16 @@ namespace ONI_Together.Networking.Transport.Lan
         {
             using var _ = Profiler.Scope();
 
+            // Read before anything is told about the disconnect.
+            //
+            // OnClientDisconnected sets the client state to Disconnected, so a
+            // guard that reads the state after invoking it can never see what the
+            // peer was doing when the connection dropped. The first version of the
+            // LoadingWorld check below did exactly that and was dead code: the log
+            // shows LoadingWorld -> Disconnected, in that order, with the
+            // disconnect handler in between.
+            var stateWhenDropped = GameClient.State;
+
             RemoveClientFromList(CLIENT_ID);
             CLIENT_ID = Utils.NilUlong();
 
@@ -139,6 +149,27 @@ namespace ONI_Together.Networking.Transport.Lan
 
             DisconnectReason disconnectReason = e.Reason;
             var (reason, message) = GetDisconnectInfo(e);
+
+            // A disconnect during a world load is expected and must not send this
+            // peer back to the title screen.
+            //
+            // The Steam path has had this guard all along - SteamworksClient
+            // returns early when the state is LoadingWorld, with a comment saying
+            // the reconnect happens once the load finishes. Riptide never got it,
+            // and it is listed in the project notes as a known trap: on LAN, a
+            // disconnect mid-load kicks the client out. Returning to the title
+            // screen is not a cosmetic outcome either, because it runs
+            // ForceQuitGame - Sim.Shutdown() and Grid.CellCount = 0 - against a
+            // world that is still being built.
+            if (stateWhenDropped == States.ClientState.LoadingWorld)
+            {
+                DebugConsole.Log(
+                    $"[Riptide] ignoring a disconnect ({reason}) while the world is loading - " +
+                    "the reconnect is part of the load");
+                CleanupRiptide();
+                return;
+            }
+
             switch (disconnectReason) {
                 case DisconnectReason.Disconnected:
                     // Initiated by client do nothing

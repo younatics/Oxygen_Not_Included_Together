@@ -31,6 +31,24 @@ namespace ONI_Together.Networking
 		private static CachedConnectionInfo? _cachedConnectionInfo = null;
 
 		public static bool IsHardSyncInProgress = false;
+
+		/// <summary>
+		/// Bumped every time a game state is requested, so a timeout armed by an
+		/// earlier attempt can tell that it has been superseded. Reconnecting
+		/// during a load arms this twice.
+		/// </summary>
+		private static int _stateRequestGeneration;
+
+		/// <summary>
+		/// How long to wait for the host to answer a state request before giving up
+		/// and going back to the title screen.
+		///
+		/// It was ten seconds and unconditional, which is shorter than a save
+		/// transfer for a large colony, so the guard fired on healthy joins. The
+		/// action now checks whether the world arrived, which is what makes a
+		/// generous value safe: this only has to catch a host that never replies.
+		/// </summary>
+		private const int StateRequestTimeoutSeconds = 45;
 		private static bool _modVerificationSent = false;
 
 		// Auto-reconnect state
@@ -103,7 +121,47 @@ namespace ONI_Together.Networking
 			NetworkConfig.TransportClient.OnRequestStateOrReturn = () =>
 			{
                 PacketSender.SendToHost(GameStateRequestPacket.CreateClientRequest(MultiplayerSession.LocalUserID));
-                MP_Timer.Instance.StartDelayedAction(10, () => CoroutineRunner.RunOne(ShowMessageAndReturnToTitle()));
+
+                // A timeout that can be called off, and that knows the difference
+                // between "the host never answered" and "the host answered and I
+                // am busy doing what it said".
+                //
+                // This used to arm an unconditional ten second return-to-title on
+                // every connect, with nothing anywhere to cancel it. Ten seconds
+                // does not cover a save transfer and a world load - a 6800 object
+                // colony takes far longer - so the timer fired in the middle of
+                // loading, and ShowMessageAndReturnToTitle calls ForceQuitGame,
+                // which is Sim.Shutdown() and Grid.CellCount = 0 on a world that
+                // is still being built. Twice the client stopped dead a minute
+                // into a session with the process still listed, no exception, no
+                // shutdown sequence and no Windows event, and both logs show the
+                // same four seconds: disconnect, then a world spawning while the
+                // client state still reads Disconnected, then silence.
+                //
+                // MP_Timer holds one action and one deadline with no way to
+                // withdraw either, so the check goes in the action.
+                int generation = ++_stateRequestGeneration;
+                MP_Timer.Instance.StartDelayedAction(StateRequestTimeoutSeconds, () =>
+                {
+                    // A later request replaced this one - reconnecting during a
+                    // load arms it twice, which is how a stale timer from the
+                    // first attempt used to land in the middle of the second.
+                    if (generation != _stateRequestGeneration)
+                        return;
+
+                    // Any of these means the host answered.
+                    if (Utils.IsInGame() || State == ClientState.LoadingWorld || IsHardSyncInProgress)
+                    {
+                        DebugConsole.Log(
+                            "[GameClient] state request timed out but the world is here or on its way " +
+                            $"(state={State}, inGame={Utils.IsInGame()}, hardSync={IsHardSyncInProgress}) - staying");
+                        return;
+                    }
+
+                    DebugConsole.LogWarning(
+                        $"[GameClient] no game state from the host after {StateRequestTimeoutSeconds}s - returning to the title screen");
+                    CoroutineRunner.RunOne(ShowMessageAndReturnToTitle());
+                });
             };
             NetworkConfig.TransportClient.Prepare();
             CursorManager.Instance.AssignColor();
