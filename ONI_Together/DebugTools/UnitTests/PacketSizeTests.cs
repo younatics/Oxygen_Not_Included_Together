@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
@@ -273,6 +274,32 @@ namespace ONI_Together.DebugTools.UnitTests
                 return UnitTestResult.Fail($"64 NetIds serialize to {LimitTable(size)}");
 
             return UnitTestResult.Pass($"64 NetIds is {LimitTable(size)}");
+        }
+
+        /// <summary>
+        /// What the live session actually put on the wire, largest first.
+        ///
+        /// Reported rather than asserted. Which packets oversize depends on the
+        /// colony, and a threshold picked here would either fail on a big base or
+        /// pass on a small one - both of which teach nothing. The counts name the
+        /// syncers worth batching, and a run with none is the answer that the
+        /// batching already in place is sufficient.
+        /// </summary>
+        [UnitTest(name: "Largest payload seen per packet type", category: "PacketSize")]
+        public static UnitTestResult LargestPayloadsObserved()
+        {
+            var oversize = Networking.PacketSender.OversizeCountByPacket;
+            string sizes = Networking.PacketSender.DescribePayloadSizes();
+
+            if (oversize.Count > 0)
+            {
+                return UnitTestResult.Fail(
+                    "these serialized past what a transport carries in one piece, so they are being " +
+                    "fragmented: " + string.Join(", ", oversize.Select(kv => $"{kv.Key} x{kv.Value}")) +
+                    ". Largest seen: " + sizes);
+            }
+
+            return UnitTestResult.Pass("nothing oversized. " + sizes);
         }
 
         [UnitTest(name: "Every transport can carry the largest declared packet", category: "PacketSize")]

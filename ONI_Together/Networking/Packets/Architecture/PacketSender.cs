@@ -229,6 +229,47 @@ namespace ONI_Together.Networking
 				DispatchPendingBulkPacketOfType(conn, packetId);
 			}
 		}
+		/// <summary>
+		/// Largest payload each packet type has produced, and how often it went
+		/// past what a transport carries in one piece.
+		///
+		/// A packet over the limit is not refused, it is fragmented - so the only
+		/// symptom is a silent change of delivery path, and the project notes name
+		/// that as the origin of several of the worst bugs here. Some syncers batch
+		/// against the byte budget and some do not, and which is which was a
+		/// question nobody could answer from the code alone: the batching lives in
+		/// the sender, the sizes depend on the colony, and a comment claiming a
+		/// 1200 byte MTU sat above a 1100 byte packet for a long time.
+		///
+		/// So the sizes are recorded where every packet becomes bytes, and the
+		/// answer comes from a live session rather than from reading.
+		/// </summary>
+		private static readonly Dictionary<string, int> _largestPayload = new Dictionary<string, int>();
+		private static readonly Dictionary<string, int> _oversizeCount = new Dictionary<string, int>();
+
+		public static IReadOnlyDictionary<string, int> LargestPayloadByPacket => _largestPayload;
+		public static IReadOnlyDictionary<string, int> OversizeCountByPacket => _oversizeCount;
+
+		public static void ResetPayloadSizes()
+		{
+			_largestPayload.Clear();
+			_oversizeCount.Clear();
+		}
+
+		/// <summary>The worst offenders, largest first, for a diagnostic line.</summary>
+		public static string DescribePayloadSizes(int top = 5)
+		{
+			if (_largestPayload.Count == 0) return "nothing serialized yet";
+
+			var worst = _largestPayload.OrderByDescending(kv => kv.Value).Take(top)
+				.Select(kv =>
+				{
+					_oversizeCount.TryGetValue(kv.Key, out int over);
+					return over > 0 ? $"{kv.Key}:{kv.Value}B(over x{over})" : $"{kv.Key}:{kv.Value}B";
+				});
+			return string.Join(" ", worst);
+		}
+
 		public static byte[] SerializeToByteArray(this IPacket packet)
 		{
 			using var _ = Profiler.Scope();
@@ -236,7 +277,28 @@ namespace ONI_Together.Networking
 			using var ms = new System.IO.MemoryStream();
 			using var writer = new System.IO.BinaryWriter(ms);
 			packet.Serialize(writer);
-			return ms.ToArray();
+			var bytes = ms.ToArray();
+
+			string name = packet.GetType().Name;
+			_largestPayload.TryGetValue(name, out int previous);
+			if (bytes.Length > previous)
+				_largestPayload[name] = bytes.Length;
+
+			if (bytes.Length > Transport.TransportPacketSender.StrictestUnfragmentedPayloadBytes)
+			{
+				_oversizeCount.TryGetValue(name, out int over);
+				_oversizeCount[name] = over + 1;
+
+				// Named and counted rather than one line per send. A syncer that
+				// oversizes does it every tick, and a line each would bury the
+				// finding the way per-cell logging once froze a host.
+				ThrottledLog.Warn(
+					$"[PacketSender] {name} serialized to {bytes.Length} bytes, past the " +
+					$"{Transport.TransportPacketSender.StrictestUnfragmentedPayloadBytes} a transport carries " +
+					"in one piece - it will be fragmented");
+			}
+
+			return bytes;
 		}
 
 		/// <summary>

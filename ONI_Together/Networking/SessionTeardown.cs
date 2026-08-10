@@ -50,6 +50,7 @@ namespace ONI_Together.Networking
 			Step("building damage", ClearDamageMemory);
 			Step("damage packet counters", BuildingDamagePacket.ResetForNewSession);
 			Step("malformed-count counter", Packets.Architecture.PacketList.ResetForNewSession);
+			Step("payload size records", PacketSender.ResetPayloadSizes);
 			Step("missing-entity queue", ClearResolverQueue);
 			// Pruned, never cleared. These track WORLD objects, and the world
 			// outlives the session - hosting starts by calling Clear() with a
