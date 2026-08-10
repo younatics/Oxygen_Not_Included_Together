@@ -82,12 +82,21 @@ namespace ONI_Together.Networking.Components
             // So a client that reconnects asks again: it has a fresh world, and
             // the host has had time to repair things while it was away.
             _asked = false;
+            _nextAsk = 0f;
         }
 
-        /// <summary>Has this client already asked the host about its damaged buildings?</summary>
+        /// <summary>Has this client asked the host about its damaged buildings at least once?</summary>
         private bool _asked;
 
         public bool HasAsked => _asked;
+
+        /// <summary>
+        /// How often a client re-checks its own damaged buildings against the host.
+        /// Bounded by how many are broken, so this is a few dozen small packets.
+        /// </summary>
+        private const float AskInterval = 30f;
+
+        private float _nextAsk;
 
         private void Update()
         {
@@ -130,9 +139,27 @@ namespace ONI_Together.Networking.Components
         /// </summary>
         private void AskAboutOwnDamageOnce()
         {
-            if (_asked) return;
             if (Grid.WidthInCells == 0) return;
             if (NetworkIdentityRegistry.Count == 0) return;
+
+            // Repeated, not once.
+            //
+            // Asking once at join left one tile disagreeing run after run,
+            // getting worse each time - 68 of 100, then 7 of 100, while the host
+            // held it at full health. Local damage is refused on a client, but
+            // only from the moment the session exists: during the hard-sync load
+            // the client's own simulation runs unsupervised, and whatever it does
+            // to a building then is frozen in by the suppression that starts
+            // afterwards. The damage therefore appears after the single question
+            // has already been asked and answered.
+            //
+            // Rather than chase where the damage comes from - DoDamage was
+            // patched too and never fired once, so it is not a second API - the
+            // question repeats. It is bounded by the number of broken buildings,
+            // three dozen in this colony, so a round trip every half minute costs
+            // about one packet a second and converges whatever the cause.
+            if (Time.unscaledTime < _nextAsk) return;
+            _nextAsk = Time.unscaledTime + AskInterval;
 
             var ids = new List<int>();
             foreach (var hp in Object.FindObjectsByType<BuildingHP>(
@@ -153,9 +180,6 @@ namespace ONI_Together.Networking.Components
                 if (ids.Count >= DamagedBuildingsQueryPacket.MaxIds) break;
             }
 
-            // Marked asked either way. With nothing damaged there is nothing to
-            // ask, and retrying every frame would be a busy loop over four
-            // thousand components.
             _asked = true;
             if (ids.Count == 0) return;
 

@@ -45,8 +45,46 @@ namespace ONI_Together.Patches.World
         /// <summary>What the last few blocked events said their source was.</summary>
         public static string LastBlockedSource { get; private set; } = "none";
 
-        public static string Describe() =>
-            $"suppressed={_suppressed} allowed={AllowedCount} lastBlockedSource={LastBlockedSource}";
+        /// <summary>
+        /// Every way BuildingHP can lose hit points, named once.
+        ///
+        /// One tile keeps taking damage on the client while the host holds it at
+        /// full health, and it gets worse run to run - 68 of 100, then 7 of 100 -
+        /// with the suppression patch active and refusing 188 events. So the
+        /// damage is arriving by some route that is not OnDoBuildingDamage, and
+        /// three guesses at a field name earlier in this work were enough to stop
+        /// guessing at API names too. This lists what exists so the next run says
+        /// which method to patch.
+        /// </summary>
+        private static string _damageApi;
+
+        public static string Describe()
+        {
+            if (_damageApi == null)
+            {
+                var names = new System.Collections.Generic.List<string>();
+                const System.Reflection.BindingFlags any =
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic;
+
+                foreach (var m in typeof(BuildingHP).GetMethods(any))
+                {
+                    string n = m.Name;
+                    if (n.IndexOf("amage", System.StringComparison.Ordinal) >= 0 ||
+                        n.IndexOf("epair", System.StringComparison.Ordinal) >= 0 ||
+                        n.IndexOf("estroy", System.StringComparison.Ordinal) >= 0 ||
+                        n.IndexOf("elt", System.StringComparison.Ordinal) >= 0)
+                    {
+                        names.Add(n);
+                    }
+                }
+                _damageApi = string.Join(",", names);
+            }
+
+            return $"suppressed={_suppressed} direct={DirectSuppressed} allowed={AllowedCount} " +
+                   $"lastBlockedSource={LastBlockedSource}";
+        }
 
         /// <summary>
         /// True while this mod is applying the host's hit points.
@@ -115,6 +153,42 @@ namespace ONI_Together.Patches.World
                     $"[BuildingDamage] ignoring locally simulated damage (#{_suppressed}) - the host decides what is broken");
             }
 
+            return false;
+        }
+
+        /// <summary>Damage that reached DoDamage without passing the event, and was refused.</summary>
+        public static long DirectSuppressed { get; private set; }
+
+        public static void NoteDirectSuppressed() => DirectSuppressed++;
+    }
+
+    /// <summary>
+    /// The narrow point where hit points actually come off.
+    ///
+    /// Patching the event handler was not enough. One tile kept taking damage on
+    /// the client while the host held it at full health, getting worse run to run
+    /// - 68 of 100, then 7 of 100 - with the event patch active and refusing 188
+    /// events. So something reduces hit points without raising the event, and
+    /// enumerating BuildingHP's methods rather than guessing at names showed what:
+    /// DoDamage, which the event handler itself calls and which anything else can
+    /// call directly.
+    ///
+    /// Blocking here covers both routes at once. The mod's own corrections pass
+    /// because the scope flag is held across the whole trigger, so it is still set
+    /// by the time execution reaches this method.
+    /// </summary>
+    [HarmonyPatch(typeof(BuildingHP), "DoDamage")]
+    public static class BuildingHP_DoDamage_Patch
+    {
+        public static bool Prefix()
+        {
+            if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+                return true;
+
+            if (BuildingHP_OnDoBuildingDamage_Patch.ApplyingHostDamage)
+                return true;
+
+            BuildingHP_OnDoBuildingDamage_Patch.NoteDirectSuppressed();
             return false;
         }
     }
