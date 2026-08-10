@@ -103,6 +103,29 @@ if (-not (Wait-HostLog '\[SCENARIO\] (OK|FAIL) status' 240 $mark)) {
 }
 Ok 'runner up'
 
+# Never start a run on top of a live session.
+#
+# The script only launches ONI when the process is missing, so running it twice
+# without closing the game left the previous session hosting and joined - and
+# then hosted and joined again on top. That run reported the suite twice, a 19 MB
+# client log, two identities per NetId, "session has 0 players but transport
+# reports 2", and a duplicant that had never received a position. Every one of
+# those is an artefact of the doubled session, and any of them could have been
+# taken for a real defect.
+$mark = HostLogLines
+Send-Host 'status'
+$state = Wait-HostLog '\[SCENARIO\] (OK|FAIL) status' 60 $mark
+if ($state -match 'insession=True') {
+    Step 'a session is already live - tearing it down first'
+    Send-Peer 'stop-net'
+    Start-Sleep -Seconds 2
+    $mark = HostLogLines
+    Send-Host 'stop-net'
+    if (Wait-HostLog '\[SCENARIO\] (OK|FAIL) stop-net' 60 $mark) { Ok 'previous session stopped' }
+    else { Die 'could not stop the previous session - close ONI on both boxes and retry' }
+    Start-Sleep -Seconds 5
+}
+
 Step "loading $Save"
 $mark = HostLogLines
 Send-Host "load $Save"
