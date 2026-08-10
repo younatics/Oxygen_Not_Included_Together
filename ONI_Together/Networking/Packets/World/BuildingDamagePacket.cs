@@ -44,6 +44,27 @@ namespace ONI_Together.Networking.Packets.World
             HitPoints = reader.ReadInt32();
         }
 
+        /// <summary>
+        /// What the receiver did with these, because the sender's counters
+        /// cannot say. The host reported a settled sweep - nothing changed, so
+        /// everything had been delivered - while two tiles still disagreed, and
+        /// there was no way to tell an unsent packet from an unapplied one.
+        /// </summary>
+        public static int Received { get; private set; }
+        public static int Unresolved { get; private set; }
+        public static int NoHitPoints { get; private set; }
+        public static int Applied { get; private set; }
+        public static int AlreadyEqual { get; private set; }
+
+        public static void ResetForNewSession()
+        {
+            Received = Unresolved = NoHitPoints = Applied = AlreadyEqual = 0;
+        }
+
+        public static string Describe() =>
+            $"received={Received} applied={Applied} same={AlreadyEqual} " +
+            $"unresolved={Unresolved} nohp={NoHitPoints}";
+
         public void OnDispatched()
         {
             using var _ = Profiler.Scope();
@@ -51,17 +72,35 @@ namespace ONI_Together.Networking.Packets.World
             if (!MultiplayerSession.IsClient)
                 return;
 
+            Received++;
+
             if (!NetworkIdentityRegistry.TryGet(NetId, out var identity))
+            {
+                Unresolved++;
                 return;
+            }
 
             if (identity.gameObject.IsNullOrDestroyed())
+            {
+                Unresolved++;
                 return;
+            }
 
             var hp = identity.gameObject.GetComponent<BuildingHP>();
             if (hp == null)
+            {
+                NoHitPoints++;
                 return;
+            }
+
+            if (hp.HitPoints == Mathf.Clamp(HitPoints, 0, hp.MaxHitPoints))
+            {
+                AlreadyEqual++;
+                return;
+            }
 
             Apply(hp, HitPoints);
+            Applied++;
         }
 
         /// <summary>

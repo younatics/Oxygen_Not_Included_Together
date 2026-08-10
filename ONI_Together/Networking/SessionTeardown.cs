@@ -48,6 +48,7 @@ namespace ONI_Together.Networking
 			// already sent damage that the new peer never received - the same
 			// shape of bug as recording a send that never happened.
 			Step("building damage", ClearDamageMemory);
+			Step("damage packet counters", BuildingDamagePacket.ResetForNewSession);
 			Step("missing-entity queue", ClearResolverQueue);
 			// Pruned, never cleared. These track WORLD objects, and the world
 			// outlives the session - hosting starts by calling Clear() with a

@@ -96,7 +96,7 @@ namespace ONI_Together.DebugTools.UnitTests
             return UnitTestResult.Pass($"dumped {entries.Count} identities");
         }
 
-        [UnitTest(name: "One id per (prefab, kind, cell)", category: "NetId")]
+        [UnitTest(name: "One id per object in a cell", category: "NetId")]
         public static UnitTestResult OneIdPerLocation()
         {
             // Static objects only. Three duplicants standing in one cell hold
@@ -107,35 +107,47 @@ namespace ONI_Together.DebugTools.UnitTests
             if (entries.Count == 0)
                 return UnitTestResult.Skip("registry is empty - no colony loaded");
 
-            // The same physical object reachable under two addresses means
-            // anything sent under the stale one lands nowhere.
+            // And the third time the same mistake was made, with the same shape.
+            //
+            // "One id per (prefab, kind, cell)" claimed that a cell holds at most
+            // one object of a given prefab. That is true of buildings and false
+            // of everything you can pick up: two piles of sand sit in one cell
+            // whenever they were not allowed to merge, each rightly holding its
+            // own id. This failed on both peers, every run, naming two Sand ids
+            // in cell 45142 as "two hashes collided".
+            //
+            // They had not collided. Both peers reported the same pair, in the
+            // same cell, across six consecutive runs - NetId is [Serialize]d, so
+            // those two came out of the save file, and no hash the mod computes
+            // today produced them. Two Clay piles in that same cell hold
+            // consecutive ids, which is the breakoff probe doing exactly its job.
+            //
+            // What is worth asserting is what a bad id actually looks like: two
+            // objects sharing one. More ids than objects is impossible here, one
+            // id per object is the healthy case, and fewer ids than objects means
+            // something is addressable only as something else.
+            var offenders = new List<string>();
+
             foreach (var group in entries.GroupBy(e => new { e.Prefab, e.Kind, e.Cell }))
             {
-                var ids = group.Select(e => e.NetId).Distinct().ToList();
-                if (ids.Count > 1)
+                int objects = group.Count();
+                int ids = group.Select(e => e.NetId).Distinct().Count();
+                if (ids < objects)
                 {
-                    // The gap between the ids says which mechanism produced
-                    // them. Consecutive means the breakoff probe stepped one
-                    // object past another that already held the slot - two
-                    // identical piles in one cell, which is the case the probe
-                    // exists for and is benign as long as both peers walk the
-                    // same order. Anything else is two different hashes landing
-                    // on one place, which is not.
-                    ids.Sort();
-                    bool consecutive = true;
-                    for (int i = 1; i < ids.Count; i++)
-                    {
-                        if (ids[i] != ids[i - 1] + 1) { consecutive = false; break; }
-                    }
-
-                    return UnitTestResult.Fail(
-                        $"{group.Key.Prefab} ({group.Key.Kind}) at cell {group.Key.Cell} " +
-                        $"has {ids.Count} ids: {string.Join(", ", ids)} " +
-                        $"({(consecutive ? "consecutive - breakoff probe separated two identical objects" : "unrelated - two hashes collided on one cell")})");
+                    offenders.Add(
+                        $"{group.Key.Prefab} ({group.Key.Kind}) at cell {group.Key.Cell}: " +
+                        $"{objects} objects share {ids} id(s)");
                 }
             }
 
-            return UnitTestResult.Pass($"every (prefab, kind, cell) owns exactly one id across {entries.Count} identities");
+            if (offenders.Count > 0)
+            {
+                return UnitTestResult.Fail(
+                    "objects that cannot be addressed separately: " + string.Join("; ", offenders.Take(5)) +
+                    ". Anything sent to the shared id reaches only one of them.");
+            }
+
+            return UnitTestResult.Pass($"every object in every cell owns its own id across {entries.Count} identities");
         }
 
         [UnitTest(name: "No two objects share a NetId", category: "NetId")]

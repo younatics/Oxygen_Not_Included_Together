@@ -70,9 +70,10 @@ namespace ONI_Together.DebugTools.UnitTests
                     "damage cannot be replicated: " + string.Join(", ", unaddressable.Take(8)));
             }
 
+            string traffic = " :: " + Networking.Packets.World.BuildingDamagePacket.Describe();
             return damaged == 0
-                ? UnitTestResult.Pass("nothing damaged")
-                : UnitTestResult.Pass($"{damaged} damaged buildings, all addressable");
+                ? UnitTestResult.Pass("nothing damaged" + traffic)
+                : UnitTestResult.Pass($"{damaged} damaged buildings, all addressable" + traffic);
         }
 
         /// <summary>
@@ -99,7 +100,8 @@ namespace ONI_Together.DebugTools.UnitTests
             }
 
             return UnitTestResult.Pass(
-                $"{syncer.LastSweepChanged} changed of {syncer.LastSweepScanned} scanned");
+                $"{syncer.LastSweepChanged} changed of {syncer.LastSweepScanned} scanned; " +
+                Networking.Packets.World.BuildingDamagePacket.Describe());
         }
     }
 }

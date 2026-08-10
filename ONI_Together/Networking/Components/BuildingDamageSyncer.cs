@@ -33,6 +33,24 @@ namespace ONI_Together.Networking.Components
         /// </summary>
         private const float SweepInterval = 2f;
 
+        /// <summary>
+        /// Ceiling on packets per sweep.
+        ///
+        /// This was 400, chosen so a post-join re-assert of every building
+        /// finished quickly, and the run that used it had the client drop and
+        /// rejoin mid-session - the host logged the join twice and the client
+        /// never got far enough to run its own checks. Four hundred reliable
+        /// packets in a frame is a lot to ask of a UDP transport, and no
+        /// correctness argument justifies it, because most of those packets say
+        /// nothing: both peers loaded the same save, so a building at full
+        /// health already agrees.
+        ///
+        /// Fifty spreads a full pass over about two and a half minutes, and the
+        /// buildings that actually disagree are sent first, so the visible cases
+        /// are fixed in the first sweep or two either way.
+        /// </summary>
+        private const int MaxSendsPerSweep = 50;
+
         private float _nextSweep;
 
         /// <summary>Last hit points we told clients about, by NetId.</summary>
@@ -41,6 +59,9 @@ namespace ONI_Together.Networking.Components
         /// <summary>Buildings whose damage differed from what clients were told, this sweep.</summary>
         public int LastSweepChanged { get; private set; }
         public int LastSweepScanned { get; private set; }
+
+        /// <summary>Buildings this sweep wanted to send but deferred to the next one.</summary>
+        public int LastSweepDeferred { get; private set; }
 
         private void OnEnable() => Instance = this;
 
@@ -54,13 +75,20 @@ namespace ONI_Together.Networking.Components
             _lastSent.Clear();
             LastSweepChanged = 0;
             LastSweepScanned = 0;
+            LastSweepDeferred = 0;
+            _lastClientCount = 0;
+            _lastReadyCount = 0;
+            _reassertDamaged = false;
         }
 
         private void Update()
         {
             using var _ = Profiler.Scope();
 
-            if (!MultiplayerSession.InSession || !MultiplayerSession.IsHost)
+            if (!MultiplayerSession.InSession)
+                return;
+
+            if (!MultiplayerSession.IsHost)
                 return;
 
             if (Time.unscaledTime < _nextSweep)
@@ -70,12 +98,104 @@ namespace ONI_Together.Networking.Components
             Sweep();
         }
 
+        /// <summary>
+        /// How many clients were connected last sweep, so a new arrival can be
+        /// noticed.
+        /// </summary>
+        private int _lastClientCount;
+
+        /// <summary>Non-host players that had reported Ready last sweep.</summary>
+        private int _lastReadyCount;
+
+        /// <summary>Set when a peer arrives: the next sweep re-sends every damaged building, once.</summary>
+        private bool _reassertDamaged;
+
+        // Reused so a sweep over four thousand buildings does not allocate twice per tick.
+        private readonly List<(int NetId, int HitPoints)> _damagedFirst = new List<(int, int)>();
+        private readonly List<(int NetId, int HitPoints)> _healthy = new List<(int, int)>();
+
+        /// <summary>
+        /// Sends one building's hit points and records it only if it reached
+        /// somebody.
+        /// </summary>
+        private bool SendOne(int netId, int hitPoints)
+        {
+            var packet = new BuildingDamagePacket { NetId = netId, HitPoints = hitPoints };
+            int delivered = PacketSender.SendToAllClients(packet, PacketSendMode.Reliable);
+
+            // Recorded only once it has gone somewhere. Marking it sent when
+            // nobody received it is what let a tile creep from 43 to 51 hit
+            // points on the host while the client held it whole.
+            if (delivered > 0)
+                _lastSent[netId] = hitPoints;
+
+            return true;
+        }
+
         private void Sweep()
         {
             using var _ = Profiler.Scope();
 
+            // A peer that just joined has been told nothing, whatever this
+            // syncer remembers telling the last one.
+            //
+            // The record is kept even when the send reached nobody, because
+            // otherwise a host with no clients re-sends every building forever
+            // and never settles. That is right for an empty session and wrong
+            // the moment somebody arrives: the host sweeps while alone, marks
+            // everything as told, and the client that connects afterwards
+            // receives only what changes from then on. Measured, that was six
+            // damage packets for a whole session and two tiles left disagreeing.
+            //
+            // What it re-sends is the damaged buildings, not all of them. Both
+            // peers load the same save, so the healthy ones already agree - and
+            // the version that re-sent everything proved it: of 3700 packets the
+            // client received, 3634 said something it already knew, 16 changed
+            // anything, and the flood cost a mid-session reconnect and a round of
+            // id disagreements. Thirty-odd packets buy almost all of the value.
+            //
+            // One case is still not covered: a building the host repaired before
+            // this peer joined reads full health here and damaged there, and
+            // nothing on the host changed to trigger a send. A client-side query
+            // for that was written and removed - the host answered all 36 ids it
+            // was asked about and the client resolved none of them, and shipping
+            // a reply path whose answers do not land is worse than the gap.
+            // Counted on Ready, not on connect.
+            //
+            // ConnectedPlayers grows the moment the transport attaches, which is
+            // well before the peer has a world - so re-asserting then sent 36
+            // damaged buildings into an empty registry and all 36 failed to
+            // resolve, every run, exactly matching the damaged count. The
+            // IRequiresLoadedWorld gate did not catch it because the client has
+            // not reported Loading yet at that instant either.
+            //
+            // Ready is the state that means "I can resolve an id", so that is
+            // what to watch.
+            int ready = 0;
+            foreach (var player in MultiplayerSession.ConnectedPlayers.Values)
+            {
+                if (player.PlayerId == MultiplayerSession.HostUserID) continue;
+                if (player.readyState == States.ClientReadyState.Ready) ready++;
+            }
+
+            if (ready > _lastReadyCount && _lastSent.Count > 0)
+            {
+                DebugConsole.Log(
+                    $"[BuildingDamage] a peer became ready ({_lastReadyCount} -> {ready}); " +
+                    "re-asserting the damaged buildings");
+                _reassertDamaged = true;
+            }
+            _lastReadyCount = ready;
+
+            int clients = MultiplayerSession.ConnectedPlayers.Count;
+            _lastClientCount = clients;
+
             int scanned = 0;
             int changed = 0;
+            int overBudget = 0;
+
+            _damagedFirst.Clear();
+            _healthy.Clear();
 
             foreach (var hp in Object.FindObjectsByType<BuildingHP>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
@@ -90,29 +210,75 @@ namespace ONI_Together.Networking.Components
                 scanned++;
 
                 int current = hp.HitPoints;
-                if (_lastSent.TryGetValue(identity.NetId, out int previous) && previous == current)
+                bool damaged = current < hp.MaxHitPoints;
+
+                // A join re-asserts the damaged ones and nothing else.
+                //
+                // Clearing the whole record and re-sending every building was
+                // measured and is not worth it: of 3700 packets the client
+                // received, 3634 told it something it already knew, 16 changed
+                // anything, and the flood cost a mid-session reconnect and a
+                // round of id disagreements. Both peers load the same save, so
+                // the healthy buildings agree without being told.
+                bool force = _reassertDamaged && damaged;
+                if (!force && _lastSent.TryGetValue(identity.NetId, out int previous) && previous == current)
                     continue;
 
-                var packet = new BuildingDamagePacket
-                {
-                    NetId = identity.NetId,
-                    HitPoints = current,
-                };
+                // Damaged first, because those are the ones a player can see and
+                // the ones most likely to disagree. Everything else is a
+                // background pass: both peers loaded the same save, so a
+                // building at full health almost certainly already agrees - the
+                // exception being one the host repaired before this peer joined,
+                // which is why the healthy ones are sent at all rather than
+                // skipped.
+                if (damaged)
+                    _damagedFirst.Add((identity.NetId, current));
+                else
+                    _healthy.Add((identity.NetId, current));
+            }
 
-                int delivered = PacketSender.SendToAllClients(packet, PacketSendMode.Reliable);
+            // With nobody listening, take the baseline silently.
+            //
+            // This is where the traffic was actually coming from, and it took
+            // two measurements to see it. The join re-assert is thirty-odd
+            // packets; the flood - 2986 of them, of which 2920 told the client
+            // something it already knew - was the very first sweep, run while
+            // the host was still alone, working through every building in the
+            // world at fifty a tick and still going when the client arrived.
+            //
+            // A building nobody has been told about needs no packet if there is
+            // nobody to tell. Recording the value and staying quiet leaves the
+            // syncer settled, so once a client joins only genuine changes go out,
+            // plus the damaged set and whatever the client asks about.
+            if (clients <= 1)
+            {
+                foreach (var (netId, current) in _damagedFirst) _lastSent[netId] = current;
+                foreach (var (netId, current) in _healthy) _lastSent[netId] = current;
 
-                // Recorded only once it has gone somewhere. Marking it sent when
-                // nobody received it is what let a tile creep from 43 to 51 hit
-                // points on the host while the client held it whole - the change
-                // was noticed once, discarded, and never noticed again.
-                if (delivered > 0 || MultiplayerSession.ConnectedPlayers.Count <= 1)
-                    _lastSent[identity.NetId] = current;
+                LastSweepScanned = scanned;
+                LastSweepChanged = 0;
+                LastSweepDeferred = 0;
+                _reassertDamaged = false;
+                return;
+            }
 
+            foreach (var (netId, current) in _damagedFirst)
+            {
+                if (!SendOne(netId, current)) { overBudget++; continue; }
+                changed++;
+            }
+
+            foreach (var (netId, current) in _healthy)
+            {
+                if (changed >= MaxSendsPerSweep) { overBudget++; continue; }
+                if (!SendOne(netId, current)) { overBudget++; continue; }
                 changed++;
             }
 
             LastSweepScanned = scanned;
             LastSweepChanged = changed;
+            LastSweepDeferred = overBudget;
+            _reassertDamaged = false;
         }
     }
 }
