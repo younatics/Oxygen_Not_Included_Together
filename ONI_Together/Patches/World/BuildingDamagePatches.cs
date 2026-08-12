@@ -116,8 +116,46 @@ namespace ONI_Together.Patches.World
             public void Dispose() { _applyingHostDamage = _previous; }
         }
 
-        public static bool Prefix(object data)
+        /// <summary>Conduit damage events seen on this peer, so a burst has a record.</summary>
+        public static int ConduitDamageSeen { get; private set; }
+
+        public static bool Prefix(object data, BuildingHP __instance)
         {
+            // A burst leaves no trace in the log, which is why "the host's pipes burst"
+            // could not be investigated at all: ONI raises it as a notification, and
+            // notifications are not written to Player.log. So the damage event says it
+            // instead, on whichever peer takes it, with what the pipe was holding.
+            //
+            // Logged before the client guard below, because the report was about the
+            // host - and the host returns from this method immediately.
+            if (!__instance.IsNullOrDestroyed() && __instance.gameObject != null
+                && __instance.TryGetComponent<Conduit>(out var conduit) && !conduit.IsNullOrDestroyed())
+            {
+                ConduitDamageSeen++;
+
+                int cell = Grid.PosToCell(__instance.gameObject);
+                string contents = "unknown";
+                try
+                {
+                    var flow = Conduit.GetFlowManager(conduit.ConduitType);
+                    if (flow != null)
+                    {
+                        var c = flow.GetContents(cell);
+                        contents = $"{ElementLoader.FindElementByHash(c.element)?.tag.Name ?? "?"} {c.mass:0.###}kg {c.temperature:0}K";
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    // Reading the flow manager must never be what breaks a damage event.
+                    contents = $"unreadable ({ex.GetType().Name})";
+                }
+
+                DebugConsole.LogWarning(
+                    $"[ConduitDamage] {(MultiplayerSession.IsHost ? "host" : "client")} " +
+                    $"'{__instance.gameObject.name}' at cell {cell} took damage, holding {contents} " +
+                    $"(hp {__instance.HitPoints}/{__instance.MaxHitPoints}, event #{ConduitDamageSeen})");
+            }
+
             if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
                 return true;
 

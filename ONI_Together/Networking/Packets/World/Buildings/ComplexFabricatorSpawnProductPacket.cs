@@ -13,6 +13,17 @@ namespace ONI_Together.Networking.Packets.World.Buildings
 	internal class ComplexFabricatorSpawnProductPacket : IPacket
 	{
 		public int NetId, CompletedRecipeIdx;
+
+		/// <summary>
+		/// True while this handler is producing the host's product on a client.
+		///
+		/// Read by the patch that otherwise stops a client fabricating for itself.
+		/// Internal to this class and set only around the one call, so "the host told
+		/// me to" is distinguishable from "my own simulation decided to" - which is
+		/// the whole distinction the client needs and cannot otherwise make.
+		/// </summary>
+		internal static bool IsApplying { get; private set; }
+
 		public ComplexFabricatorSpawnProductPacket() { }
 		public ComplexFabricatorSpawnProductPacket(ComplexFabricator cf)
 		{
@@ -50,7 +61,28 @@ namespace ONI_Together.Networking.Packets.World.Buildings
 
 			ComplexRecipe complexRecipe = fab.recipe_list[CompletedRecipeIdx];
 			DebugConsole.Log($"[ComplexFabricatorSpawnProductPacket] spawning product {complexRecipe.id} for {fab.name} with netId {NetId}");
-			fab.SpawnOrderProduct(complexRecipe);
+
+			// Marked, because a client's own fabricator output is now blocked and this
+			// is the one call that must still go through.
+			//
+			// The client runs its fabricators for itself: creation-time attribution
+			// caught "MushBar created on the client by MicrobeMusher.SpawnOrderProduct",
+			// and the host announces its own MushBar for the same order, so the client
+			// ends up with two - one of them holding an id the host never issued.
+			//
+			// Blocking the method outright would also block this line, and then a
+			// client would never receive any product at all. The same reentrancy flag
+			// pattern the priority packet uses, for the same reason.
+			IsApplying = true;
+			try
+			{
+				fab.SpawnOrderProduct(complexRecipe);
+			}
+			finally
+			{
+				IsApplying = false;
+			}
+
 			RemoteProgressRegistry.Clear(NetId, RemoteProgressKind.ComplexFabricatorOrder);
 		}
 	}

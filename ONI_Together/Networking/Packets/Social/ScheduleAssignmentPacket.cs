@@ -54,6 +54,12 @@ namespace ONI_Together.Networking.Packets.Social
 				return;
 			}
 
+			if (ScheduleManager.Instance == null)
+			{
+				DebugConsole.LogWarning("[ScheduleAssignmentPacket] no ScheduleManager yet; ignoring");
+				return;
+			}
+
 			List<Schedule> schedules = ScheduleManager.Instance.schedules;
 			if (schedules == null || ScheduleIndex < 0 || ScheduleIndex >= schedules.Count)
 			{
@@ -70,7 +76,15 @@ namespace ONI_Together.Networking.Packets.Social
 			IsApplying = true;
 			try
 			{
-                previousSchedule.Unassign(schedulable); // Unassign from the old schedule
+				// Every other value here is checked and this one was not, so a
+				// duplicant that is not on a schedule yet threw a
+				// NullReferenceException out of the packet handler instead of being
+				// assigned. It happened in a live session two seconds before the
+				// client closed itself.
+				//
+				// Nothing to unassign from is a normal state, not a failure: a
+				// duplicant that has just arrived has no previous schedule.
+				previousSchedule?.Unassign(schedulable);
 				newSchedule.Assign(schedulable); // Assign to the new schedule
 
 				DebugConsole.Log($"[ScheduleAssignmentPacket] Assigned {identity.name} to Schedule {ScheduleIndex}");

@@ -77,6 +77,21 @@ namespace ONI_Together.Networking.Packets.World
 
 			//DebugConsole.Log($"[BuildingConfigPacket] Received a config update packet. NetId={NetId}, Cell={Cell}");
 
+			// An unset id cannot be resolved and must not be guessed at.
+			//
+			// The cell fallback below is a reasonable second try for a real id whose
+			// object this peer has not registered. It is not a reasonable way to
+			// handle zero: zero arrives with no cell either, so the fallback aimed at
+			// cell 0 and would have named whatever stands in the corner of the map.
+			// The senders no longer send it; this refuses it if one ever does again.
+			if (NetId == 0)
+			{
+				DebugTools.ThrottledLog.Warn(
+					"[BuildingConfigPacket] refusing a config change carrying NetId 0 - " +
+					"the sender did not fill in the id, and there is nothing to apply it to");
+				return;
+			}
+
 			if (!NetworkIdentityRegistry.TryGet(NetId, out var identity) || identity == null)
 			{
 				// Attempt to find building by cell
@@ -94,9 +109,13 @@ namespace ONI_Together.Networking.Packets.World
 						}
 						else
 						{
+							// Same route as the branch above. Writing the field and
+							// then registering files the object under whatever it
+							// hashes to, not under the id the host just named - the
+							// field and the key drift apart and two objects end up
+							// claiming one address. OverrideNetId moves both.
 							identity = buildingGO.AddOrGet<NetworkIdentity>();
-							identity.NetId = NetId; // Client forces the NetId from Host
-							identity.RegisterIdentity();
+							identity.OverrideNetId(NetId);
 						}
 
                         //DebugConsole.Log($"[BuildingConfigPacket] Resolved missing identity for {buildingGO.name} at cell {Cell}. Assigned NetId: {NetId}");

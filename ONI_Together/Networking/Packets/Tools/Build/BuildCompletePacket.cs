@@ -14,6 +14,24 @@ namespace ONI_Together.Networking.Packets.Tools.Build
     {
         private const int MaxMaterialTagCount = 64;
 
+        /// <summary>
+        /// Scaffolds this peer had to clear itself after a building finished.
+        ///
+        /// Every one of these was a client showing a tile as still scheduled while
+        /// standing on the finished thing. Zero means the finish path is finding the
+        /// scaffold where it looks for it.
+        /// </summary>
+        public static int LeftoverScaffoldsCleared { get; private set; }
+
+        /// <summary>
+        /// Scaffolds found in the cell that belong to a different building.
+        ///
+        /// Left alone, and counted, because deleting them is what the first version did:
+        /// one cell holds a tile and a wire, and finishing one destroyed the other's
+        /// construction site on the client.
+        /// </summary>
+        public static int ScaffoldsLeftAlone { get; private set; }
+
         public int Cell;
         public string PrefabID;
         public Orientation Orientation;
@@ -158,6 +176,66 @@ namespace ONI_Together.Networking.Packets.Tools.Build
                         ApplyUtilityConnections(builtObj, def);
                     }
                 }
+            }
+
+            // Sweep the cell for a scaffold that survived, whatever layer it is on.
+            //
+            // The lookup above reads one slot - Grid.Objects[Cell, def.ObjectLayer] -
+            // and if the scaffold is not in that slot it is never deleted, while
+            // def.Build happily adds the finished building beside it. On the client
+            // that reads as a tile which is both "scheduled for construction" and
+            // already there, reported from a live session: the host had 9 Tile and 13
+            // GasPermeableMembrane completions out, both tile-class buildings.
+            //
+            // Swept by cell across every layer rather than by guessing which one,
+            // because the two guesses this bug has already survived were both about
+            // where the object lives. Only objects that are still under construction
+            // are touched, so a finished building can never be removed by this - which
+            // is what makes it safe to run after the build rather than instead of it.
+            int scaffoldsCleared = 0;
+            for (int layer = 0; layer < (int)ObjectLayer.NumLayers; layer++)
+            {
+                var leftover = Grid.Objects[Cell, layer];
+                if (leftover == null || leftover.IsNullOrDestroyed()) continue;
+                // Named rather than discarded: '_' is already the Profiler scope in
+                // this method, and 'out _' collides with it.
+                if (!leftover.TryGetComponent<BuildingUnderConstruction>(out var scaffold)) continue;
+                if (scaffold.IsNullOrDestroyed()) continue;
+
+                // Only this building's own scaffold.
+                //
+                // Sweeping every layer was meant to avoid guessing which one the
+                // scaffold sits on. It also deleted other buildings' scaffolds: one cell
+                // holds a tile on the foundation layer and a wire on the wire layer, so
+                // finishing the wire destroyed the tile's construction site on the
+                // client while the host still had it. Everything the host then said
+                // about that tile missed - failed lookups on the client went from about
+                // one a minute to several hundred, and the tile never appeared at all.
+                //
+                // The prefab is what makes this safe: the object being removed has to be
+                // the unfinished version of the thing that just finished.
+                string scaffoldPrefab = leftover.TryGetComponent<KPrefabID>(out var leftoverId) && !leftoverId.IsNullOrDestroyed()
+                    ? leftoverId.PrefabTag.Name
+                    : leftover.name;
+
+                if (scaffoldPrefab != PrefabID)
+                {
+                    ScaffoldsLeftAlone++;
+                    continue;
+                }
+
+                Grid.Objects[Cell, layer] = null;
+                leftover.DeleteObject();
+                scaffoldsCleared++;
+            }
+
+            if (scaffoldsCleared > 0)
+            {
+                LeftoverScaffoldsCleared += scaffoldsCleared;
+                DebugConsole.LogWarning(
+                    $"[BuildCompletePacket] cleared {scaffoldsCleared} leftover scaffold(s) at cell {Cell} " +
+                    $"after finishing {PrefabID} - they were not on layer {ObjectLayer}, which is the only " +
+                    "one the finish path checks");
             }
 
             DebugConsole.Log($"[BuildCompletePacket] Finalized {PrefabID} at cell {Cell}");

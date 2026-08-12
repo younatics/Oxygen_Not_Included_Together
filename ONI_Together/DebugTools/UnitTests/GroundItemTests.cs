@@ -11,7 +11,10 @@ namespace ONI_Together.DebugTools.UnitTests
 		[UnitTest(name: "GroundItemPickedUpPacket: serialization roundtrip", category: "GroundItems")]
 		public static UnitTestResult PacketRoundtrip()
 		{
-			var original = new GroundItemPickedUpPacket { NetId = 999888777 };
+			// Cell and prefab go over the wire now: the id alone left the client unable
+			// to find the item it was told to remove, and a roundtrip that only checks
+			// the id would pass while the new fields were dropped.
+			var original = new GroundItemPickedUpPacket { NetId = 999888777, Cell = 41362, PrefabHash = -12345 };
 			using var ms = new MemoryStream();
 			using var writer = new BinaryWriter(ms);
 			original.Serialize(writer);
@@ -21,6 +24,10 @@ namespace ONI_Together.DebugTools.UnitTests
 			copy.Deserialize(reader);
 			if (copy.NetId != original.NetId)
 				return UnitTestResult.Fail($"NetId mismatch: {copy.NetId} != {original.NetId}");
+			if (copy.Cell != original.Cell)
+				return UnitTestResult.Fail($"Cell mismatch: {copy.Cell} != {original.Cell}");
+			if (copy.PrefabHash != original.PrefabHash)
+				return UnitTestResult.Fail($"PrefabHash mismatch: {copy.PrefabHash} != {original.PrefabHash}");
 			return UnitTestResult.Pass("GroundItemPickedUpPacket roundtrip OK");
 		}
 

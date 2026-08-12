@@ -591,10 +591,63 @@ namespace ONI_Together.Networking.Components
 
 			if (targetNetId != 0 && identity.NetId != targetNetId)
 			{
-				identity.OverrideNetId(targetNetId);
+				// Try, but do not keep trying forever.
+				//
+				// This ran once per plant per sync tick, and when the target id
+				// cannot be taken - another plant holds it - the override evicts
+				// that one, it rehouses, and next tick the disagreement is back.
+				// A real session shows the result: 1 to 4 of these a minute for
+				// twenty minutes, then 25, then 256, then a flat 430 to 460 every
+				// minute for the rest of the session, never coming down. 3116
+				// reassignments for ColdWheat alone, 2384 for SwampLily, each one a
+				// registry eviction, a rehouse and three formatted log lines. That
+				// is the "it gets slower the longer we play" report, and the 4.8 MB
+				// log it produced is most of why the tail of a dying session is hard
+				// to read.
+				//
+				// After a few attempts the two peers genuinely disagree about which
+				// object owns this id, and repeating the swap cannot settle it. Stop,
+				// and say which pair gave up - a bounded loop that reports what it
+				// abandoned, rather than an unbounded one that reports every attempt.
+				_overrideAttempts.TryGetValue(targetNetId, out int attempts);
+				if (attempts < MaxOverrideAttempts)
+				{
+					_overrideAttempts[targetNetId] = attempts + 1;
+					identity.OverrideNetId(targetNetId);
+				}
+				else if (attempts == MaxOverrideAttempts)
+				{
+					_overrideAttempts[targetNetId] = attempts + 1;
+					_abandonedIds++;
+					DebugConsole.LogWarning(
+						$"[PlantGrowth] giving up on naming '{go.PrefabID()}' NetId {targetNetId} after " +
+						$"{MaxOverrideAttempts} attempts - it holds {identity.NetId} and something else " +
+						$"will not release {targetNetId}. This plant stays unaddressable rather than " +
+						$"trading the id every tick ({_abandonedIds} abandoned so far).");
+				}
+			}
+			else if (targetNetId != 0)
+			{
+				// It agrees now, so a later disagreement gets a fresh set of tries.
+				_overrideAttempts.Remove(targetNetId);
 			}
 
 			return identity.NetId;
+		}
+
+		/// <summary>How many times one id may be fought over before it is left alone.</summary>
+		private const int MaxOverrideAttempts = 3;
+
+		private static readonly Dictionary<int, int> _overrideAttempts = new Dictionary<int, int>();
+		private static int _abandonedIds;
+
+		/// <summary>Ids this peer stopped trying to assign. Reported, never silent.</summary>
+		public static int AbandonedIds => _abandonedIds;
+
+		public static void ResetIdentityAttempts()
+		{
+			_overrideAttempts.Clear();
+			_abandonedIds = 0;
 		}
 
 		private static int GetExistingIdentityId(GameObject go)

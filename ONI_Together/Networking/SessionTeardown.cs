@@ -42,6 +42,11 @@ namespace ONI_Together.Networking
 			Step("status subscriptions", StatusBroadcaster.ResetForNewSession);
 			Step("chore subscriptions", DuplicantChoreBroadcaster.ResetForNewSession);
 			Step("navigator overrides", NavigatorExtensions.ResetForNewSession);
+			// Dummy move targets and the navigator subscriptions that drive them.
+			// One per moving duplicant now, but they are scene objects and live
+			// handlers, and leaving them across sessions is what made the previous
+			// version degrade the longer it ran.
+			Step("navigator paths", Packets.Core.NavigatorPathPacket.ResetForNewSession);
 			// Session state, not world state: this records what clients have been
 			// told about each building's damage, and a new client has been told
 			// nothing. Keeping it would leave the next session convinced it had
@@ -49,6 +54,14 @@ namespace ONI_Together.Networking
 			// shape of bug as recording a send that never happened.
 			Step("building damage", ClearDamageMemory);
 			Step("damage packet counters", BuildingDamagePacket.ResetForNewSession);
+			Step("removal packet counters", Packets.World.BuildingRemovedPacket.ResetForNewSession);
+			Step("spawn-naming counters", Packets.World.BuildingSpawnedPacket.ResetForNewSession);
+			Step("death packet counters", Packets.DuplicantActions.DuplicantDeathPacket.ResetForNewSession);
+			Step("plant naming attempts", Components.PlantGrowthSyncer.ResetIdentityAttempts);
+			Step("preview index", NetworkIdentity.ResetPreviewIndex);
+			Step("rename refusals", NetworkIdentity.ResetRenameRefusals);
+			Step("instantiation adoptions", Packets.InstantiationsPacket.ResetForNewSession);
+			Step("building lifecycle counters", Patches.World.BuildingLifecycleWatch.Reset);
 			Step("malformed-count counter", Packets.Architecture.PacketList.ResetForNewSession);
 			Step("payload size records", PacketSender.ResetPayloadSizes);
 			Step("missing-entity queue", ClearResolverQueue);
@@ -112,3 +125,5 @@ namespace ONI_Together.Networking
 		}
 	}
 }
+
+

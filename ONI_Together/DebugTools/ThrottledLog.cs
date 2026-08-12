@@ -21,6 +21,7 @@ namespace ONI_Together.DebugTools
 		private const float FlushSeconds = 10f;
 
 		private static readonly Dictionary<string, int> _pending = new Dictionary<string, int>();
+		private static readonly Dictionary<string, int> _pendingInfo = new Dictionary<string, int>();
 		private static float _lastFlush;
 
 		/// <summary>
@@ -28,10 +29,25 @@ namespace ONI_Together.DebugTools
 		/// reported at most once per flush window, carrying however many times it
 		/// happened.
 		/// </summary>
-		public static void Warn(string key)
+		public static void Warn(string key) => Record(key, warn: true);
+
+		/// <summary>
+		/// The same collapsing for something that is not a fault. Used where a
+		/// line is worth having but arrives at packet rate - a path applied to a
+		/// duplicant, say, which on a busy colony is several a second per
+		/// duplicant and buries everything else while costing string formatting
+		/// on the network path.
+		///
+		/// Pass a constant key. A key built from the id and the step count is a
+		/// distinct key every time, which collapses nothing and grows the table.
+		/// </summary>
+		public static void Info(string key) => Record(key, warn: false);
+
+		private static void Record(string key, bool warn)
 		{
-			_pending.TryGetValue(key, out int n);
-			_pending[key] = n + 1;
+			var table = warn ? _pending : _pendingInfo;
+			table.TryGetValue(key, out int n);
+			table[key] = n + 1;
 
 			float now = Time.unscaledTime;
 			if (_lastFlush == 0f)
@@ -50,12 +66,21 @@ namespace ONI_Together.DebugTools
 					: kvp.Key);
 			}
 			_pending.Clear();
+
+			foreach (var kvp in _pendingInfo)
+			{
+				DebugConsole.Log(kvp.Value > 1
+					? $"{kvp.Key} (x{kvp.Value} in the last {FlushSeconds:0}s)"
+					: kvp.Key);
+			}
+			_pendingInfo.Clear();
 		}
 
 		/// <summary>Dropped on session teardown so counts never span two sessions.</summary>
 		public static void Reset()
 		{
 			_pending.Clear();
+			_pendingInfo.Clear();
 			_lastFlush = 0f;
 		}
 	}

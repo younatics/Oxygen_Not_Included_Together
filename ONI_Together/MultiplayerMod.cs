@@ -149,6 +149,8 @@ namespace ONI_Together
 				go.AddComponent<BuildingDamageSyncer>();
 				go.AddComponent<MissingEntityResolver>();
 				go.AddComponent<ClientDamageWatcher>();
+				go.AddComponent<SessionHealthLog>();
+				go.AddComponent<LinkQualitySampler>();
 
 				// CHECKPOINT 5
 				System.IO.File.AppendAllText(logPath, "[Trace] Checkpoint 5: Pre-Listeners\n");
@@ -181,6 +183,16 @@ namespace ONI_Together
 				if (_inLogHandler) return;
 				if (type == LogType.Exception || type == LogType.Error)
 				{
+					// Counted as well as logged, so a test can assert that a code path
+					// produced no Unity error.
+					//
+					// The two crashes in the printing-pod screen announced themselves
+					// only this way - an assert and an exception raised inside Klei
+					// code, with the method that caused them returning normally. A test
+					// that just calls the path and checks for a thrown exception sees
+					// nothing wrong, which is why both shipped.
+					DebugConsole.NoteUnityError();
+
 					_inLogHandler = true;
 					DebugConsole.LogError($"[Unity] {type}: {condition}\n{stackTrace}");
 					_inLogHandler = false;

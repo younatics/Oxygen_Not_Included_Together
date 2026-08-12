@@ -138,7 +138,13 @@ namespace ONI_Together.Networking.Packets.World
 				// Now set the host's active research
 				if (!string.IsNullOrEmpty(activeTechId))
 				{
-					var tech = Db.Get().Techs.Get(activeTechId);
+					// TryGet, not Get. Get logs a Unity ERROR for an id it does not know
+					// ("Could not find Tech: ...") and ONI turns errors into a report the
+					// player has to dismiss - and sometimes into a quit. An unknown tech id
+					// is a dropped update, not a reason to interrupt the game.
+					var tech = Db.Get().Techs.TryGet(activeTechId);
+					if (tech == null)
+						DebugTools.ThrottledLog.Warn($"[ResearchState] unknown active tech '{activeTechId}'; ignoring it");
 					if (tech != null)
 					{
 						DebugConsole.Log($"[ResearchLog] Setting active research to: {tech.Name}");
@@ -162,7 +168,12 @@ namespace ONI_Together.Networking.Packets.World
 				int unlockedCount = 0;
 				foreach (var techId in unlockedIds)
 				{
-					var tech = Db.Get().Techs.Get(techId);
+					var tech = Db.Get().Techs.TryGet(techId);
+					if (tech == null)
+					{
+						DebugTools.ThrottledLog.Warn($"[ResearchState] unknown queued tech '{techId}'; skipping it");
+						continue;
+					}
 					if (tech == null) continue;
 
 					var techInst = Research.Instance.Get(tech);

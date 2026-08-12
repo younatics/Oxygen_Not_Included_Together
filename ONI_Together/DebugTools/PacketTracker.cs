@@ -165,6 +165,26 @@ namespace ONI_Together.DebugTools
         /// are sent, they simply do not log. Absence of a log line is not
         /// absence of a packet, and this is the number that settles it.
         /// </summary>
+        /// <summary>
+        /// How many of a packet type this peer sent and received.
+        ///
+        /// The counts were only ever printed, and one comparison between two of those
+        /// printed lines is what found the last unresolved id: 118 resolve requests
+        /// sent, 56 answers back, 62 met with silence. I noticed that by reading two
+        /// lines next to each other. Exposing the numbers lets a test do it, for every
+        /// request type, on every run.
+        /// </summary>
+        public static bool TryGetCounts(string packetTypeName, out long sent, out long received)
+        {
+            sent = 0;
+            received = 0;
+            if (_instance == null) return false;
+
+            if (_instance._outBw.TryGetValue(packetTypeName, out var o)) sent = o.TotalCount;
+            if (_instance._inBw.TryGetValue(packetTypeName, out var i)) received = i.TotalCount;
+            return sent > 0 || received > 0;
+        }
+
         public static void DumpCounts(string tag = "[PACKETS]")
         {
             if (_instance == null)

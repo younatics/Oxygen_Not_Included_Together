@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Patches.KleiPatches;
 using System;
@@ -22,7 +22,6 @@ namespace ONI_Together.Networking.Components
 			{
 				if (kbac.currentAnim != animHash)
 				{
-					KAnimControllerBase_Patches.AllowAnims();
 					try
 					{
 						kbac.Play(animHash, playMode, animSpeed, 0f);
@@ -30,7 +29,6 @@ namespace ONI_Together.Networking.Components
 					finally
 					{
 						// Invariant #10: a throw in Play must not leak globally-allowed anims.
-						KAnimControllerBase_Patches.ForbidAnims();
 					}
 					ForceAnimUpdate(kbac, source);
 					TrySetElapsedTime(kbac, elapsedTime);

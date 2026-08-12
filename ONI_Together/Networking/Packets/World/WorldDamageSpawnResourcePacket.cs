@@ -93,9 +93,33 @@ namespace ONI_Together.Networking.Packets.World
 			// active object, so OnSpawn has already run by the time we get it -
 			// and without this it will have minted an id of its own and taken a
 			// registry slot that belongs to somebody else.
-			NetworkIdentity.ReserveNextNetId(NetId);
+			// Named, so only the pile this id is for can take it.
+			//
+			// The frame guard was not enough. SpawnResource sometimes merges into an
+			// existing pile and returns it without an OnSpawn, so the reservation is
+			// still set when the next object of that frame spawns - and that object
+			// collects an id the host issued for this element. Three ids survived every
+			// other fix that way, the host holding food and the client holding a
+			// Creature pile under the same number.
+			//
+			// The element's tag is what the spawned pile's PrefabID reads as, which is
+			// what makes the comparison on the other side possible at all.
+			NetworkIdentity.ReserveNextNetId(NetId, element.tag.Name);
 
 			GameObject dropped = element.substance.SpawnResource(Position, dropMass, Temperature, DiseaseIndex, DiseaseCount);
+
+			// Released here, on every path, whatever SpawnResource did.
+			//
+			// The reservation exists for the object this one call creates, and by the
+			// time it returns that object's OnSpawn has already run - so from this
+			// line on the reservation can only be consumed by something else. It was
+			// cleared on the two failure paths below and not on the success path, and
+			// success is exactly where it survives: when SpawnResource merges into an
+			// existing pile it creates nothing, no OnSpawn runs, and the id stays
+			// reserved for whatever spawns next. Ten-run batches showed the result
+			// three times in ten - a resource and an unrelated critter or gas sharing
+			// one id, with the field and the registry disagreeing.
+			NetworkIdentity.ReserveNextNetId(0);
 
 			// SpawnResource returns null when the element cannot be placed where
 			// it was asked for, and the identity is only there if the prefab

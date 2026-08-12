@@ -83,6 +83,19 @@ namespace ONI_Together.Networking.Packets.Core
 				DebugConsole.LogWarning("Could not find KAnimControllerBase on entity " + networkEntity.gameObject.GetProperName());
 				return;
 			}
+
+			// The sender only ever sends these for a BaseMinion, so a resolved
+			// object that is not one is proof the id did not mean what it said -
+			// not a reason to guess. Applying a duplicant's override to whatever
+			// came back is how an assert inside Klei closed a client.
+			if (!networkEntity.gameObject.HasTag(GameTags.BaseMinion))
+			{
+				DebugTools.ThrottledLog.Warn(
+					$"[ToggleAnimOverride] NetId {EntityNetId} resolved to " +
+					$"'{networkEntity.gameObject.PrefabID()}', which is not a duplicant - " +
+					"only duplicants are sent these, so this id means something different here");
+				return;
+			}
 			if (AddingOverride)
 			{
 				KAnimControllerBase_Patches.AddKanimOverride(kbac, Kanim, Priority);

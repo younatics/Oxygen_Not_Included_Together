@@ -171,6 +171,56 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+            // A second connect while one is already in flight strands the client
+            // for good, and nothing stopped it. Measured: the client connected as
+            // player 2, asked the host for the save, and the host queued a 2.2 MB
+            // TCP transfer and sent TcpTransferStartPacket. One second later a
+            // duplicate join arrived. It reset the state to Connecting, so the
+            // start packet landed on a client that had just thrown away the
+            // request it belonged to. The download never began, the host kept the
+            // transfer queued for a client that would never collect it, and the
+            // client sat at the main menu forever - in-session, registry empty,
+            // absorbing operational-state packets for a world it did not have
+            // (2196 lookup failures in under a second).
+            //
+            // Refuse instead. A join is only meaningful from Disconnected or
+            // Error; anything else is either the same join arriving twice (a
+            // double-click, a retrying UI, a harness redelivering a command) or a
+            // join racing a live session, and both are worse than doing nothing.
+            if (State != ClientState.Disconnected && State != ClientState.Error)
+            {
+                // One exception, and it matters more than the rule.
+                //
+                // A refusal is only correct while something is actually happening.
+                // If the state says Connecting but the attempt died - the LAN
+                // timeout path used to leave it there, and the transport can also
+                // decline a connect request outright - then refusing every later
+                // attempt means "press join, nothing happens", forever, until the
+                // game is restarted. That is a worse bug than the one the guard was
+                // added for, and it is the one that got reported.
+                //
+                // So a Connecting state that has outlived the connect timeout is
+                // treated as dead rather than trusted. Anything else - Connected,
+                // LoadingWorld, InGame - is a live session and still refused.
+                bool staleAttempt = IsStaleConnectAttempt(State, Time.unscaledTime - _connectingSince);
+
+                if (!staleAttempt)
+                {
+                    DebugConsole.LogWarning(
+                        $"[GameClient] Ignoring connect request while State={State} " +
+                        (MultiplayerSession.InSession ? "(already in a session). " : ". ") +
+                        "Disconnect first; accepting this would abandon the save transfer in flight.");
+                    return;
+                }
+
+                DebugConsole.LogWarning(
+                    $"[GameClient] State was still Connecting after " +
+                    $"{Time.unscaledTime - _connectingSince:0}s with nothing to show for it; " +
+                    "treating the previous attempt as dead and retrying. Something failed a " +
+                    "connect without reporting it.");
+                SetState(ClientState.Disconnected);
+            }
+
             Init();
 
             // Reset mod verification for new connection attempts
@@ -190,9 +240,47 @@ namespace ONI_Together.Networking
 					MultiplayerOverlay.Show(string.Format(STRINGS.UI.MP_OVERLAY.CLIENT.CONNECTING_TO_HOST, hostName));
 			}
 
+			_connectingSince = Time.unscaledTime;
 			SetState(ClientState.Connecting);
 			NetworkConfig.TransportClient.ConnectToHost(ip, port);
 		}
+
+		/// <summary>When the current attempt started, so a dead one can be told from a live one.</summary>
+		private static float _connectingSince;
+
+		/// <summary>
+		/// Past this, a Connecting state is evidence of a failure that was not
+		/// reported rather than of a connection in progress. Comfortably above the
+		/// transport's own timeout so a slow join is never mistaken for a dead one.
+		/// </summary>
+		/// <summary>
+		/// Derived from the configured timeout, never a constant.
+		///
+		/// This was hardcoded to 45 seconds "comfortably above the transport's own
+		/// timeout", which was true of the 30 second default and false of the
+		/// machine it shipped to, where the client timeout is 120. A threshold below
+		/// the timeout judges a join that is still legitimately connecting to be
+		/// dead, which lets a second connect through and abandons the save transfer
+		/// in flight - the exact failure the refusal was added to prevent.
+		///
+		/// The suite caught it on the first run after deployment. It is the reason
+		/// that test compares against the configuration rather than a number.
+		/// </summary>
+		internal static float StaleConnectSeconds =>
+			Configuration.Instance.Client.TimeoutSeconds + 15f;
+
+		/// <summary>
+		/// Whether a connect request should be allowed through despite the state
+		/// saying one is already under way.
+		///
+		/// A pure function so it can be tested. The rule it encodes is the one that
+		/// decides between two bad outcomes: accept a duplicate join and strand the
+		/// client mid-save-transfer, or refuse every join after a silent failure and
+		/// make the button dead until restart. Both have happened, so neither reading
+		/// is safe to leave to whoever edits this next.
+		/// </summary>
+		internal static bool IsStaleConnectAttempt(ClientState state, float secondsInState) =>
+			state == ClientState.Connecting && secondsInState > StaleConnectSeconds;
 
 		public static void Disconnect()
 		{

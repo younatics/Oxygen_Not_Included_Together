@@ -133,6 +133,28 @@ namespace ONI_Together.Networking.Packets
 				Instantiate(e);
 		}
 
+		/// <summary>
+		/// Announcements satisfied by naming an object the client had already drawn,
+		/// rather than adding a second one. The pair of numbers - this against the
+		/// preview count - is how to tell whether the matching is working.
+		/// </summary>
+		public static int AdoptedInstead => _adoptedInstead;
+
+		/// <summary>
+		/// Duplicant prefabs refused. Zero is the expected reading once the sender is
+		/// fixed; a non-zero one means another sender is still announcing colonists.
+		/// </summary>
+		public static int RefusedMinions => _refusedMinions;
+
+		private static int _adoptedInstead;
+		private static int _refusedMinions;
+
+		public static void ResetForNewSession()
+		{
+			_adoptedInstead = 0;
+			_refusedMinions = 0;
+		}
+
 		private void Instantiate(InstantiationEntry e)
 		{
 			using var _ = Profiler.Scope();
@@ -141,6 +163,45 @@ namespace ONI_Together.Networking.Packets
 			if (prefab == null)
 			{
 				DebugConsole.LogWarning($"[InstantiationsPacket] Missing prefab '{e.PrefabName}'");
+				return;
+			}
+
+			// Refuse duplicants here as well as at the sender.
+			//
+			// A colonist cannot be rebuilt from a prefab name: personality, traits,
+			// aptitudes and name are not in the prefab, and the result is a duplicant
+			// with personality 0x0. The renderer reads the personality inside
+			// World.LateUpdate, so it throws every frame and the game closes itself -
+			// three client sessions ended that way, each one with "Could not find
+			// Personality: 0x0" repeating in the last seconds.
+			//
+			// The sender no longer announces them. This is the second layer, because
+			// the cost of one more sender ever reaching this line is a dead client,
+			// and refusing it only costs a colonist the telepad path can deliver
+			// properly.
+			if (prefab.HasTag(GameTags.BaseMinion))
+			{
+				_refusedMinions++;
+				DebugTools.ThrottledLog.Warn(
+					$"[InstantiationsPacket] refusing to build a duplicant from the prefab name " +
+					$"'{e.PrefabName}' (NetId {e.NetId}): it would have no personality and drawing it " +
+					"throws every frame. Duplicants replicate through the telepad path.");
+				return;
+			}
+
+			// Name what is already here before building another one.
+			//
+			// The client drew this object itself the moment it was ordered, and left
+			// it unnamed on purpose. Instantiating regardless produced two objects
+			// for one thing: the named copy from this packet and the client's own
+			// with no id. 577 previews created against 38 adopted in eleven minutes,
+			// with failed lookups rising from 270 to 3925 over the same period, is
+			// what that costs - the host talks about its item, the client is holding
+			// a different one, and every packet about it misses.
+			int cell = Grid.IsValidCell(Grid.PosToCell(e.Position)) ? Grid.PosToCell(e.Position) : -1;
+			if (cell >= 0 && Components.NetworkIdentity.TryAdoptPreview(cell, e.PrefabName, e.NetId))
+			{
+				_adoptedInstead++;
 				return;
 			}
 

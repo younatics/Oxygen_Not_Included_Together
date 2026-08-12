@@ -40,6 +40,30 @@ namespace ONI_Together.Networking.Packets.Core
 		/// <summary>Bounded so a lost chunk cannot cost a buffer for the rest of the session.</summary>
 		private const int MaxPendingSets = 32;
 
+		/// <summary>
+		/// Report a discard as a warning only when real traffic caused it.
+		///
+		/// The Chunking tests deliberately overrun this buffer - proving an
+		/// abandoned set cannot leak is the whole point of one of them - and every
+		/// one of those discards was logged at WARNING. The session digest then
+		/// showed "pending set limit 32 reached; dropped the oldest" 32 times on
+		/// the host and 64 on the client (the client ran the suite twice), which
+		/// reads as a network dropping in-flight messages wholesale. It was not:
+		/// all 32 host lines share one millisecond, 12:40:31.399, inside the suite,
+		/// and gameplay discarded nothing at all. An instrument that reports the
+		/// test exercising it as a fault costs more than it explains.
+		///
+		/// Still logged, just not as a warning, so the line is there when looked
+		/// for and absent from the digest of what went wrong.
+		/// </summary>
+		private static void ReportDiscard(string message)
+		{
+			if (Networking.NetworkIdentityRegistry.InDiagnosticScope)
+				DebugConsole.Log($"[Chunked] (test) {message}");
+			else
+				DebugConsole.LogWarning($"[Chunked] {message}");
+		}
+
 		private const float PendingTimeoutSeconds = 30f;
 
 		private sealed class PendingSet
@@ -79,12 +103,12 @@ namespace ONI_Together.Networking.Packets.Core
 			// Everything below arrived over the wire, so none of it is trusted.
 			if (TotalChunks < 1 || TotalChunks > MaxChunks)
 			{
-				DebugConsole.LogWarning($"[Chunked] refusing header claiming {TotalChunks} chunks from {SenderId}");
+				ReportDiscard($"refusing header claiming {TotalChunks} chunks from {SenderId}");
 				return;
 			}
 			if (ChunkIndex < 0 || ChunkIndex >= TotalChunks)
 			{
-				DebugConsole.LogWarning($"[Chunked] refusing chunk {ChunkIndex} of {TotalChunks} from {SenderId}");
+				ReportDiscard($"refusing chunk {ChunkIndex} of {TotalChunks} from {SenderId}");
 				return;
 			}
 			if (ChunkData == null)
@@ -105,8 +129,8 @@ namespace ONI_Together.Networking.Packets.Core
 			{
 				// Same sender reusing a sequence with a different shape: the old
 				// set can never complete, so replace it rather than index into it.
-				DebugConsole.LogWarning(
-					$"[Chunked] sequence {SequenceId} from {SenderId} reused with {TotalChunks} chunks " +
+				ReportDiscard(
+					$"sequence {SequenceId} from {SenderId} reused with {TotalChunks} chunks " +
 					$"(was {set.Chunks.Length}); discarding the incomplete set");
 				set = new PendingSet { Chunks = new byte[TotalChunks][] };
 				_pendingChunks[key] = set;
@@ -154,7 +178,7 @@ namespace ONI_Together.Networking.Packets.Core
 
 			foreach (var key in dead)
 				_pendingChunks.Remove(key);
-			DebugConsole.LogWarning($"[Chunked] dropped {dead.Count} incomplete set(s) after {PendingTimeoutSeconds}s");
+			ReportDiscard($"dropped {dead.Count} incomplete set(s) after {PendingTimeoutSeconds}s");
 		}
 
 		private static void DropOldest()
@@ -174,7 +198,7 @@ namespace ONI_Together.Networking.Packets.Core
 			if (found)
 			{
 				_pendingChunks.Remove(oldestKey);
-				DebugConsole.LogWarning($"[Chunked] pending set limit {MaxPendingSets} reached; dropped the oldest");
+				ReportDiscard($"pending set limit {MaxPendingSets} reached; dropped the oldest");
 			}
 		}
 
@@ -202,7 +226,7 @@ namespace ONI_Together.Networking.Packets.Core
 		/// this, so a test cannot otherwise tell "still waiting for a chunk" from
 		/// "gave up" from "spliced two senders together".
 		/// </summary>
-		internal static int PendingSetCount => _pendingChunks.Count;
+		public static int PendingSetCount => _pendingChunks.Count;
 
 		/// <summary>Drop all partial state. Used by tests to isolate cases.</summary>
 		internal static void ResetPending()

@@ -14,7 +14,23 @@ namespace Shared.Profiling
 {
     public static class Profiler
     {
-        private static bool Enabled = true;
+        /// <summary>
+        /// Off by default, because leaving it on makes the thing it measures.
+        ///
+        /// Every Profiler.Scope() in a DEBUG build builds a key from the caller's
+        /// file, member and line and looks it up - and Scope() is called from
+        /// essentially every method on the packet and syncer paths. The host runs far
+        /// more of those than a client does, which is exactly the shape of what was
+        /// being investigated: a host at 77-79 ms a frame against a client at 16.7,
+        /// on the same colony.
+        ///
+        /// That does not prove the profiler is the cause, and it is not assumed here.
+        /// It removes it as a variable, which has to happen before any other
+        /// candidate can be believed. The switch already existed and defaulted the
+        /// wrong way; the ImGui checkbox still turns it on when someone is actually
+        /// profiling.
+        /// </summary>
+        private static bool Enabled = false;
 
         private const int HistorySize = 300;
 

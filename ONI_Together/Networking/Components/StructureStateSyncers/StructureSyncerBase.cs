@@ -25,6 +25,37 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
         private bool _initialized;
         private float _initializationTime;
+
+        /// <summary>
+        /// How often a structure states itself even though nothing changed.
+        ///
+        /// Everything here was delta-only, and a delta cannot repair a peer that is
+        /// already wrong and has stopped moving. Measured across a run: a MetalRefinery
+        /// holding 310 kg of water on the host and 800 on the client, a MicrobeMusher at
+        /// 150 kg of dirt against 75, an AlgaeHabitat at 316 kg against 38. Sixteen
+        /// containers more than 5 kg apart, and the values are clean multiples rather
+        /// than drift - the client took a different number of deliveries and then both
+        /// sides went idle. The host's mass never changed again, so it never spoke
+        /// again, and the client stayed wrong for the rest of the session.
+        ///
+        /// Storage makes this worse than most: StorageStateSyncer switches off the
+        /// optional-value comparison, so a container whose composition changed while its
+        /// total mass held steady is not even considered changed.
+        ///
+        /// Fifteen seconds, phase-spread per instance so four hundred structures do not
+        /// all speak on the same frame. Costs about thirty small packets a second
+        /// against the ninety thousand this host already sends per three thousand
+        /// frames, and it is the only thing that can close a divergence nobody is
+        /// touching.
+        /// </summary>
+        private const float ResyncInterval = 15f;
+
+        private float _nextResync;
+
+        /// <summary>Sends that happened only because the keyframe came due.</summary>
+        public static int ResyncsForced { get; private set; }
+
+        public static void ResetResyncCount() => ResyncsForced = 0;
         private const float INITIAL_DELAY = 5f;
 
         private float _lastClientPacketTime;
@@ -52,6 +83,13 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                 {
                     _initializationTime = Time.unscaledTime;
                     _initialized = true;
+
+                    // Spread by instance id rather than at random: scripts here may not
+                    // call Math.Random, and a deterministic offset is easier to reason
+                    // about anyway. Any spread will do - the point is only that four
+                    // hundred structures do not come due together.
+                    float phase = (System.Math.Abs(GetInstanceID()) % 1024) / 1024f;
+                    _nextResync = Time.unscaledTime + INITIAL_DELAY + phase * ResyncInterval;
                     return;
                 }
                 if (Time.unscaledTime - _initializationTime < INITIAL_DELAY) return;
@@ -83,10 +121,13 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
             // every structure that syncs, not the one that was complained about.
             AddHitPoints(ref optionalValues);
 
+            bool dueForResync = Time.unscaledTime >= _nextResync;
+
             bool changed = StructureStatePacket.VariantValueChanged(currentValue, lastSentValue) ||
                 currentActive != lastSentActive ||
                 (checkOptionalsValuesForChanges && StructureStatePacket.OptionalValuesChanged(optionalValues, lastOptionalValues)) ||
-                ShouldForceSync();
+                ShouldForceSync() ||
+                dueForResync;
 
             if (changed)
             {
@@ -108,7 +149,22 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 
                 int delivered = 0;
 
-                if (cullByViewport && WorldStateSyncer.Instance != null)
+                // A keyframe ignores the viewport, which is the whole point of it.
+                //
+                // Culling deltas is right: nobody needs a progress bar for a building
+                // they cannot see. But it also meant the divergences that survive are
+                // exactly the ones nobody looked at, and the measurement says so - after
+                // keyframes closed half the storage gaps, the ten that remained were
+                // AlgaeHabitat, Compost, MetalRefinery and MicrobeMusher, with water 278
+                // kg apart. That is not fifteen seconds of conversion drifting; it is a
+                // correction that was never delivered, because the keyframe clock only
+                // advances on delivery and delivery never happened.
+                //
+                // So the delta stays culled and the keyframe goes to everyone. It is one
+                // small packet per structure per fifteen seconds - about thirty a second
+                // for four hundred structures, against the ninety thousand sends this
+                // host already makes per three thousand frames.
+                if (cullByViewport && !dueForResync && WorldStateSyncer.Instance != null)
                 {
                     WorldStateSyncer.Instance.GetClientsViewingCell(cell, _viewportScratch, 2);
                     foreach (var playerId in _viewportScratch)
@@ -141,6 +197,16 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                     lastSentValue = currentValue;
                     lastSentActive = currentActive;
                     lastOptionalValues = optionalValues;
+
+                    // The keyframe clock advances on delivery, for the same reason the
+                    // value record does. A keyframe that came due while nobody was
+                    // looking has not repaired anything, and rescheduling it would mean
+                    // waiting another fifteen seconds after the client scrolls over.
+                    if (dueForResync)
+                    {
+                        _nextResync = Time.unscaledTime + ResyncInterval;
+                        ResyncsForced++;
+                    }
                 }
             }
         }

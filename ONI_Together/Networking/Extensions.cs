@@ -41,7 +41,20 @@ namespace ONI_Together.Networking
 				// that asks gets zero. A host logged 32 of those for pacu
 				// juveniles alone, all of which had an identity attached.
 				if (identity.NetId == 0)
+				{
 					identity.RegisterIdentity();
+
+					// Still zero, and the rules say it may never be anything else.
+					//
+					// This used to be silent, and silence here is what turned a halving
+					// of the client's failed lookups into 476 packets a run carrying
+					// NetId 0. The caller asked for an address, got a zero, and wrote it
+					// down. Naming the object and the caller is what says whether the
+					// exclusion rule is drawn in the wrong place or the sender should not
+					// be sending at all.
+					if (identity.NetId == 0 && NetworkIdentity.IsExcludedFromIdentity(go))
+						NetworkIdentity.NoteRefusedAsk(go);
+				}
 				return identity;
 			}
 

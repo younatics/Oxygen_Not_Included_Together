@@ -138,40 +138,34 @@ public class PlayAnimPacket : IPacket
 
 		if (MultipleAnims)
 		{
-			KAnimControllerBase_Patches.AllowAnims();
 			try
 			{
 				kbac.Play(AnimHashes, Mode);
 			}
 			finally
 			{
-				KAnimControllerBase_Patches.ForbidAnims();
 			}
 		}
 		else
 		{
 			if (IsQueue)
 			{
-				KAnimControllerBase_Patches.AllowAnims();
 				try
 				{
 					kbac.Queue(AnimHashes.FirstOrDefault(), Mode, Speed, TimeOffset);
 				}
 				finally
 				{
-					KAnimControllerBase_Patches.ForbidAnims();
 				}
 			}
 			else
 			{
-				KAnimControllerBase_Patches.AllowAnims();
 				try
 				{
 					kbac.Play(AnimHashes.FirstOrDefault(), Mode, Speed, TimeOffset);
 				}
 				finally
 				{
-					KAnimControllerBase_Patches.ForbidAnims();
 				}
 			}
 

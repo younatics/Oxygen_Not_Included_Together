@@ -14,22 +14,79 @@ import re, sys, argparse, collections
 
 STATE = re.compile(r'\[STATE\] (-?\d+)\|([^|]+)\|([^|]+)\|(.*)$')
 DAMAGE = re.compile(r'\[DAMAGE\] (-?\d+)\|([^|]+)\|(\d+)\|(\d+)/(\d+)')
+NETID = re.compile(r'\[NETID\] ([^|]+)\|([^|]+)\|(\d+)\|(-?\d+)')
+
+
+TIME = re.compile(r'^\[(\d\d):(\d\d):(\d\d)\.(\d\d\d)\]')
+
+# One dump is written inside a single frame, so its lines are milliseconds
+# apart while consecutive dumps are seconds apart. Anything past this is a
+# different run of the suite.
+DUMP_GAP_SECONDS = 2.0
+
+
+def stamp(line):
+    m = TIME.match(line)
+    if not m:
+        return None
+    h, mi, s, ms = (int(x) for x in m.groups())
+    return h * 3600 + mi * 60 + s + ms / 1000.0
+
+
+class Blocks:
+    """One dict per run of the suite, so a stale dump cannot be read as state.
+
+    The suite can run more than once in a session - the client ran it twice in
+    the run this was written for - and merging dicts across runs keeps entries
+    that had already disappeared. That does not read as "gone", it reads as
+    "one peer has state the other does not", which is the exact finding this
+    tool exists to report.
+
+    Blocks are cut on elapsed time rather than on a repeated key. Keying by
+    (kind, prefab, cell) legitimately repeats inside one dump - stacked items
+    share a cell - so a repeat cut the dump into fragments, and the last
+    fragment held a couple of items and no buildings at all. That printed
+    "buildings: host 0, client 0" while both logs carried thousands, and it
+    made every ABSENT verdict below vacuous: nothing is present in an empty
+    table. Same class of mistake as the thing it was written to catch.
+    """
+
+    def __init__(self):
+        self.blocks = [{}]
+        self._last_t = None
+
+    def add(self, key, value, t):
+        if t is not None and self._last_t is not None and t - self._last_t > DUMP_GAP_SECONDS:
+            self.blocks.append({})
+        if t is not None:
+            self._last_t = t
+        self.blocks[-1][key] = value
+
+    @property
+    def last(self):
+        return self.blocks[-1]
+
 
 def read(path):
-    """Last dump wins - a log can hold several runs of the suite."""
-    state, damage = {}, {}
+    """The most recent dump of each kind."""
+    state, damage, netid = Blocks(), Blocks(), Blocks()
     with open(path, encoding='utf-8', errors='ignore') as fh:
         for line in fh:
             m = STATE.search(line)
             if m:
-                netid, syncer, key, value = m.groups()
-                state[(netid, syncer.strip(), key.strip())] = value.strip()
+                nid, syncer, key, value = m.groups()
+                state.add((nid, syncer.strip(), key.strip()), value.strip(), stamp(line))
                 continue
             m = DAMAGE.search(line)
             if m:
-                netid, prefab, cell, hp, maxhp = m.groups()
-                damage[(netid, prefab.strip())] = (cell, int(hp), int(maxhp))
-    return state, damage
+                nid, prefab, cell, hp, maxhp = m.groups()
+                damage.add((nid, prefab.strip()), (cell, int(hp), int(maxhp)), stamp(line))
+                continue
+            m = NETID.search(line)
+            if m:
+                kind, prefab, cell, nid = m.groups()
+                netid.add((kind.strip(), prefab.strip(), cell), nid, stamp(line))
+    return state.last, damage.last, netid.last
 
 # Values that drift by their nature. Comparing them produces noise that buries
 # the real findings, which is how a comparison stops being read at all.
@@ -92,8 +149,8 @@ def main():
     ap.add_argument('--all', action='store_true', help='include continuously drifting values')
     args = ap.parse_args()
 
-    hs, hd = read(args.host)
-    cs, cd = read(args.client)
+    hs, hd, hn = read(args.host)
+    cs, cd, cn = read(args.client)
 
     if not hs and not cs:
         print('no [STATE] lines in either log - run the in-game suite first (Divergence category)')
@@ -129,7 +186,64 @@ def main():
             side = 'host' if (netid, syncer, key) in hs else 'client'
             print(f'    {side}-only  netid {netid:>12} {syncer}.{key} = {v}')
 
+    # Which buildings each peer has at all, keyed by where and what rather than
+    # by id: the ids are the thing under test and two peers can disagree about
+    # them while holding the same building.
+    #
+    # This comparison was missing, and its absence produced a false diagnosis.
+    # Two Tiles showed up as a damage disagreement reading "host=undamaged
+    # client=42/100", which says the host has an intact building. The host did
+    # not have the building at all - it had finished digging those cells out,
+    # while the client still held a half-destroyed tile that nothing would ever
+    # remove. The player sees solid ground where the other sees a tunnel, and
+    # the tool called it a hit-point mismatch.
+    hb = {(p, c): n for (kind, p, c), n in hn.items() if kind == 'building'}
+    cb = {(p, c): n for (kind, p, c), n in cn.items() if kind == 'building'}
+    host_missing = sorted(set(cb) - set(hb))
+    client_missing = sorted(set(hb) - set(cb))
+
+    # A building site and the building it becomes are different prefabs at one
+    # cell, so a peer that has finished construction while the other is still
+    # building shows up twice: "client-only GasConduit at 46222" and "host-only
+    # GasConduitUnderConstruction at 46222". Reported as phantoms, that reads as
+    # two peers holding different worlds. It is one building, mid-construction,
+    # seen a moment apart - and mixing it in with the real findings is how the
+    # four tiles that mattered took six runs to notice.
+    def base_name(prefab):
+        for suffix in ('UnderConstruction', 'Complete'):
+            if prefab.endswith(suffix) and len(prefab) > len(suffix):
+                return prefab[:-len(suffix)]
+        return prefab
+
+    host_cells = {(base_name(p), c) for (p, c) in hb}
+    client_cells = {(base_name(p), c) for (p, c) in cb}
+    in_progress = [(p, c) for (p, c) in host_missing
+                   if (base_name(p), c) in host_cells]
+    in_progress += [(p, c) for (p, c) in client_missing
+                    if (base_name(p), c) in client_cells]
+    in_progress_set = set(in_progress)
+    host_missing = [k for k in host_missing if k not in in_progress_set]
+    client_missing = [k for k in client_missing if k not in in_progress_set]
+
+    print(f'\nbuildings: host {len(hb)}, client {len(cb)}, '
+          f'client-only {len(host_missing)}, host-only {len(client_missing)}, '
+          f'mid-construction {len(in_progress_set)}')
+    for (prefab, cell) in sorted(in_progress_set)[:6]:
+        print(f'    mid-construction  {prefab} at cell {cell} '
+              f'- the other peer has the same building at a different stage')
+    if not hb or not cb:
+        print('  (no [NETID] building dump on one side - cannot compare presence)')
+    for (prefab, cell) in host_missing[:10]:
+        print(f'    client-only  {prefab} at cell {cell} (netid {cb[(prefab, cell)]}) '
+              f'- a phantom: the host has nothing here')
+    for (prefab, cell) in client_missing[:10]:
+        print(f'    host-only    {prefab} at cell {cell} (netid {hb[(prefab, cell)]}) '
+              f'- the client never built or received it')
+
     # Damage is separate because it is what a player sees first.
+    def present(buildings, prefab, cell):
+        return (prefab, cell) in buildings
+
     dkeys = set(hd) | set(cd)
     dbad = []
     for k in sorted(dkeys):
@@ -138,10 +252,19 @@ def main():
             dbad.append((k, h, c))
     print(f'\ndamaged buildings: host {len(hd)}, client {len(cd)}, disagreeing {len(dbad)}')
     for (netid, prefab), h, c in dbad[:15]:
-        fmt = lambda v: 'undamaged' if v is None else f'{v[1]}/{v[2]} at cell {v[0]}'
-        print(f'    netid {netid:>12} {prefab}: host={fmt(h)} client={fmt(c)}')
+        def fmt(v, buildings, other):
+            if v is not None:
+                return f'{v[1]}/{v[2]} at cell {v[0]}'
+            # Nothing in this peer's damage dump. Distinguish "at full health"
+            # from "does not exist here" - they need opposite fixes.
+            cell = other[0] if other else None
+            if cell is not None and not present(buildings, prefab, cell):
+                return 'ABSENT (no such building on this peer)'
+            return 'undamaged'
+        print(f'    netid {netid:>12} {prefab}: '
+              f'host={fmt(h, hb, c)} client={fmt(c, cb, h)}')
 
-    return 1 if (differs or dbad) else 0
+    return 1 if (differs or dbad or host_missing or client_missing) else 0
 
 if __name__ == '__main__':
     sys.exit(main())

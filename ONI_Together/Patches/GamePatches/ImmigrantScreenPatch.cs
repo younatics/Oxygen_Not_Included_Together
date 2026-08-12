@@ -45,15 +45,17 @@ namespace ONI_Together.Patches.GamePatches
 
 			DebugConsole.Log("[ImmigrantScreen] Options lock cleared");
 		}
-		static IEnumerator SetMinionDelayed(CharacterContainer container, MinionStartingStats stats)
-		{
-			using var _ = Profiler.Scope();
-
-			// Wait for end of frame to ensure proper initialization
-			yield return SequenceUtil.WaitForNextFrame;
-			container.SetMinion(stats);
-			DebugConsole.Log($"[ImmigrantScreen] SetMinionDelayed: Set minion '{stats.Name}' in container");
-		}
+		// SetMinionDelayed used to live here and must not come back.
+		//
+		// It waited a frame before calling container.SetMinion, and the container's
+		// portrait duplicant spawns in that frame with no stats - "Could not find
+		// Personality: 0x0" out of Accessorizer.OnSpawn, once per frame, until ONI
+		// raises it as an error and closes the game. Three client sessions ended
+		// that way and it reproduced every time the printing pod was opened.
+		//
+		// SetMinion is called directly now, in the same frame as the container is
+		// created, which is what the base game does. If a future change here seems
+		// to need a frame of delay, the delay is the bug.
 		static IEnumerator SetCarePackageInfoDelayed(CarePackageContainer carePackageContainer, CarePackageInfo pkg)
 		{
 			using var _ = Profiler.Scope();
@@ -122,16 +124,58 @@ namespace ONI_Together.Patches.GamePatches
 				var deliverable = option.ToGameDeliverable();
 				if(deliverable is MinionStartingStats stats)
 				{
-					CharacterContainer characterContainer = Util.KInstantiateUI<CharacterContainer>(instance.containerPrefab.gameObject, instance.containerParent);
+					// Active, and given its duplicant in the same frame.
+					//
+					// This is the crash that ends a client the moment the printing pod
+					// choices are opened, and it took two attempts to get right.
+					//
+					// The original code created the container and handed over the stats
+					// a frame later, by coroutine ("wait for end of frame to ensure
+					// proper initialization"). In that frame the container's portrait
+					// Minion spawns with no MinionStartingStats, so MinionIdentity and
+					// Accessorizer read a personality that is not there:
+					//
+					//   [ERROR] Could not find Personality: 0x0
+					//   at MinionStartingStats.CreateBodyData (Personality p)
+					//   at Accessorizer.OnSpawn () ... at (0.00, 0.00, -25.50)
+					//
+					// It then repeats every frame, ONI raises it as an error, and the
+					// game closes itself seconds later. No mod frame appears in those
+					// stacks, which is why it read as a game bug for three sessions.
+					//
+					// The first attempt built the container inactive so nothing could
+					// spawn before the stats were set. That traded one crash for
+					// another: SetMinion goes through SetAnimator to ApplyTraits, and
+					// on an inactive container the MinionSelectPreview it applies them
+					// to is still the prefab, not an instance -
+					//
+					//   Assert failed: Tried adding a trait on a prefab ...
+					//   MinionSelectPreview
+					//   at Klei.AI.Modifier.AddTo (Attributes) -> NullReferenceException
+					//
+					// So SetMinion needs the container live, and the portrait needs the
+					// stats before it spawns. Both hold if the container is created the
+					// way the base game creates it and the stats are set immediately:
+					// KMonoBehaviour.Spawn is scheduled, not immediate, so the same
+					// frame is early enough. The deferral was the whole defect.
+					CharacterContainer characterContainer = Util.KInstantiateUI<CharacterContainer>(
+						instance.containerPrefab.gameObject, instance.containerParent);
 					characterContainer.SetController(instance);
 					characterContainer.SetReshufflingState(canRerollMinions);
+					characterContainer.SetMinion(stats);
 
-					Game.Instance.StartCoroutine(SetMinionDelayed(characterContainer, stats));
 					instance.containers.Add(characterContainer);
 				}
 				else if(deliverable is CarePackageInfo pkg)
 				{
-					CarePackageContainer carePackageContainer = Util.KInstantiateUI<CarePackageContainer>(instance.carePackageContainerPrefab.gameObject, instance.containerParent);
+					// Left exactly as it was. A care package has no personality to
+					// miss and this container has never crashed, so there is nothing
+					// here to fix - and the duplicant container just showed what
+					// happens when this screen is changed on reasoning rather than on
+					// evidence. Its coroutine also destroys and rebuilds an anim
+					// controller, which is more than a stats assignment.
+					CarePackageContainer carePackageContainer = Util.KInstantiateUI<CarePackageContainer>(
+						instance.carePackageContainerPrefab.gameObject, instance.containerParent);
 					carePackageContainer.SetController(instance);
 					carePackageContainer.SetReshufflingState(canRerollCarePackages);
 					Game.Instance.StartCoroutine(SetCarePackageInfoDelayed(carePackageContainer, pkg));

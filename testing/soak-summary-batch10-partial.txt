@@ -1,0 +1,6 @@
+﻿[08-11 10:43:09] soak starting: 10 runs on '식물버그 조사본'
+[08-11 10:43:09] run 1/10  label=soak01 dig=2 settle=90s
+[08-11 10:47:27]   exit=1
+      host  errors=0  row=2|role=host|frameMs=17.6|worstMs=262|stutters=36|hitches=1|registry=7102|lookupFails=0|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=301|dupes=0|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1353
+      client  errors=0  row=1|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=7107|lookupFails=0|collisions=1|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=234|hpTracked=3868|statusSubs=0|choreSubs=0|plants=301|dupes=0|deathsApplied=0|previews=10/1|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1314
+[08-11 10:47:27] run 2/10  label=soak02 dig=4 settle=150s

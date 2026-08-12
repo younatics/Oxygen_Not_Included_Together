@@ -53,7 +53,15 @@ namespace ONI_Together.Networking.Transport.Lan
             if (_client != null)
             {
                 if (!_client.IsNotConnected)
+                {
+                    // Silent before. The caller has already moved the client state
+                    // to Connecting, so returning without a word leaves it there
+                    // with nothing running that will ever change it.
+                    DebugConsole.LogWarning(
+                        "[LanClient] a connection is already in progress or established; " +
+                        "ignoring this connect request. Disconnect first.");
                     return;
+                }
             }
 
             MultiplayerSession.ServerIp = ip;
@@ -163,9 +171,37 @@ namespace ONI_Together.Networking.Transport.Lan
             // world that is still being built.
             if (stateWhenDropped == States.ClientState.LoadingWorld)
             {
+                // Ignoring it was only half the job, and the comment said so while
+                // the code did not: nothing reconnected. A run ended with the client
+                // sitting in its own single-player colony, role=solo, having quietly
+                // stopped being in the session at all.
+                //
+                // The cause is on the other side. The host logs "Could not guarantee
+                // delivery of a Welcome message after 15 attempts! Disconnecting..." -
+                // fifteen is Riptide's default, and RiptideServer only raises
+                // MaxSendAttempts to 30 inside ClientConnected, which fires after the
+                // handshake this message belongs to. So the one message whose loss
+                // kills a join is sent with the least resilience, and the generous
+                // setting applies only once the join has already worked.
+                //
+                // Meanwhile this peer cannot ack anything: Unity's main thread is
+                // inside a 2.5 MB save load. Whether the handshake survives comes down
+                // to how long that load takes, which is why it fails on some runs and
+                // not others.
+                //
+                // Retried here rather than fixed there, because the server-side
+                // default belongs to a library this project references as a binary.
+                // The address is captured first - CleanupRiptide clears the session's
+                // idea of where the host is.
+                _reconnectIp = MultiplayerSession.ServerIp;
+                _reconnectPort = MultiplayerSession.ServerPort;
+                _reconnectAttempts = 0;
+                _reconnectAfterLoadAt = Time.unscaledTime + ReconnectFirstDelaySeconds;
+
                 DebugConsole.Log(
-                    $"[Riptide] ignoring a disconnect ({reason}) while the world is loading - " +
-                    "the reconnect is part of the load");
+                    $"[Riptide] disconnected ({reason}) while the world was loading - " +
+                    $"will reconnect to {_reconnectIp}:{_reconnectPort} once the load finishes");
+
                 CleanupRiptide();
                 return;
             }
@@ -232,11 +268,96 @@ namespace ONI_Together.Networking.Transport.Lan
             ConnectToHost(ip, port);
         }
 
+        // Static, and ticked from a component rather than from Update().
+        //
+        // The first version kept these on the instance and drove them from this
+        // class's Update. The flag was set correctly - the log shows the right
+        // address, 192.168.45.39:8080, not the 127.0.0.1:7777 this code used to
+        // reset to - and the attempt never happened. Whatever pumps the transport
+        // stops pumping it once the session is gone, which is exactly when a
+        // reconnect is needed, and the instance may be replaced across a cleanup
+        // anyway. So the state outlives the instance and something that always
+        // ticks does the driving.
+        private static string _reconnectIp;
+        private static int _reconnectPort;
+
+        /// <summary>Zero means no reconnect is owed.</summary>
+        private static float _reconnectAfterLoadAt;
+        private static int _reconnectAttempts;
+
+        /// <summary>Long enough for the load to finish and the world to settle.</summary>
+        private const float ReconnectFirstDelaySeconds = 8f;
+        private const float ReconnectRetrySeconds = 10f;
+
+        /// <summary>
+        /// Bounded on purpose. A client that cannot get back in should stop and say
+        /// so; retrying forever turns one failed join into a permanent load on the
+        /// host and hides the failure from the log.
+        /// </summary>
+        private const int ReconnectMaxAttempts = 3;
+
         public override void Update()
         {
             using var _ = Profiler.Scope();
 
             _client?.Update();
+        }
+
+        /// <summary>
+        /// Get back into the session that was lost while the world was loading.
+        ///
+        /// Driven from Update because the transport is already pumped every frame and
+        /// this needs no more than that. Guarded so it can only act in the exact
+        /// situation it was written for: a reconnect is owed, the world has finished
+        /// loading, and this peer is not in a session.
+        /// </summary>
+        public static void TryReconnectAfterLoad()
+        {
+            if (_reconnectAfterLoadAt <= 0f) return;
+
+            // Still loading, or not loaded at all. Reconnecting mid-load would
+            // reproduce the failure it is meant to recover from.
+            if (Game.Instance == null) return;
+            if (GameClient.State == States.ClientState.LoadingWorld) return;
+
+            // Something else got us back in - a manual rejoin, or the load flow's own
+            // connect. Nothing owed.
+            if (MultiplayerSession.InSession || GameClient.State == States.ClientState.Connected)
+            {
+                DebugConsole.Log("[Riptide] back in the session already; dropping the pending reconnect");
+                _reconnectAfterLoadAt = 0f;
+                return;
+            }
+
+            if (Time.unscaledTime < _reconnectAfterLoadAt) return;
+
+            if (_reconnectAttempts >= ReconnectMaxAttempts)
+            {
+                DebugConsole.LogWarning(
+                    $"[Riptide] gave up reconnecting after {_reconnectAttempts} attempts - " +
+                    "this peer loaded the world and is not in the session");
+                _reconnectAfterLoadAt = 0f;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_reconnectIp) || _reconnectPort <= 0)
+            {
+                DebugConsole.LogWarning(
+                    $"[Riptide] cannot reconnect: no host address was captured ('{_reconnectIp}':{_reconnectPort})");
+                _reconnectAfterLoadAt = 0f;
+                return;
+            }
+
+            _reconnectAttempts++;
+            _reconnectAfterLoadAt = Time.unscaledTime + ReconnectRetrySeconds;
+
+            DebugConsole.Log(
+                $"[Riptide] reconnecting after the load, attempt {_reconnectAttempts} of " +
+                $"{ReconnectMaxAttempts}, to {_reconnectIp}:{_reconnectPort}");
+
+            // Through the session's current transport, not through this instance:
+            // the one that was dropped may already have been replaced.
+            NetworkConfig.TransportClient?.ConnectToHost(_reconnectIp, _reconnectPort);
         }
 
         private ulong GetClientID()
@@ -493,6 +614,24 @@ namespace ONI_Together.Networking.Transport.Lan
 
             MultiplayerSession.HostUserID = Utils.NilUlong();
             MultiplayerSession.InSession = false;
+
+            // Say so, or the client is left believing a connection is still in
+            // progress forever.
+            //
+            // GameClient goes to Connecting before calling into the transport, and
+            // the only two things that move it off Connecting are the transport's
+            // connected and disconnected callbacks. Neither fires here: this path
+            // unsubscribes both handlers a few lines up, and Riptide does not raise
+            // Disconnected for an attempt that never connected. So a failed join
+            // left the state at Connecting permanently.
+            //
+            // That was survivable while a repeat join simply tried again. It is not
+            // now - a duplicate join is refused, because accepting one mid-transfer
+            // stranded the client - so without this, one failed join means every
+            // later click does nothing until the game is restarted. Which is the
+            // symptom that was reported: "sometimes pressing join does nothing".
+            if (GameClient.State != States.ClientState.Disconnected)
+                GameClient.SetState(States.ClientState.Disconnected);
         }
 
         /*IEnumerator Handshake()

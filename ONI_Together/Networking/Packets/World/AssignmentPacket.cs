@@ -57,9 +57,19 @@ namespace ONI_Together.Networking.Packets.World
 					GameObject buildingGO = Grid.Objects[Cell, (int)ObjectLayer.Building];
 					if (buildingGO != null)
 					{
+						// AddOrGet returns the component the building already has, and
+						// writing NetId on it moved the field without moving the
+						// registry entry. That is how two objects came to claim one
+						// id: a SuitMarker sat filed under its own 755485301 while
+						// its field said 1776225777, which an Iron was legitimately
+						// filed under. Everything the marker sent was stamped with
+						// the Iron's address and applied to the Iron, and the marker
+						// itself was reachable only at a number nobody used.
+						//
+						// OverrideNetId moves both together - it unregisters the old
+						// id, takes the new one, and rehouses whoever held it.
 						buildingIdentity = buildingGO.AddOrGet<NetworkIdentity>();
-						buildingIdentity.NetId = BuildingNetId;
-						buildingIdentity.RegisterIdentity();
+						buildingIdentity.OverrideNetId(BuildingNetId);
 						DebugConsole.Log($"[AssignmentPacket] Resolved building by cell {Cell}, assigned NetId {BuildingNetId}");
 					}
 				}

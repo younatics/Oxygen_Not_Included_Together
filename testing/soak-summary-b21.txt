@@ -1,0 +1,7 @@
+﻿[08-11 13:41:51] soak starting: 1 runs on '싱크검증본'
+[08-11 13:41:51] run 1/1  label=soak01 dig=2 settle=90s
+[08-11 13:46:27]   exit=1
+      host  errors=0  row=3|role=host|frameMs=78.5|worstMs=1099|stutters=762|hitches=2|registry=8036|lookupFails=0|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=336|dupes=3|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=14|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=1|removalsApplied=0|gcMB=1306|cost[BuildingDamageSyncer=1765ms/765,PacketSender.SendToAllClients=669ms/23631,AnimSyncCoordinator=379ms/765,KAnimControllerBase_Patches.SendAnimPacketToClients=119ms/4145,ConduitFlowSyncer=115ms/765,KAnimControllerBase_Play_Patch.Prefix=103ms/2003,CursorManager=31ms/765,KAnimControllerBase_Queue_Patch.Prefix=26ms/2448]|gap[RotPile:1announced <link="SANDSTONE">사암</link>:1announced <link="HYDROGEN">수소 기체</link>:1announced <link="CONTAMINATEDOXYGEN">오염된 산소</link>:1announced <link="CARBONDIOXIDE">이산화탄소</link>:1announced <link="CARBON">석탄</link>:1announced]
+      FAIL client  Latency | Both peers agree the link is healthy | 0.3 | client sees 262 ms, past the BAD threshold of 150
+      client  errors=0  no health row
+[08-11 13:46:27] soak finished

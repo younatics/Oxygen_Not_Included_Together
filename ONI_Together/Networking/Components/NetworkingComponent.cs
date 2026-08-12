@@ -61,6 +61,12 @@ namespace ONI_Together.Networking.Components
 		{
 			using var _ = Profiler.Scope();
 
+			// Before the early return and before anything is torn down: shutdown
+			// cleans up every building in the colony, and building removals are
+			// replicated now. Announcing those would tell a client that is still
+			// playing to demolish its own colony.
+			Patches.World.BuildingLifecycleWatch.NoteQuitting();
+
 			if (!MultiplayerSession.InSession)
 				return;
 

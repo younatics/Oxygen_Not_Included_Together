@@ -43,18 +43,50 @@ namespace ONI_Together.DebugTools
             }
         }
 
+        /// <summary>
+        /// Whether the suite is running right now.
+        ///
+        /// The suite is not a quiet observer. It dumps a table of eight thousand
+        /// identities, feeds the packet handlers deliberate rubbish, and asks the
+        /// host to resolve ids - four minutes of the heaviest traffic the session
+        /// ever sees. Anything that samples the link has to know it is looking at
+        /// that and not at the game.
+        ///
+        /// This is what the latency reading was doing wrong: the suite measured 193
+        /// to 228 ms while the once-a-minute sampler, taken between test runs on the
+        /// same link, read 41 to 76. The number was real and it was the suite's own
+        /// load.
+        /// </summary>
+        public static bool IsRunning { get; private set; }
+
         public static void RunAll()
         {
-            foreach (var test in _tests)
-                test.Run();
+            IsRunning = true;
+            try
+            {
+                foreach (var test in _tests)
+                    test.Run();
+            }
+            finally
+            {
+                IsRunning = false;
+            }
         }
 
         public static void RunFailed()
         {
-            foreach (var test in _tests)
+            IsRunning = true;
+            try
             {
-                if (test.HasRun && test.IsFailed)
-                    test.Run();
+                foreach (var test in _tests)
+                {
+                    if (test.HasRun && test.IsFailed)
+                        test.Run();
+                }
+            }
+            finally
+            {
+                IsRunning = false;
             }
         }
 

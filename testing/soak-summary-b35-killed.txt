@@ -1,0 +1,3 @@
+﻿[08-11 17:10:42] soak starting: 3 runs on '싱크검증본'
+[08-11 17:10:42] run 1/3  label=soak01 dig=2 settle=90s build=4 peerBuild=0 deconstruct=0
+[08-11 17:10:42]   colony reset from '꾸밈 없는 우주 오두막'

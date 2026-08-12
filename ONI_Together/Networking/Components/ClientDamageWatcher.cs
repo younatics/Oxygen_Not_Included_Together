@@ -48,6 +48,13 @@ namespace ONI_Together.Networking.Components
 
         public int Drops { get; private set; }
         public int UnexplainedDrops { get; private set; }
+
+        /// <summary>
+        /// Buildings whose hit points are remembered. Reported by the health row:
+        /// this keeps an entry per NetId and never drops one, so it is a table
+        /// that can only grow, and a growth curve should say by how much.
+        /// </summary>
+        public int TrackedCount => _lastHp.Count;
         private readonly List<string> _examples = new List<string>();
 
         private void OnEnable() => Instance = this;

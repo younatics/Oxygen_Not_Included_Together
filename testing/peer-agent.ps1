@@ -141,6 +141,13 @@ function Invoke-PushLog($label) {
     if (-not $label) { throw 'push-log needs a label' }
     if (-not (Test-Path $playerLog)) { throw "no Player.log at $playerLog" }
     $dest = Join-Path $dropDir $label
+
+    # Empty the label first. Reusing a label left the previous run's files in
+    # place, and the reader has no way to tell them apart from this run's - it
+    # picked up a client.meta.json from two days earlier and reported the two
+    # boxes as running different binaries. They were not. A stale file that
+    # parses is worse than a truncated one, because nothing about it looks wrong.
+    if (Test-Path $dest) { Remove-Item (Join-Path $dest '*') -Force -Recurse -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
     # ONI holds the handle; copy locally first, then ship the copy.
@@ -182,7 +189,14 @@ function Invoke-PushLog($label) {
         $meta.modDllBytes  = $f.Length
         $meta.modDllSha256 = (Get-FileHash $f.FullName -Algorithm SHA256).Hash
     }
-    $meta | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $dest 'client.meta.json') -Encoding UTF8
+    # Written aside and renamed, and written LAST, so its presence means the whole
+    # snapshot is there. Set-Content straight to the final name leaves a window in
+    # which the file exists and is incomplete - and the reader on the other side of
+    # a share cannot distinguish that from a finished file. A rename is atomic.
+    $metaFinal = Join-Path $dest 'client.meta.json'
+    $metaTemp  = Join-Path $dest 'client.meta.writing'
+    $meta | ConvertTo-Json -Depth 4 | Set-Content $metaTemp -Encoding UTF8
+    Move-Item -LiteralPath $metaTemp -Destination $metaFinal -Force
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     @{ playerLogMB = $size; modLogLines = $modLines; dest = $dest }
 }
@@ -195,15 +209,41 @@ Info "sha256  : $(Get-ModHash)"
 Info "polling every ${IntervalSeconds}s - Ctrl-C to stop"
 
 $running = $true
+# Ids already dispatched this agent lifetime. Belt to the .taken rename's
+# braces: a request must run at most once even if the file reappears.
+$seen = New-Object 'System.Collections.Generic.HashSet[string]'
 while ($running) {
     try {
         $reqs = Get-ChildItem $cmdDir -Filter '*.req.json' -ErrorAction SilentlyContinue |
                 Sort-Object LastWriteTime
         foreach ($r in $reqs) {
             $id = $r.BaseName -replace '\.req$', ''
+
+            # Claim the request before running it, and skip anything already
+            # claimed. This used to delete the file afterwards with
+            # -ErrorAction SilentlyContinue, which turns dispatch into
+            # at-least-once: when the delete lost (share held the handle, the
+            # writer still had it open), the next poll found the same
+            # *.req.json and ran the verb again. None of these verbs are
+            # idempotent. It cost a whole run - join-lan executed twice, one
+            # second apart, and the second join reset the client's state while
+            # a 2.2 MB save transfer was in flight, so the client never loaded
+            # the world and the run died at "peer never reached an in-session
+            # state" with nothing wrong with the session. start-oni and
+            # stop-oni twice are worse.
+            #
+            # Renaming is atomic and fails loudly rather than silently, so a
+            # request that cannot be claimed is left for the next poll instead
+            # of being executed on a guess.
+            if ($seen.Contains($id)) { Remove-Item $r.FullName -Force -ErrorAction SilentlyContinue; continue }
+            $taken = Join-Path $cmdDir "$id.taken"
+            try { Move-Item -LiteralPath $r.FullName -Destination $taken -Force -ErrorAction Stop }
+            catch { Warn "could not claim $id, leaving it: $($_.Exception.Message)"; continue }
+            $seen.Add($id) | Out-Null
+
             $reply = [ordered]@{ id = $id; machine = $env:COMPUTERNAME }
             try {
-                $req = Get-Content $r.FullName -Raw | ConvertFrom-Json
+                $req = Get-Content $taken -Raw | ConvertFrom-Json
                 Info "-> $($req.verb) $($req.label)"
                 switch ($req.verb) {
                     'ping' {
@@ -297,7 +337,9 @@ while ($running) {
             $tempPath  = Join-Path $cmdDir "$id.done.writing"
             $reply | ConvertTo-Json -Depth 6 | Set-Content $tempPath -Encoding UTF8
             Move-Item -LiteralPath $tempPath -Destination $finalPath -Force
-            Remove-Item $r.FullName -Force -ErrorAction SilentlyContinue
+            # Already claimed above; if this delete loses, the .taken name means
+            # no poll will pick it up again.
+            Remove-Item $taken -Force -ErrorAction SilentlyContinue
         }
     } catch {
         Warn "poll error: $($_.Exception.Message)"

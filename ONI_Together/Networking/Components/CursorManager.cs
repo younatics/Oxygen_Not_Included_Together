@@ -173,9 +173,25 @@ namespace ONI_Together.Networking.Components
                 }
 			}
 
+			// Not before this peer knows who it is.
+			//
+			// A client's id is filled in when its connection completes, and cursor
+			// updates start before that. Sent early, they carry PlayerID 0 - and the
+			// host, seeing an id that is not its own, creates a cursor for "player 0".
+			// No player has that id, so nothing ever removes it: the ghost-cursor
+			// check failed on the host in all twenty soak runs across two batches,
+			// always "2 player cursors for 1 remote peer(s)", and the host log says
+			// plainly "Created new cursor for 0".
+			//
+			// Zero is not an address. The same rule already had to be applied to the
+			// priority and building-config senders.
+			ulong localId = MultiplayerSession.LocalUserID;
+			if (localId == 0 || localId.Equals(Utils.NilUlong()))
+				return;
+
 			var packet = new PlayerCursorPacket
 			{
-				PlayerID = MultiplayerSession.LocalUserID,
+				PlayerID = localId,
 				Position = cursorWorldPos,
 				Color = color,
 				CursorState = cursorState,

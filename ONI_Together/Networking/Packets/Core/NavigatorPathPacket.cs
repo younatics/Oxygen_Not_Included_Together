@@ -146,6 +146,71 @@ namespace ONI_Together.Networking.Packets.Core
 			}
 		}
 
+		/// <summary>
+		/// The navigation currently driven by a received path, per entity, so a
+		/// replacement path can take the previous one down. One entry per moving
+		/// duplicant rather than one per packet.
+		/// </summary>
+		private sealed class PendingNavigation
+		{
+			public GameObject Target;
+			public Navigator Navigator;
+			public int ReachedHandle = -1;
+			public int FailedHandle = -1;
+			public bool Done;
+		}
+
+		private static readonly Dictionary<int, PendingNavigation> _pending = new Dictionary<int, PendingNavigation>();
+
+		/// <summary>How many navigations are being tracked. Zero-growth is the property under test.</summary>
+		public static int PendingCount => _pending.Count;
+
+		private static void Release(PendingNavigation nav, bool stopAdvancing)
+		{
+			if (nav == null || nav.Done)
+				return;
+			nav.Done = true;
+
+			// Unsubscribing has to survive a navigator that has since been
+			// destroyed: this runs from a packet, and the duplicant it names may
+			// have been removed in between.
+			if (!nav.Navigator.IsNullOrDestroyed() && !nav.Navigator.gameObject.IsNullOrDestroyed())
+			{
+				if (nav.ReachedHandle != -1) nav.Navigator.gameObject.Unsubscribe(nav.ReachedHandle);
+				if (nav.FailedHandle != -1) nav.Navigator.gameObject.Unsubscribe(nav.FailedHandle);
+				if (stopAdvancing) nav.Navigator.SetCanAdvance(false);
+			}
+
+			if (!nav.Target.IsNullOrDestroyed())
+				Object.Destroy(nav.Target);
+		}
+
+		/// <summary>The path finished or failed on its own.</summary>
+		private static void Finish(int netId, PendingNavigation nav)
+		{
+			Release(nav, stopAdvancing: true);
+			if (_pending.TryGetValue(netId, out var current) && ReferenceEquals(current, nav))
+				_pending.Remove(netId);
+		}
+
+		/// <summary>A newer path arrived, or this one never started.</summary>
+		private static void Cancel(int netId)
+		{
+			if (!_pending.TryGetValue(netId, out var nav))
+				return;
+			_pending.Remove(netId);
+			// Not SetCanAdvance(false): a replacement path is about to move this
+			// duplicant, and cancelling the old one must not stop the new one.
+			Release(nav, stopAdvancing: false);
+		}
+
+		public static void ResetForNewSession()
+		{
+			foreach (var nav in _pending.Values)
+				Release(nav, stopAdvancing: false);
+			_pending.Clear();
+		}
+
 		public void OnDispatched()
 		{
 			using var _ = Profiler.Scope();
@@ -184,19 +249,32 @@ namespace ONI_Together.Networking.Packets.Core
 
 			var targetBehaviour = dummyTarget.AddComponent<KMonoBehaviour>();
 
-			System.Action cleanup = () =>
-			{
-				if (dummyTarget != null)
-				{
-					Object.Destroy(dummyTarget);
-					DebugConsole.Log($"[NavigatorPathPacket] Cleaned up dummy target for NetId {NetId}");
-					navigator.SetCanAdvance(false);
-				}
-			};
+			// A path replaces the one before it, so the one before it has to be
+			// taken down. Nothing did that.
+			//
+			// Every packet that arrived created a dummy target parented to
+			// Game.Instance and subscribed two handlers to the navigator, and both
+			// were released only if DestinationReached or NavigationFailed fired
+			// for that exact path. A duplicant re-routes constantly, so most paths
+			// are superseded instead of finished: the GameObject stayed in the
+			// scene for the rest of the session and the two handlers stayed on the
+			// navigator's list. The list is walked on every event, so arriving
+			// anywhere cost more the longer the session had run - and it never got
+			// cheaper. This is the shape of a game that starts fine and degrades,
+			// and the client that had to be killed after fourteen minutes had 4291
+			// registry misses and a stalled main thread to go with it.
+			Cancel(NetId);
 
-			// Inject callback into navigator events
-			navigator.Subscribe((int)GameHashes.DestinationReached, (data) => cleanup.Invoke());
-			navigator.Subscribe((int)GameHashes.NavigationFailed, (data) => cleanup.Invoke());
+			var pending = new PendingNavigation { Target = dummyTarget, Navigator = navigator };
+			_pending[NetId] = pending;
+
+			int netId = NetId;
+			System.Action cleanup = () => Finish(netId, pending);
+
+			pending.ReachedHandle = navigator.gameObject.Subscribe(
+				(int)GameHashes.DestinationReached, _ => cleanup.Invoke());
+			pending.FailedHandle = navigator.gameObject.Subscribe(
+				(int)GameHashes.NavigationFailed, _ => cleanup.Invoke());
 
 			// Trigger movement
 			bool result = navigator.ClientGoTo(targetBehaviour, new CellOffset[] { CellOffset.none });
@@ -204,10 +282,12 @@ namespace ONI_Together.Networking.Packets.Core
 			if (!result)
 			{
 				DebugConsole.LogWarning($"[NavigatorPathPacket] ClientGoTo failed for {NetId}");
-				Object.Destroy(dummyTarget); // immediate fallback cleanup
+				Cancel(NetId); // immediate fallback cleanup, handlers included
 			}
 
-			DebugConsole.Log($"[NavigatorPathPacket] Path with {Steps.Count} nodes applied to NetId {NetId}");
+			// Was one line per packet, on the busiest packet there is. Per-object
+			// logging at packet rate is what froze a host earlier in this work.
+			ThrottledLog.Info("[NavigatorPathPacket] paths applied");
 		}
 
 		private bool PassesPreliminaryChecks(out Component entity, out Navigator navigator)

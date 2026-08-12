@@ -1,4 +1,5 @@
 ﻿using ONI_Together.DebugTools;
+using ONI_Together.Networking.Components;
 using Shared.Profiling;
 using UnityEngine;
 
@@ -31,6 +32,22 @@ namespace ONI_Together.Networking
 		private const int WorkableSalt = 0x7A6B1E03;
 		private const int EntitySalt   = 0x13C7F905;
 		private const int StoredItemSalt = 0x5701ED07;
+
+		/// <summary>
+		/// Separates a displaced object from its neighbours' hashes.
+		///
+		/// Arbitrary and fixed, like the other salts. What matters is only that
+		/// consecutive attempts land far apart, so a walked id does not squat on the
+		/// value some other prefab will compute for itself later.
+		/// </summary>
+		private const int WalkSalt = 0x2F1B3C5D;
+
+		/// <summary>
+		/// Enough tries that running out means something is genuinely wrong rather
+		/// than crowded. Sixteen re-mixes into a 32-bit space is already astronomically
+		/// unlikely to be exhausted by a colony's worth of objects.
+		/// </summary>
+		private const int MaxWalkAttempts = 16;
 
 		public static int GetDeterministicBuildingId(GameObject go)
 		{
@@ -113,6 +130,157 @@ namespace ONI_Together.Networking
 		}
 
 		/// <summary>
+		/// Suppresses the "Registered ..." lines while an id is being recomputed
+		/// rather than assigned.
+		///
+		/// Without it, asking four hundred objects what their id should be writes
+		/// four hundred lines claiming they were just registered - into the same log
+		/// the next investigation reads.
+		/// </summary>
+		private static bool _quiet;
+
+		/// <summary>
+		/// The id this object should have, by whichever rule its kind uses.
+		///
+		/// One definition, so that a test asking "would this object move" and the
+		/// code that decides whether to move it cannot answer differently.
+		/// </summary>
+		public static int GetDeterministicIdFor(GameObject go, bool quiet = true)
+		{
+			if (go == null) return 0;
+
+			bool previous = _quiet;
+			_quiet = quiet;
+			try
+			{
+				if (go.TryGetComponent<Building>(out _))
+					return GetDeterministicBuildingId(go);
+				if (go.TryGetComponent<Workable>(out _))
+					return GetDeterministicWorkableId(go);
+				return GetDeterministicEntityId(go);
+			}
+			finally
+			{
+				_quiet = previous;
+			}
+		}
+
+		private static void Note(string message)
+		{
+			if (!_quiet) DebugConsole.Log(message);
+		}
+
+		/// <summary>
+		/// The first id at or after <paramref name="hash"/> that this object may
+		/// have - counting the slot it already holds as available to it.
+		///
+		/// Every probe in this file used to ask only "is this id taken", and an
+		/// object that already held the id it was recomputing answered yes to
+		/// itself. It then walked one slot past its own correct address.
+		///
+		/// That is what the eggs were doing, and it explains the shape of the
+		/// disagreement that six earlier attempts could not: the two peers differed
+		/// by exactly one, and which peer was high swapped between runs. A live run
+		/// shows both halves at once - the host's egg arrives at cell 61849 holding
+		/// some unrelated id, finds the cell's id free and takes it; the client's
+		/// egg is already sitting on that same id because the host told it to, sees
+		/// the slot "occupied", and walks to the next one. The peer that was right
+		/// is the one that moves.
+		///
+		/// So the probe has to know who is asking. With that, recomputing an id an
+		/// object already holds returns the same id, which is what "deterministic"
+		/// was supposed to mean.
+		/// </summary>
+		/// <summary>
+		/// The hash the last computation produced before any walk.
+		///
+		/// Exists so a test can tell the two reasons a recomputed id differs from
+		/// the one an object holds apart. An id is issued once and kept - a rock
+		/// that has been carried, a wire that has finished construction, a plant
+		/// that has been renamed all hash differently now than when they were named,
+		/// and keeping the original is the whole point. That is not the defect.
+		///
+		/// The defect is an object whose hash still comes out exactly where it is
+		/// sitting, being walked off it anyway. Comparing against the pre-walk hash
+		/// separates the two; comparing against the held id alone cannot, which made
+		/// the first version of the test fail on six objects that were all correct.
+		///
+		/// Only meaningful immediately after a call, and only single-threaded, which
+		/// is what the tests do and all this is for.
+		/// </summary>
+		internal static int LastBaseHash { get; private set; }
+
+		private static int WalkToFreeSlot(GameObject go, int hash)
+		{
+			using var _ = Profiler.Scope();
+
+			LastBaseHash = hash;
+
+			// Not every caller has an identity yet - this runs during registration,
+			// and on that path there is no self to exempt.
+			NetworkIdentity self = null;
+			if (go != null && go.TryGetComponent<NetworkIdentity>(out var found) && !found.IsNullOrDestroyed())
+				self = found;
+
+			// Re-mixed per attempt, not hash+1.
+			//
+			// Walking upward lands on the next integer, and the next integer is some
+			// other prefab's natural hash. Traced end to end on a live pair: the host
+			// walked a Creature pile onto -885421119, announced it, the pile died, and a
+			// MushBar then hashed to exactly that value and took it - while the client
+			// still held the dead Creature there. Every packet about the host's MushBar
+			// landed on the client's corpse. The same two ids collided again on the next
+			// run, because a deterministic hash collides in the same place every time.
+			//
+			// Mixing the attempt into the hash puts a displaced object somewhere
+			// unrelated instead of on its neighbour's doorstep. It stays deterministic
+			// for the peer that computes it, which is all the walk ever needed to be -
+			// the two peers agree by propagation, not by both walking the same way.
+			int candidate = hash;
+			for (int attempt = 1; attempt <= MaxWalkAttempts; attempt++)
+			{
+				// Exists, not ExistsOrRetired.
+				//
+				// Refusing to reissue a retired id was meant to stop a new object taking
+				// the number the other peer still holds for a dead one. Measured: the
+				// disagreement count stayed inside its usual 2-8 band while the host's
+				// collision count went from 0 to 13 and 10. Objects unregister and
+				// re-register during their lives - a cell change, a move into storage -
+				// and retirement stops them getting their own number back.
+				//
+				// A measured cost against an unmeasured benefit is not a fix. The
+				// retirement bookkeeping stays because retiredIds is worth seeing; only
+				// the refusal is gone.
+				// Held by somebody else, or free. Retirement is deliberately not
+				// consulted - see below.
+				//
+				// Refusing to reissue retired ids was tried twice and measured worse
+				// both times. First bluntly: the host's collisions went 0 to 13 because
+				// objects unregister and re-register constantly during normal play.
+				// Then with the former owner allowed to reclaim its own number: still 14
+				// and 17, because ONI pools pickupables - a recycled object comes back
+				// with a new instance id, so "the same object" cannot be recognised at
+				// all. The reservation comments in this file already warn about that
+				// pooling; I did not carry it into the ownership check.
+				//
+				// The reuse chain is real - a dropped pile is announced, dies, and its
+				// number is handed to something new while the client still holds the
+				// dead one - but retirement is not the place to break it. Recorded in
+				// REFACTOR_BACKLOG.md so it is not attempted a third time.
+				if (!NetworkIdentityRegistry.Exists(candidate)) return candidate;
+				if (self != null && NetworkIdentityRegistry.Holds(candidate, self)) return candidate;
+
+				candidate = Mix(hash, attempt * WalkSalt);
+				if (candidate == 0) candidate = attempt;
+			}
+
+			// Out of attempts. Returning the last candidate keeps the old behaviour of
+			// always producing something rather than leaving the object nameless; a
+			// collision here is reported by the registry and by the bulk-rehouse test.
+			return candidate;
+		}
+
+		/// <summary>
 		/// A duplicant's id, derived from who it is rather than where it is.
 		///
 		/// Duplicants carry a Storage, and Storage is a Workable, so they went
@@ -139,12 +307,10 @@ namespace ONI_Together.Networking
 			hash = Mix(hash, minion.arrivalTime.GetHashCode());
 			hash = Mix(hash, StableHash(minion.gender ?? ""));
 
-			int breakoff = 0;
-			while (NetworkIdentityRegistry.Exists(hash + breakoff))
-				breakoff++;
+			hash = WalkToFreeSlot(go, hash);
 
-			DebugConsole.Log($"Registered duplicant {minion.GetProperName()} with id: {hash + breakoff}");
-			return hash + breakoff;
+			Note($"Registered duplicant {minion.GetProperName()} with id: {hash}");
+			return hash;
 		}
 
 		/// <summary>
@@ -157,6 +323,53 @@ namespace ONI_Together.Networking
 		/// than the alternative it replaces, where every stored item in the colony
 		/// shared one cell and collided with buildings as well as with each other.
 		/// </summary>
+		/// <summary>
+		/// Both ids an object could ever be given, before any walk.
+		///
+		/// An item is named one way while it lies on the ground and another way once it
+		/// is in a container, and it moves between those states constantly. The suite
+		/// only ever compared the ids objects hold *right now*, which cannot see a
+		/// collision between two objects that are never registered at the same moment -
+		/// and that is exactly the collision found in a live pair: the host's MushBar,
+		/// stored in a refrigerator at cell 47726, holds the number its Creature pile at
+		/// that cell had held earlier and announced to the client.
+		///
+		/// Returning both forms lets a test ask the question without a time axis: does
+		/// any id this object could take collide with any id another object could take.
+		/// The walk is deliberately excluded - it depends on what happens to be
+		/// registered, and the question here is about the hashes themselves.
+		/// </summary>
+		public static void BaseHashes(GameObject go, out int loose, out int stored)
+		{
+			loose = 0;
+			stored = 0;
+			if (go == null) return;
+
+			int cell = Grid.PosToCell(go);
+			if (!go.TryGetComponent<Workable>(out var workable)) return;
+
+			if (Grid.IsValidCell(cell))
+			{
+				int h = StableHash(go.PrefabID().ToString());
+				h = Mix(h, cell);
+				h = Mix(h, StableHash(workable.GetType().Name));
+				loose = Mix(h, WorkableSalt);
+			}
+
+			if (go.TryGetComponent<Pickupable>(out var pickupable)
+				&& !pickupable.IsNullOrDestroyed()
+				&& pickupable.storage != null
+				&& !pickupable.storage.IsNullOrDestroyed())
+			{
+				int containerCell = Grid.PosToCell(pickupable.storage.gameObject);
+				int h = StableHash(go.PrefabID().ToString());
+				h = Mix(h, StableHash(pickupable.storage.gameObject.PrefabID().ToString()));
+				h = Mix(h, containerCell);
+				h = Mix(h, StableHash(workable.GetType().Name));
+				stored = Mix(h, StoredItemSalt);
+			}
+		}
+
 		private static int GetStoredItemId(GameObject go, Storage container, Workable workable)
 		{
 			int containerCell = Grid.PosToCell(container.gameObject);
@@ -167,12 +380,9 @@ namespace ONI_Together.Networking
 			hash = Mix(hash, StableHash(workable.GetType().Name));
 			hash = Mix(hash, StoredItemSalt);
 
-			int breakoff = 0;
-			while (NetworkIdentityRegistry.Exists(hash + breakoff))
-				breakoff++;
-			hash += breakoff;
+			hash = WalkToFreeSlot(go, hash);
 
-			DebugConsole.Log(
+			Note(
 				$"Registered stored {go.PrefabID()} with id: {hash} inside " +
 				$"{container.gameObject.PrefabID()} at cell {containerCell}");
 			return hash;
@@ -257,12 +467,9 @@ namespace ONI_Together.Networking
 			// Including the cell above is what makes this rare: before, every
 			// object of a prefab collapsed onto one value and the probe ran
 			// constantly.
-			int breakoff = 0;
-			while (NetworkIdentityRegistry.Exists(hash + breakoff))
-				breakoff++;
-			hash += breakoff;
+			hash = WalkToFreeSlot(go, hash);
 
-			DebugConsole.Log($"Registered workable {go.PrefabID().ToString()} with id: {hash} for workable type {workable.GetType().Name} at cell {cell}");
+			Note($"Registered workable {go.PrefabID().ToString()} with id: {hash} for workable type {workable.GetType().Name} at cell {cell}");
 			return hash;
 		}
 
@@ -294,17 +501,10 @@ namespace ONI_Together.Networking
 			hash = Mix(hash, (int)primaryElement.ElementID);
 			hash = Mix(hash, EntitySalt);
 
-			int breakoff = 0;
 			if (useBreakOff)
-			{
-				while (NetworkIdentityRegistry.Exists(hash + breakoff))
-				{
-					breakoff++;
-				}
-			}
-			hash += breakoff;
-			if(useBreakOff)
-				DebugConsole.Log($"Registered entity {go.PrefabID().ToString()} with id: {hash}");
+				hash = WalkToFreeSlot(go, hash);
+			if (useBreakOff)
+				Note($"Registered entity {go.PrefabID().ToString()} with id: {hash}");
 			return hash;
 		}
 	}

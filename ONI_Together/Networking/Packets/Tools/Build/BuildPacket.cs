@@ -31,14 +31,54 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         {
             using var _ = Profiler.Scope();
 
+            // An empty id is a build order nobody can carry out.
+            //
+            // Four orders reached a client as "Unknown building def: " with nothing
+            // after the colon. The order was sent, received and discarded, and no
+            // count anywhere said so - the client simply did not get the building.
+            // Named at the sending end, because that is where it can still be fixed
+            // and where the def is still in hand.
+            if (string.IsNullOrEmpty(prefabID))
+            {
+                DebugConsole.LogError(
+                    $"[BuildPacket] refusing to announce a build at cell {cell} with an empty prefab id - " +
+                    "the receiver cannot resolve it and would drop the order silently");
+            }
+
             PrefabID = prefabID;
             Cell = cell;
             Orientation = orientation;
             MaterialTags = materials.Select(t => t.ToString()).ToList();
             InstantBuild = instantBuild;
 
-            if (PlanScreen.Instance)
-                Priority = PlanScreen.Instance.GetBuildingPriority();
+            // The priority is a nicety; the build order is not.
+            //
+            // PlanScreen.Instance existing does not mean it can answer: the priority
+            // it reports comes from a screen that is only set up once the build menu
+            // has been opened, and asking before then throws. The existing null check
+            // guards the wrong thing - the instance is there, its innards are not.
+            //
+            // Caught rather than pre-checked, because what is null inside PlanScreen
+            // is Klei's business and a future build may move it. Losing the whole
+            // announcement over a priority number is the one outcome that must not
+            // happen: the order still has to reach the other peer.
+            //
+            // Found by a scenario that ordered a build without touching the UI, which
+            // is also what any headless or automated caller looks like.
+            try
+            {
+                if (PlanScreen.Instance)
+                    // PlanScreen.Instance was dereferenced with no guard, so a build order that
+            // did not come from a player clicking the plan screen either threw or left
+            // the priority unset. See PriorityWire.
+            Priority = PriorityWire.SampleBuilding();
+            }
+            catch (System.Exception ex)
+            {
+                DebugConsole.LogWarning(
+                    $"[BuildPacket] no build priority available ({ex.GetType().Name}); " +
+                    "sending the order without one");
+            }
 
             ObjectLayer = objectLayer;
         }
@@ -54,8 +94,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             foreach (var tag in MaterialTags)
                 writer.Write(tag);
 
-            writer.Write((int)Priority.priority_class);
-            writer.Write(Priority.priority_value);
+            PriorityWire.Write(writer, Priority);
 
             writer.Write((int)ObjectLayer);
             writer.Write(InstantBuild);
@@ -80,7 +119,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             for (int i = 0; i < count; i++)
                 MaterialTags.Add(reader.ReadString());
 
-            Priority = new PrioritySetting((PriorityScreen.PriorityClass)reader.ReadInt32(), reader.ReadInt32());
+            Priority = PriorityWire.Read(reader);
             ObjectLayer = (ObjectLayer)reader.ReadInt32();
             InstantBuild = reader.ReadBoolean();
         }

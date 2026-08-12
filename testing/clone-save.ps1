@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Copy a colony into a genuinely separate one, leaving the original untouched.
 
@@ -22,7 +22,14 @@
 param(
     [Parameter(Mandatory = $true)][string]$Source,
     [Parameter(Mandatory = $true)][string]$NewName,
-    [string]$SaveRoot
+    [string]$SaveRoot,
+    # Replace an existing clone, autosaves and all.
+    #
+    # Without this a soak reuses whatever the last run left behind: ONI autosaves
+    # over the clone as it plays, so the colony drifts every run and eventually the
+    # duplicants die. A dead colony reports no failed lookups because nothing
+    # happens in it, which reads exactly like a fix.
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +65,10 @@ Info "source: $($srcSav.FullName)"
 Info "        $([math]::Round($srcSav.Length/1MB,1)) MB, written $($srcSav.LastWriteTime)"
 
 $dstDir = Join-Path $SaveRoot $NewName
+if ($Force -and (Test-Path $dstDir)) {
+    # The autosave folder too - it is what the game loads back if it is newer.
+    Remove-Item $dstDir -Recurse -Force
+}
 $dstSav = Join-Path $dstDir "$NewName.sav"
 New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
 

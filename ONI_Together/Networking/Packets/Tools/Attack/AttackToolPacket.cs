@@ -31,14 +31,15 @@ public class AttackToolPacket : IPacket
     {
         using var _ = Profiler.Scope();
 
-        if (ToolMenu.Instance?.PriorityScreen != null)
-            Priority = ToolMenu.Instance.PriorityScreen.GetLastSelectedPriority();
+        // Through PriorityWire, which cannot produce a value the game refuses. The
+        // guarded assignment here used to leave the struct default - class 0, value 0 -
+        // and the receiver pushed that into its priority screen and ran the tool.
+        Priority = PriorityWire.Sample();
 
         writer.Write(SenderId);
         writer.Write(Min);
         writer.Write(Max);
-        writer.Write((int)Priority.priority_class);
-        writer.Write(Priority.priority_value);
+        PriorityWire.Write(writer, Priority);
     }
 
     public void Deserialize(BinaryReader reader)
@@ -48,7 +49,7 @@ public class AttackToolPacket : IPacket
         SenderId = reader.ReadUInt64();
         Min      = reader.ReadVector2();
         Max      = reader.ReadVector2();
-        Priority = new PrioritySetting((PriorityScreen.PriorityClass)reader.ReadInt32(), reader.ReadInt32());
+        Priority = PriorityWire.Read(reader);
     }
 
     public void OnDispatched()

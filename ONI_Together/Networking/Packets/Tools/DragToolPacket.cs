@@ -50,8 +50,14 @@ namespace ONI_Together.Networking.Packets.Tools
 		{
 			using var _ = Profiler.Scope();
 
-			if (ToolMenu.Instance?.PriorityScreen != null)
-				Priority = ToolMenu.Instance.PriorityScreen.GetLastSelectedPriority();
+			// Through PriorityWire, which cannot produce a value the game refuses.
+			//
+			// This is the packet the failure was measured on. The guarded assignment left
+			// the struct at its default when the tool menu was absent, OnDispatched below
+			// pushes the received value into the local priority screen, and the tool then
+			// ran at priority zero: "Priority Value Out Of Range: 0", once per run, only
+			// in the run where the client places orders.
+			Priority = PriorityWire.Sample();
 
 			if(ToolInstance is FilteredDragTool filteredToolInstance)
 				StoreFilterData(filteredToolInstance);
@@ -77,8 +83,7 @@ namespace ONI_Together.Networking.Packets.Tools
 					break;
 			}
 
-			writer.Write((int)Priority.priority_class);
-			writer.Write(Priority.priority_value);
+			PriorityWire.Write(writer, Priority);
 		}
 
 		public virtual void Deserialize(BinaryReader reader)
@@ -107,7 +112,7 @@ namespace ONI_Together.Networking.Packets.Tools
 					break;
 			}
 
-			Priority = new PrioritySetting((PriorityScreen.PriorityClass)reader.ReadInt32(), reader.ReadInt32());
+			Priority = PriorityWire.Read(reader);
 		}
 
 		public virtual void OnDispatched()

@@ -1,0 +1,22 @@
+﻿[08-11 02:43:22] soak starting: 10 runs on '식물버그 조사본'
+[08-11 02:43:22] run 1/10  label=soak01 dig=2 settle=90s
+[08-11 02:47:36]   exit=1
+[08-11 02:47:36] run 2/10  label=soak02 dig=4 settle=150s
+[08-11 02:52:55]   exit=1
+[08-11 02:52:55] run 3/10  label=soak03 dig=6 settle=120s
+[08-11 02:57:44]   exit=1
+[08-11 02:57:44] run 4/10  label=soak04 dig=3 settle=180s
+[08-11 03:03:37]   exit=1
+[08-11 03:03:37] run 5/10  label=soak05 dig=2 settle=90s
+[08-11 03:07:57]   exit=1
+[08-11 03:07:57] run 6/10  label=soak06 dig=4 settle=150s
+[08-11 03:13:17]   exit=1
+[08-11 03:13:17] run 7/10  label=soak07 dig=6 settle=120s
+[08-11 03:18:00]   exit=1
+[08-11 03:18:00] run 8/10  label=soak08 dig=3 settle=180s
+[08-11 03:23:46]   exit=1
+[08-11 03:23:46] run 9/10  label=soak09 dig=2 settle=90s
+[08-11 03:28:00]   exit=1
+[08-11 03:28:00] run 10/10  label=soak10 dig=4 settle=150s
+[08-11 03:33:20]   exit=1
+[08-11 03:33:20] soak finished

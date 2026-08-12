@@ -92,6 +92,21 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+			// Nobody is player zero, and nothing can ever clean up a cursor for them.
+			//
+			// The host built one every session from a client's cursor packet sent
+			// before that client's id existed, and it outlived every peer because no
+			// disconnect ever matches id 0. Twenty soak runs, twenty failures of the
+			// ghost-cursor check. The sender no longer sends it; this is the second
+			// layer, and it is the one that holds if any other sender is added.
+			if (steamID == 0 || steamID.Equals(Utils.NilUlong()))
+			{
+				DebugConsole.LogWarning(
+					"[MultiplayerSession] refusing to create a cursor for player 0 - " +
+					"no player has that id, and nothing would ever remove it");
+				return;
+			}
+
 			if (PlayerCursors.ContainsKey(steamID))
 				return;
 
@@ -120,14 +135,52 @@ namespace ONI_Together.Networking
 			using var _ = Profiler.Scope();
 
             var members = NetworkConfig.GetConnectedClients();
+			ulong localId = LocalUserID;
+
             foreach (var playerId in members)
 			{
-				if (playerId == LocalUserID)
+				if (playerId == localId)
 					continue;
 
 				if (!PlayerCursors.ContainsKey(playerId))
 				{
 					CreateNewPlayerCursor(playerId);
+				}
+			}
+
+			// Then take away the ones that should not be there.
+			//
+			// Creating from the member list is not enough, because who "we" are is not
+			// known at a fixed moment. On a host LocalUserID resolves through
+			// RiptideServer.CLIENT_ID, and that is filled in only once the host's own
+			// loopback client has finished connecting. Run this before then and the
+			// host fails to recognise its own id in the list, builds a cursor for
+			// itself, and nothing ever takes it away: ten consecutive soak runs each
+			// reported "2 player cursors for 1 remote peer(s)".
+			//
+			// Pruning makes the outcome depend on the facts as they are now rather than
+			// on the order they arrived in, which is the only way to be right about a
+			// value that is populated late. It is also self-healing - the disconnect
+			// path's cursor removal is commented out, so this is what cleans up after
+			// a peer leaves.
+			if (localId != 0 && !localId.Equals(Utils.NilUlong()) && members.Count > 0)
+			{
+				List<ulong> stale = null;
+				foreach (var kvp in PlayerCursors)
+				{
+					if (kvp.Key == localId || !members.Contains(kvp.Key))
+						(stale ??= new List<ulong>()).Add(kvp.Key);
+				}
+
+				if (stale != null)
+				{
+					foreach (var id in stale)
+					{
+						DebugConsole.Log(
+							$"[MultiplayerSession] removing cursor {id}: " +
+							(id == localId ? "that is us" : "not a connected client"));
+						RemovePlayerCursor(id);
+					}
 				}
 			}
 		}

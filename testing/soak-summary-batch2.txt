@@ -1,0 +1,59 @@
+﻿[08-11 03:39:29] soak starting: 10 runs on '식물버그 조사본'
+[08-11 03:39:29] run 1/10  label=soak01 dig=2 settle=90s
+[08-11 03:43:44]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=2|role=host|frameMs=17.9|worstMs=212|stutters=45|hitches=0|registry=6889|lookupFails=1|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1373
+      client  errors=3  row=1|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6851|lookupFails=68|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=275|hpTracked=3932|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=45/5|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=5|byCell=5|staleIndex=4|minionsRefused=0|renamesRefused=0|removalsApplied=6|gcMB=1354
+[08-11 03:43:44] run 2/10  label=soak02 dig=4 settle=150s
+[08-11 03:48:57]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=3|role=host|frameMs=17.9|worstMs=208|stutters=47|hitches=0|registry=6885|lookupFails=53|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1408
+      FAIL client  NetId | No registry lookup failures | 2.6 | 1 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (528 misses in total). Asked by: WorkableProgre ...
+      client  errors=3  row=2|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6853|lookupFails=500|collisions=2|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=50|hpTracked=3926|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=81/13|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=11|byCell=11|staleIndex=8|minionsRefused=0|renamesRefused=0|removalsApplied=4|gcMB=1385
+[08-11 03:48:57] run 3/10  label=soak03 dig=6 settle=120s
+[08-11 03:53:47]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 2.4 | 1 prefabs only got an identity when a packet needed one: PacuEgg x1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=3|role=host|frameMs=18.4|worstMs=906|stutters=45|hitches=3|registry=6902|lookupFails=31|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1380
+      FAIL client  NetId | The three id functions do not overlap | 4.1 | NetId -1975175207 is held by both 'PacuEgg' and 'DirtyWater'
+      FAIL client  NetId | No two objects share a NetId | 15.1 | NetId -1975175207 is claimed by several objects: PacuEgg@30825, DirtyWater@41604
+      FAIL client  Networking | Check for duplicate network identities | 9.0 | NetId -1975175207 has 2 identities (two objects sharing one id): PacuEgg@30825 obj#-751034 cmp#-751074 filedUnder=1977498062 / DirtyWater@41 ...
+      client  errors=3  row=2|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6876|lookupFails=205|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=31|hpTracked=3922|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=68/15|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=13|byCell=13|staleIndex=7|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1383
+[08-11 03:53:47] run 4/10  label=soak04 dig=3 settle=180s
+[08-11 03:59:37]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=4|role=host|frameMs=18.2|worstMs=937|stutters=40|hitches=4|registry=6934|lookupFails=32|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1389
+      FAIL client  Latency | Both peers agree the link is healthy | 0.4 | client sees 162 ms, past the BAD threshold of 150
+      client  errors=3  row=3|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6906|lookupFails=204|collisions=1|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=3922|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=118/12|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=9|byCell=9|staleIndex=9|minionsRefused=0|renamesRefused=0|removalsApplied=2|gcMB=1445
+[08-11 03:59:37] run 5/10  label=soak05 dig=2 settle=90s
+[08-11 04:03:57]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=2|role=host|frameMs=17.9|worstMs=252|stutters=43|hitches=1|registry=6901|lookupFails=1|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1371
+      client  errors=3  row=1|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6873|lookupFails=192|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=290|hpTracked=3920|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=50/10|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=9|byCell=9|staleIndex=4|minionsRefused=0|renamesRefused=0|removalsApplied=1|gcMB=1341
+[08-11 04:03:57] run 6/10  label=soak06 dig=4 settle=150s
+[08-11 04:09:16]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=3|role=host|frameMs=17.9|worstMs=211|stutters=44|hitches=0|registry=6900|lookupFails=34|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1521
+      client  errors=3  row=2|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6882|lookupFails=270|collisions=1|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=25|hpTracked=3919|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=61/17|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=13|byCell=13|staleIndex=6|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1398
+[08-11 04:09:16] run 7/10  label=soak07 dig=6 settle=120s
+[08-11 04:14:10]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=3|role=host|frameMs=18.3|worstMs=1071|stutters=44|hitches=2|registry=6904|lookupFails=30|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1527
+      client  errors=3  row=2|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6874|lookupFails=136|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=11|hpTracked=3919|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=0|previews=68/13|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=11|byCell=11|staleIndex=4|minionsRefused=0|renamesRefused=0|removalsApplied=5|gcMB=1378
+[08-11 04:14:10] run 8/10  label=soak08 dig=3 settle=180s
+[08-11 04:19:55]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=4|role=host|frameMs=18.3|worstMs=939|stutters=42|hitches=3|registry=6938|lookupFails=18|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=20|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1391
+      client  errors=3  row=3|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6900|lookupFails=153|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=3914|statusSubs=0|choreSubs=0|plants=304|dupes=21|deathsApplied=1|previews=118/17|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=15|byCell=15|staleIndex=6|minionsRefused=0|renamesRefused=0|removalsApplied=3|gcMB=1428
+[08-11 04:19:55] run 9/10  label=soak09 dig=2 settle=90s
+[08-11 04:24:10]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=2|role=host|frameMs=17.8|worstMs=206|stutters=46|hitches=0|registry=6918|lookupFails=0|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=20|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1380
+      client  errors=3  row=1|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6897|lookupFails=89|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=285|hpTracked=3911|statusSubs=0|choreSubs=0|plants=304|dupes=20|deathsApplied=0|previews=46/9|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=9|byCell=9|staleIndex=4|minionsRefused=0|renamesRefused=0|removalsApplied=2|gcMB=1427
+[08-11 04:24:10] run 10/10  label=soak10 dig=4 settle=150s
+[08-11 04:29:26]   exit=1
+      FAIL host  UI | No ghost cursors present | 0.2 | 2 player cursors for 1 remote peer(s) - a cursor outlived its player
+      host  errors=3  row=3|role=host|frameMs=17.9|worstMs=252|stutters=47|hitches=1|registry=6904|lookupFails=33|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=304|dupes=20|deathsApplied=0|previews=0/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|removalsApplied=0|gcMB=1375
+      FAIL client  NetId | No registry lookup failures | 2.7 | 1 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (267 misses in total). Asked by: WorkableProgre ...
+      client  errors=3  row=2|role=client|frameMs=16.7|worstMs=17|stutters=0|hitches=0|registry=6893|lookupFails=190|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=22|hpTracked=3909|statusSubs=0|choreSubs=0|plants=304|dupes=20|deathsApplied=0|previews=63/11|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|instAdopted=10|byCell=10|staleIndex=5|minionsRefused=0|renamesRefused=0|removalsApplied=3|gcMB=1363
+[08-11 04:29:26] soak finished

@@ -48,16 +48,63 @@ namespace ONI_Together.Misc
                 validItems.Add(go);
             }
 
-            writer.Write(validItems.Count);
+            // One record per prefab, with the total mass. Not one per object.
+            //
+            // Per-object records cannot be applied. The receiver recreates items with
+            // Storage.Store, and ONI stacks identical food and seeds into a single
+            // object, so a refrigerator holding three MushBar on the host became one on
+            // the client - measured: host x3 client x1, host x4 client x1, seven
+            // containers in one run.
+            //
+            // The count then never matches, TryUpdateInPlace can never succeed, and the
+            // storage is cleared and rebuilt on every packet for the rest of the
+            // session. That is the pathology this file already carries a note about: a
+            // client registered the same water pile 2109 times in 29 minutes, 14655 of
+            // its 19106 workable registrations. It came back the moment storage syncing
+            // reached containers that hold stackable items.
+            //
+            // Per-prefab totals are also the honest unit. How many objects a pile of
+            // 12 kg of dirt is split into is a local detail neither peer can control;
+            // that there is 12 kg of dirt in this box is what the player reads and what
+            // every gameplay decision depends on.
+            var byPrefab = new Dictionary<int, StoredItem>();
+            var order = new List<int>();
             foreach (var go in validItems)
             {
                 var pe = go.GetComponent<PrimaryElement>();
-                var prefabID = go.GetComponent<KPrefabID>();
-                writer.Write(prefabID.PrefabTag.GetHashCode());
-                writer.Write(pe.Mass);
-                writer.Write(pe.Temperature);
-                writer.Write(pe.DiseaseIdx);
-                writer.Write(pe.DiseaseCount);
+                int hash = go.GetComponent<KPrefabID>().PrefabTag.GetHashCode();
+
+                if (!byPrefab.TryGetValue(hash, out var acc))
+                {
+                    order.Add(hash);
+                    acc = new StoredItem { Hash = hash, DiseaseIdx = pe.DiseaseIdx };
+                }
+
+                // Mass-weighted temperature, so merging two piles does not invent heat.
+                float newMass = acc.Mass + pe.Mass;
+                acc.Temperature = newMass > 0f
+                    ? (acc.Temperature * acc.Mass + pe.Temperature * pe.Mass) / newMass
+                    : pe.Temperature;
+                acc.Mass = newMass;
+                acc.DiseaseCount += pe.DiseaseCount;
+
+                // Any disease beats none. Two different diseases in one prefab's pile is
+                // not representable here and is not worth a wider format - the receiver
+                // applies one.
+                if (acc.DiseaseIdx == byte.MaxValue) acc.DiseaseIdx = pe.DiseaseIdx;
+
+                byPrefab[hash] = acc;
+            }
+
+            writer.Write(order.Count);
+            foreach (int hash in order)
+            {
+                var item = byPrefab[hash];
+                writer.Write(item.Hash);
+                writer.Write(item.Mass);
+                writer.Write(item.Temperature);
+                writer.Write(item.DiseaseIdx);
+                writer.Write(item.DiseaseCount);
             }
 
             optionalValues[keyPrefix + "stor"] = ms.ToArray();
@@ -121,6 +168,13 @@ namespace ONI_Together.Misc
             if (TryUpdateInPlace(storage, diseaseReason))
                 return;
 
+            // Every rebuild destroys objects and creates new ones, and every new object
+            // takes a new NetId. Counted so the ratio is visible: a healthy session
+            // rebuilds when contents genuinely change and updates in place otherwise, so
+            // rebuilds far outnumbering in-place corrections means the match rule is
+            // broken again rather than the colony being busy.
+            StorageRebuilt++;
+
             ClearStorage(storage);
             if (count == 0) return;
 
@@ -158,52 +212,118 @@ namespace ONI_Together.Misc
             }
         }
         
+        /// <summary>Storages corrected without destroying anything.</summary>
+        public static int StorageUpdatedInPlace { get; private set; }
+
+        /// <summary>Storages torn down and rebuilt, which mints new NetIds.</summary>
+        public static int StorageRebuilt { get; private set; }
+
         /// <summary>
-        /// True if the storage already holds exactly these things, in which case
-        /// only their mass, temperature and disease need correcting - no object
-        /// is destroyed and none is created, so nothing takes a new NetId.
+        /// Massless entries left alone rather than deleted - machine working buffers.
+        /// </summary>
+        public static int MasslessEntriesPreserved { get; private set; }
+
+        /// <summary>
+        /// True if the storage already holds the same set of prefabs, in which case
+        /// only mass, temperature and disease need correcting - no object is destroyed
+        /// and none is created, so nothing takes a new NetId.
         ///
-        /// Composition is compared by prefab tag and order, which is how the
-        /// blob is written, so a genuine change - something added, removed or
-        /// swapped - still falls through to the full rebuild.
+        /// Matched per prefab, not per object slot.
+        ///
+        /// Per-slot matching required the two peers to have split their piles into the
+        /// same number of objects, and they cannot: ONI stacks identical food and seeds
+        /// on store, so a refrigerator with three MushBar on the host holds one on the
+        /// client. The count never lined up, this always returned false, and the
+        /// storage was cleared and rebuilt twice a second forever - which is exactly
+        /// the object churn that once produced 14655 spurious registrations on one
+        /// client.
+        ///
+        /// A genuine change - a prefab appearing or disappearing - still falls through
+        /// to the full rebuild, because the prefab sets differ then.
         /// </summary>
         private static bool TryUpdateInPlace(Storage storage, string diseaseReason)
         {
             var items = storage.items;
             if (items == null) return false;
 
-            // Entries with no mass are skipped by the rebuild, so they must be
-            // skipped here too or the counts would never line up.
-            int expected = 0;
+            // What is here, grouped the same way the sender grouped it.
+            var localByPrefab = new Dictionary<int, List<PrimaryElement>>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                var go = items[i];
+                if (go.IsNullOrDestroyed()) return false;
+                if (!go.TryGetComponent<PrimaryElement>(out var pe) || pe.IsNullOrDestroyed()) return false;
+
+                // Massless entries are invisible to the sender, so they must be
+                // invisible here too.
+                //
+                // The encoder skips anything at or below zero mass. A pump or a shower
+                // holds exactly that - an element object with no mass, for part of a
+                // tick - so its container encodes as empty, and this side read "empty"
+                // as "everything in here was removed" and deleted the buffer object.
+                // The comparison showed it plainly: GasPump and Shower entries at 0 kg
+                // present on the host and gone on the client.
+                //
+                // Deleting a machine's working buffer is not a cosmetic difference. It
+                // is the client's pump losing the object it dispenses from.
+                if (pe.Mass <= 0f)
+                {
+                    MasslessEntriesPreserved++;
+                    continue;
+                }
+                // The same accessor the encoder used. Tag exposes GetHash() and
+                // GetHashCode() and they are not the same number, so comparing one
+                // against the other never matched and the storage was torn down and
+                // rebuilt on every packet regardless.
+                if (!go.TryGetComponent<KPrefabID>(out var storedPrefab) || storedPrefab.IsNullOrDestroyed())
+                    return false;
+
+                int hash = storedPrefab.PrefabTag.GetHashCode();
+                if (!localByPrefab.TryGetValue(hash, out var list))
+                {
+                    list = new List<PrimaryElement>();
+                    localByPrefab[hash] = list;
+                }
+                list.Add(pe);
+            }
+
+            // Entries with no mass are skipped by the sender, so they cannot be
+            // expected here either.
+            int expectedPrefabs = 0;
             for (int i = 0; i < _incoming.Count; i++)
             {
-                if (_incoming[i].Mass > 0f) expected++;
+                if (_incoming[i].Mass > 0f) expectedPrefabs++;
             }
-            if (items.Count != expected) return false;
+            if (localByPrefab.Count != expectedPrefabs) return false;
 
-            int slot = 0;
+            for (int i = 0; i < _incoming.Count; i++)
+            {
+                if (_incoming[i].Mass <= 0f) continue;
+                if (!localByPrefab.ContainsKey(_incoming[i].Hash)) return false;
+            }
+
+            // Only now, once every prefab is known to be present, is anything written.
+            // A half-applied correction would be worse than none.
             for (int i = 0; i < _incoming.Count; i++)
             {
                 if (_incoming[i].Mass <= 0f) continue;
 
-                var go = items[slot];
-                if (go == null) return false;
-                if (!go.TryGetComponent<PrimaryElement>(out var pe)) return false;
-                // The same accessor the encoder used. Tag exposes GetHash() and
-                // GetHashCode() and they are not the same number, so comparing
-                // one against the other never matched and the storage was torn
-                // down and rebuilt on every packet regardless.
-                if (!go.TryGetComponent<KPrefabID>(out var storedPrefab)) return false;
-                if (storedPrefab.PrefabTag.GetHashCode() != _incoming[i].Hash) return false;
+                var local = localByPrefab[_incoming[i].Hash];
 
-                pe.Mass = _incoming[i].Mass;
-                pe.Temperature = _incoming[i].Temperature;
-                if (_incoming[i].DiseaseIdx != byte.MaxValue && pe.DiseaseIdx != _incoming[i].DiseaseIdx)
-                    pe.AddDisease(_incoming[i].DiseaseIdx, _incoming[i].DiseaseCount, diseaseReason);
-
-                slot++;
+                // Spread the total over however many objects this peer split it into.
+                // Setting the first to the whole amount and the rest to zero would make
+                // them vanish from the next encode and start the churn again.
+                float share = _incoming[i].Mass / local.Count;
+                foreach (var pe in local)
+                {
+                    pe.Mass = share;
+                    pe.Temperature = _incoming[i].Temperature;
+                    if (_incoming[i].DiseaseIdx != byte.MaxValue && pe.DiseaseIdx != _incoming[i].DiseaseIdx)
+                        pe.AddDisease(_incoming[i].DiseaseIdx, _incoming[i].DiseaseCount / local.Count, diseaseReason);
+                }
             }
 
+            StorageUpdatedInPlace++;
             return true;
         }
 
@@ -223,6 +343,16 @@ namespace ONI_Together.Misc
                 // half-cleared and never refilled.
                 if (item.IsNullOrDestroyed())
                     continue;
+
+                // Not the massless ones. The sender never described them, so the blob
+                // says nothing about whether they should still be here - and they are
+                // the working buffers of pumps, showers and vents.
+                if (item.TryGetComponent<PrimaryElement>(out var keep)
+                    && !keep.IsNullOrDestroyed() && keep.Mass <= 0f)
+                {
+                    MasslessEntriesPreserved++;
+                    continue;
+                }
 
                 item.DeleteObject();
             }

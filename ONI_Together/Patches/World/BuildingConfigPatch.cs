@@ -45,6 +45,17 @@ namespace ONI_Together.Patches.World
 					var identity = __instance.gameObject.AddOrGet<NetworkIdentity>();
 					identity.RegisterIdentity();
 
+					// Registering can legitimately fail to produce an id - the grid is
+					// not ready, or every candidate slot is taken - and sending zero
+					// puts a packet on the wire that no peer can apply.
+					if (identity.NetId == 0)
+					{
+						DebugTools.ThrottledLog.Warn(
+							$"[LogicSwitch] not sending state for '{__instance.gameObject.PrefabID()}': " +
+							"registration produced no NetId");
+						return;
+					}
+
 					var packet = new BuildingConfigPacket
 					{
 						NetId = identity.NetId,
@@ -102,25 +113,33 @@ namespace ONI_Together.Patches.World
 			if (!MultiplayerSession.InSession) return;
 
 			// Get NetId
-			int netId = -1;
-			var identity = component.GetComponent<NetworkIdentity>();
-			if (identity != null)
+			var identity = component.GetComponent<NetworkIdentity>()
+						   ?? component.GetComponentInParent<NetworkIdentity>();
+			int netId = identity.IsNullOrDestroyed() ? 0 : identity.NetId;
+
+			// The same wrong sentinel as the priority patch had: -1 meant "no
+			// identity component", and refusing only that let an object that HAS an
+			// identity but no id yet send zero. Zero is not an address - the receiver
+			// cannot resolve it, and its cell fallback then looks at cell 0, which is
+			// a real cell in the corner of the map.
+			//
+			// A live client logged 12 refusals of exactly this shape
+			// ("refusing to file 'GasPumpUnderConstruction' under NetId 0").
+			if (netId == 0)
 			{
-				netId = identity.NetId;
-			}
-			else
-			{
-				// Check registry? Identity should be on the object.
-				// Maybe look for identity on parent?
-				identity = component.GetComponentInParent<NetworkIdentity>();
-				if (identity != null) netId = identity.NetId;
+				DebugTools.ThrottledLog.Warn(
+					$"[BuildingConfig] not sending '{configId}' for " +
+					$"'{component.gameObject.PrefabID()}': it has no NetId, so no peer could apply it");
+				return;
 			}
 
-			if (netId != -1)
 			{
 				var packet = new BuildingConfigPacket
 				{
 					NetId = netId,
+					// Was never set, so every one of these arrived claiming cell 0 and
+					// the receiver's cell fallback aimed there.
+					Cell = Grid.PosToCell(component.gameObject),
 					ConfigHash = configId.GetHashCode(),
 					Value = value
 				};

@@ -92,9 +92,34 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 				return;
 			}
 
+			// Amounts.SetValue looks the amount up and writes through the result
+			// without checking it, so an amount this object does not have is a
+			// NullReferenceException out of the packet handler rather than a
+			// skipped field. A live client threw it 39 times in the twenty seconds
+			// before the game closed: a duplicant's vitals kept arriving for
+			// something that has no Calories.
+			//
+			// The cause is upstream - the id resolved to the wrong object - and
+			// guarding here does not fix that. It stops one peer's bad address from
+			// becoming an exception storm on the other, and it names what was hit.
+			if (!identity.gameObject.HasTag(GameTags.BaseMinion))
+			{
+				DebugTools.ThrottledLog.Warn(
+					$"[VitalStatsPacket] NetId {NetId} resolved to " +
+					$"'{identity.gameObject.PrefabID()}', which is not a duplicant - " +
+					"vitals are only sent for duplicants, so this id means something different here");
+				return;
+			}
+
 			foreach (var kvp in VitalAmounts)
 			{
-				//DebugConsole.Log("[VitalStatsPacket] Setting Vital amount: " + kvp.Key + ": " + kvp.Value);
+				if (amounts.Get(kvp.Key) == null)
+				{
+					DebugTools.ThrottledLog.Warn(
+						$"[VitalStatsPacket] '{identity.gameObject.PrefabID()}' has no amount " +
+						$"'{kvp.Key}'; skipping it rather than throwing");
+					continue;
+				}
 				amounts.SetValue(kvp.Key, kvp.Value);
 			}
 			if (identity.TryGetComponent<PrimaryElement>(out var element))

@@ -78,10 +78,59 @@ Ok 'host snapshot'
 
 try {
     & $peerCmd -Verb push-log -Label $Label -Share $Share -TimeoutSeconds 180 | Out-Null
-    Copy-Item (Join-Path $Share "drop\$Label\client.log")       (Join-Path $dest 'client.log')       -Force
-    Copy-Item (Join-Path $Share "drop\$Label\client.meta.json") (Join-Path $dest 'client.meta.json') -Force
+
+    # Wait for the files, rather than assuming the reply means they are there.
+    #
+    # The reply arriving and the files being complete are two different events, and
+    # this assumed they were one. Twice a run was thrown away here: the copy ran,
+    # found no client.meta.json, and reported "is peer-agent.ps1 still running
+    # there?" - while the agent was running perfectly and wrote the file eighteen
+    # seconds later. Both logs existed; only the reader was early.
+    $clientLog  = Join-Path $Share "drop\$Label\client.log"
+    $clientMeta = Join-Path $Share "drop\$Label\client.meta.json"
+    $waitUntil  = (Get-Date).AddSeconds(120)
+    while ((Get-Date) -lt $waitUntil -and -not ((Test-Path $clientLog) -and (Test-Path $clientMeta))) {
+        Start-Sleep -Seconds 2
+    }
+    if (-not ((Test-Path $clientLog) -and (Test-Path $clientMeta))) {
+        throw "the peer's snapshot never appeared in $(Split-Path $clientLog): log=$(Test-Path $clientLog) meta=$(Test-Path $clientMeta)"
+    }
+
+    # Existing is not finished, and waiting for existence was only half the fix.
+    # The next run died here instead: both files were there, and Copy-Item threw
+    # "cannot access the file ... because it is being used by another process"
+    # because the agent still had client.meta.json open. Same mistake one step
+    # further along - a whole 180-second run discarded for a reader that was
+    # early, again.
+    #
+    # So copy through a shared handle and keep trying until the deadline. For the
+    # meta the real completeness test is that it parses: a truncated JSON copies
+    # fine and fails later, further from the cause.
+    function Copy-Shared([string]$from, [string]$to, [datetime]$deadline, [bool]$mustParseJson) {
+        while ($true) {
+            try {
+                $fs = [System.IO.File]::Open($from, [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read,
+                        [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                try {
+                    $out = [System.IO.File]::Create($to)
+                    try { $fs.CopyTo($out) } finally { $out.Dispose() }
+                } finally { $fs.Dispose() }
+
+                if ($mustParseJson) { Get-Content $to -Raw | ConvertFrom-Json | Out-Null }
+                return
+            } catch {
+                if ((Get-Date) -ge $deadline) { throw "could not read $from within the deadline: $($_.Exception.Message)" }
+                Start-Sleep -Milliseconds 500
+            }
+        }
+    }
+
+    $copyUntil = (Get-Date).AddSeconds(90)
+    Copy-Shared $clientLog  (Join-Path $dest 'client.log')       $copyUntil $false
+    Copy-Shared $clientMeta (Join-Path $dest 'client.meta.json') $copyUntil $true
     $prevSrc = Join-Path $Share "drop\$Label\client-prev.log"
-    if (Test-Path $prevSrc) { Copy-Item $prevSrc (Join-Path $dest 'client-prev.log') -Force }
+    if (Test-Path $prevSrc) { Copy-Shared $prevSrc (Join-Path $dest 'client-prev.log') $copyUntil $false }
     Ok 'client snapshot'
 } catch {
     Bad "could not collect from PC-B: $($_.Exception.Message)"
@@ -91,6 +140,27 @@ try {
 
 $hostMeta   = Get-Content (Join-Path $dest 'host.meta.json')   -Raw | ConvertFrom-Json
 $clientMeta = Get-Content (Join-Path $dest 'client.meta.json') -Raw | ConvertFrom-Json
+
+# Is this run's snapshot, or an older one left in a reused label?
+#
+# A stale client.meta.json from two days earlier was once read as current and
+# reported the two boxes as running different binaries. Everything downstream of
+# a mismatch verdict is wasted, and everything downstream of a wrong one is worse
+# than wasted. The agent now clears the label, but the reader should not depend on
+# the writer being the fixed version.
+foreach ($pair in @(@{ n = 'host'; m = $hostMeta }, @{ n = 'client'; m = $clientMeta })) {
+    $collected = $pair.m.collectedUtc
+    if (-not $collected) {
+        Warn "$($pair.n).meta.json has no collectedUtc - cannot tell whether it belongs to this run"
+        continue
+    }
+    $ageMinutes = ((Get-Date).ToUniversalTime() - [datetime]::Parse($collected).ToUniversalTime()).TotalMinutes
+    if ($ageMinutes -gt 30) {
+        Bad ("$($pair.n).meta.json was collected {0:N0} minutes ago - that is not this run. " -f $ageMinutes)
+        Bad "  Delete $dest and collect again; a reused label can leave an older snapshot behind."
+        if ($Mode -eq 'final') { exit 2 }
+    }
+}
 
 # --- 3. the pair has to match ----------------------------------------------
 # Checked in live mode too, just not fatal there. A mismatched pair produces
@@ -214,6 +284,71 @@ foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
 # collapse into one line with a count, and a new kind of warning stands out
 # against the familiar ones instead of being buried by them. A long real session
 # is exactly where that matters and exactly where reading by eye stops working.
+# --- the last health row from each peer, side by side ------------------------
+#
+# The mod states its own sizes once a minute. Putting the final row from each box
+# next to the other turns several questions that used to need two people looking
+# at two screens into one glance: do the colonist counts agree, is a table growing,
+# did the previews get named, is the frame time drifting.
+#
+# The colonist count in particular. "The duplicant totals do not match" was
+# reported from the game, and nothing in this analysis could see it - there was no
+# number for it anywhere in either log.
+# --- did either peer report an error at all ----------------------------------
+#
+# Blunt on purpose. Four client deaths in this work looked identical from the
+# outside: our code returns normally, ONI logs an error or a failed assert from
+# inside its own code, and the game closes itself seconds later. Every specific
+# check passed every time. Counting errors needs no theory about what can break.
+Head 'errors either peer reported'
+$errorTotal = 0
+foreach ($peer in 'host', 'client') {
+    $logPath = Join-Path $dest "$peer.log"
+    if (-not (Test-Path $logPath)) { continue }
+
+    $errs = Select-String -Path $logPath -Pattern '\[ERROR\]|Assert failed|Exception:' |
+            Where-Object { $_.Line -notmatch '\[TEST\]|\[test-scope\]' }
+    if (-not $errs) { Ok "$peer reported none"; continue }
+
+    $errorTotal += $errs.Count
+    Bad "$peer reported $($errs.Count)"
+    # Grouped, because one cause repeating every frame is one finding, and the
+    # count is the part that says "every frame".
+    $errs | ForEach-Object { ($_.Line -replace '^.*?(\[ERROR\]|Assert failed|Exception:)', '$1') -replace '\d+', 'N' } |
+        Group-Object | Sort-Object Count -Descending | Select-Object -First 6 |
+        ForEach-Object { Write-Host ("      {0,5}  {1}" -f $_.Count, $_.Name.Substring(0, [Math]::Min(110, $_.Name.Length))) }
+}
+$script:reportedErrors = $errorTotal
+
+Head 'health, last row from each peer'
+$healthRows = @{}
+foreach ($peer in 'host', 'client') {
+    $logPath = Join-Path $dest "$peer.log"
+    if (-not (Test-Path $logPath)) { continue }
+    $row = Select-String -Path $logPath -Pattern '\[HEALTH\] ' | Select-Object -Last 1
+    if (-not $row) { Warn "$peer produced no [HEALTH] rows (an older build, or it never entered a session)"; continue }
+    $text = ($row.Line -split '\[HEALTH\] ')[-1]
+    $healthRows[$peer] = $text
+    Write-Host ("  {0,-6} {1}" -f $peer, $text)
+}
+
+if ($healthRows.Count -eq 2) {
+    # Fields worth comparing directly. Counts that must agree between peers, not
+    # rates or memory - those legitimately differ.
+    foreach ($field in 'dupes', 'plants') {
+        $values = @{}
+        foreach ($peer in 'host', 'client') {
+            if ($healthRows[$peer] -match "\|$field=(-?\d+)") { $values[$peer] = [int]$Matches[1] }
+        }
+        if ($values.Count -eq 2 -and $values['host'] -ne $values['client']) {
+            Bad ("  $field disagree: host $($values['host']), client $($values['client'])")
+        }
+        elseif ($values.Count -eq 2) {
+            Ok "  $field agree at $($values['host'])"
+        }
+    }
+}
+
 Head 'what each peer warned about (grouped, most frequent first)'
 foreach ($side in @(@('host', $hostLog), @('client', $clientLog))) {
     Write-Host "--- $($side[0]) ---" -ForegroundColor DarkGray
@@ -250,6 +385,13 @@ Say "  artifacts: $dest"
 
 $verdict -join "`r`n" | Set-Content (Join-Path $dest 'verdict.txt') -Encoding UTF8
 
+Say ("  reported errors      {0}  {1}" -f $script:reportedErrors,
+    $(if ($script:reportedErrors -gt 0) { 'A PEER LOGGED AN ERROR' } else { 'neither peer logged one' }))
+
 if ($Mode -eq 'live') { exit 0 }
-if ($diffCode -eq 1 -or $netidCode -eq 1 -or $stateCode -eq 1) { exit 1 }
+
+# A reported error fails the run on its own. It did not, and that is how four
+# client deaths passed every gate here: the specific checks all had reasons to be
+# satisfied while ONI was logging an assert every frame.
+if ($diffCode -eq 1 -or $netidCode -eq 1 -or $stateCode -eq 1 -or $script:reportedErrors -gt 0) { exit 1 }
 exit 0

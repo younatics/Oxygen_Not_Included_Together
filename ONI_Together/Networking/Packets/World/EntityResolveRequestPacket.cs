@@ -50,6 +50,27 @@ namespace ONI_Together.Networking.Packets.World
             PacketSender.SendToPlayer(RequesterId, packet, PacketSendMode.Reliable);
         }
 
+        /// <summary>
+        /// "I have it, and it is not something I can hand you."
+        ///
+        /// The prefab goes in the log rather than the packet: what the client needs
+        /// is to stop asking, and what the next investigation needs is to know
+        /// whether the object was a building that should have replicated or a seed
+        /// that never could.
+        /// </summary>
+        private void ReplyHeld(UnityEngine.GameObject go)
+        {
+            ThrottledLog.Info(
+                $"[EntityResolve] holding NetId {NetId} as '{go.PrefabID()}' - not a loose item, " +
+                $"answering the request rather than dropping it");
+
+            Reply(new EntityUnknownPacket
+            {
+                NetId = NetId,
+                Reason = EntityUnknownPacket.Answer.HeldButNotSpawnable,
+            });
+        }
+
         public void OnDispatched()
         {
             using var _ = Profiler.Scope();
@@ -74,30 +95,51 @@ namespace ONI_Together.Networking.Packets.World
             // and stops a dead object being reported as a divergence.
             if (!NetworkIdentityRegistry.TryGet(NetId, out var identity) || identity.IsNullOrDestroyed())
             {
-                Reply(new EntityUnknownPacket { NetId = NetId });
+                Reply(new EntityUnknownPacket { NetId = NetId, Reason = EntityUnknownPacket.Answer.Gone });
                 return;
             }
 
             var go = identity.gameObject;
             if (go.IsNullOrDestroyed())
             {
-                Reply(new EntityUnknownPacket { NetId = NetId });
+                Reply(new EntityUnknownPacket { NetId = NetId, Reason = EntityUnknownPacket.Answer.Gone });
                 return;
             }
 
             // Only loose items. A building or a duplicant the client is missing
             // is a different and much larger problem, and spawning one from here
             // would paper over it.
+            //
+            // Answered rather than dropped, which is the fix. These three returns
+            // used to be silent, and silence is indistinguishable from a lost
+            // packet: the client retried three times, logged that it had given up,
+            // and recorded an id it would never resolve. 118 requests in one run,
+            // 56 answered, 62 into nothing - and the leftover unresolved id every
+            // clean run still reported came from here.
+            //
+            // Saying "I have it, it is not an item" ends the retries and keeps the
+            // real problem visible under its own name instead of hiding inside a
+            // failed-lookup total.
             if (!go.TryGetComponent<Pickupable>(out var pickupable) || pickupable.IsNullOrDestroyed())
+            {
+                ReplyHeld(go);
                 return;
+            }
 
             if (!go.TryGetComponent<PrimaryElement>(out var element) || element.IsNullOrDestroyed())
+            {
+                ReplyHeld(go);
                 return;
+            }
 
             var elementDef = ElementLoader.GetElement(element.Element.tag);
             var substance = elementDef?.substance;
             if (substance == null)
-                return;   // Not something SpawnResource can make - a seed, an artifact.
+            {
+                // Not something SpawnResource can make - a seed, an artifact.
+                ReplyHeld(go);
+                return;
+            }
 
             // Reuses the drop packet rather than inventing a second spawn path.
             // That one is the busiest in the mod and has already been taught the

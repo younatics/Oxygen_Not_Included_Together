@@ -93,6 +93,26 @@ def main():
             print(f"  {kind:<28} {total:>7} {bad:>7}")
 
     if mismatched:
+        # Every prefab that disagrees, with a count. Complete, not a sample.
+        #
+        # The kind breakdown above says "workable: 41 differ" and stops there, which
+        # is enough to know something is wrong and not enough to fix it. Grouping by
+        # prefab is what turns the number into a list of things to close: the eggs
+        # were only recognisable as a class once they were counted as PacuEgg,
+        # DreckoEgg, PuftBleachstoneEgg rather than as "entity".
+        #
+        # Not truncated. A cap here would quietly hide the tail, which is exactly
+        # where the last few disagreements live.
+        by_prefab = {}
+        for key in mismatched:
+            hk, hp, hc = host[key]
+            by_prefab[hp] = by_prefab.get(hp, 0) + 1
+
+        print()
+        print(f"  every prefab that disagrees ({len(by_prefab)} kinds, {len(mismatched)} ids):")
+        for prefab, n in sorted(by_prefab.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"    {n:>5}  {prefab}")
+
         print()
         print("  first disagreements:")
         for key in mismatched[:15]:

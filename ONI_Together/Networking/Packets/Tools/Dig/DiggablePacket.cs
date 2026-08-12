@@ -33,13 +33,13 @@ namespace ONI_Together.Networking.Packets.Tools.Dig
         {
             using var _ = Profiler.Scope();
 
-            if (ToolMenu.Instance?.PriorityScreen != null)
-                Priority = ToolMenu.Instance.PriorityScreen.GetLastSelectedPriority();
+            // See PriorityWire: a guarded assignment left the struct default, and zero
+            // is not a priority the game accepts.
+            Priority = PriorityWire.Sample();
 
             writer.Write(Cell);
             writer.Write(AnimationDelay);
-            writer.Write((int)Priority.priority_class);
-            writer.Write(Priority.priority_value);
+            PriorityWire.Write(writer, Priority);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -48,7 +48,7 @@ namespace ONI_Together.Networking.Packets.Tools.Dig
 
             Cell           = reader.ReadInt32();
             AnimationDelay = reader.ReadInt32();
-            Priority       = new PrioritySetting((PriorityScreen.PriorityClass)reader.ReadInt32(), reader.ReadInt32());
+            Priority       = PriorityWire.Read(reader);
         }
 
         public void OnDispatched()

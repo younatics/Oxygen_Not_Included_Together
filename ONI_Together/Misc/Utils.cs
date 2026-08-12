@@ -35,23 +35,10 @@ namespace ONI_Together.Misc
             Grid.CellCount = 0;
             Sim.Shutdown();
         }
-		public static void LogHierarchy(Transform root, string prefix = "")
-		{
-			using var _ = Profiler.Scope();
-
-			if (root == null)
-			{
-				DebugConsole.LogWarning("LogHierarchy called with null root.");
-				return;
-			}
-
-			DebugConsole.Log($"{prefix}{root.name}");
-
-			foreach (Transform child in root)
-			{
-				LogHierarchy(child, prefix + "  ");
-			}
-		}
+		// LogHierarchy lived here: a recursive dump of a transform tree, with no
+		// caller anywhere except itself. Written for one debugging session and left
+		// behind. Removed - an unused walk of the scene graph is a thing a future
+		// reader has to rule out before they can trust what does run.
 
         public static GameObject FindChild(this GameObject root, string path)
         {

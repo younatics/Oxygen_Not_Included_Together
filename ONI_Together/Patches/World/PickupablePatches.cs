@@ -83,7 +83,11 @@ namespace ONI_Together.Patches.World
                         return;
                     }
 
-                    PacketSender.SendToAllClients(new GroundItemPickedUpPacket { NetId = identity.NetId });
+                    // Sent with where and what, not just the number. The client needs a
+                    // second way to find the item: when the id misses it used to keep the
+                    // pile forever, and the host would later reissue that number.
+                    PacketSender.SendToAllClients(
+                        new GroundItemPickedUpPacket(__instance.gameObject, identity.NetId));
                     //PacketSender.SendToAllClients(new PickupItemPacket { NetId = identity.NetId }); // Display FX for object
                 }
                 catch (System.Exception ex)

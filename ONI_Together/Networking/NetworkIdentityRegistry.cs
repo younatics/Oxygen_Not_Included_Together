@@ -17,6 +17,13 @@ namespace ONI_Together.Networking
 		private static int _collisionCount = 0;
 		private static float _lastFailLogTime = 0f;
 
+		/// <summary>
+		/// Ids handed from one live object to another. A high number is a thrash,
+		/// not a sequence of unrelated events, so the total is the useful reading.
+		/// </summary>
+		private static int _reassignments = 0;
+		public static int Reassignments => _reassignments;
+
 		public static int Count => identities?.Count ?? 0;
 
 		/// <summary>
@@ -26,6 +33,85 @@ namespace ONI_Together.Networking
 		/// there is - no second machine and no log parsing needed.
 		/// </summary>
 		public static int LookupFailCount => _lookupFailCount;
+
+		/// <summary>
+		/// Ids that failed a lookup and later resolved - the object was simply not
+		/// here yet.
+		///
+		/// Read against LookupFailCount: what is left over is the half that never
+		/// arrived, and that is the only half worth chasing.
+		/// </summary>
+		public static int LookupFailsResolvedLater => _lookupFailsResolvedLater;
+
+		/// <summary>
+		/// Distinct ids that have failed and not resolved since.
+		///
+		/// This is the number the split was for, and subtracting the two event counts
+		/// did not produce it: one id failing eight thousand times counts eight
+		/// thousand failures and at most a handful of resolutions, so the difference
+		/// measured repetition rather than breadth. The first row of the first run
+		/// came out at minus thirteen, which is what a wrong unit looks like.
+		///
+		/// Objects, not events. If this is small, the peers disagree about a handful
+		/// of things however loudly the packets complain.
+		/// </summary>
+		public static int UnresolvedIdCount => _everFailed.Count;
+
+		/// <summary>
+		/// Every id currently unaccounted for, so the set can be compared against the
+		/// host's table instead of guessed at.
+		///
+		/// The throttled log only prints a sample, and that sample is biased towards
+		/// whatever fails most often - it said 63% of unresolved ids were objects the
+		/// host no longer had, while the two registries differ by 113 out of 8,268.
+		/// Those two cannot both describe the same thing, and the way to find out which
+		/// is right is to dump the whole set rather than argue from the loud end of it.
+		/// </summary>
+		public static System.Collections.Generic.IEnumerable<int> UnresolvedIds => _everFailed;
+
+		/// <summary>
+		/// Misses the design expects, counted apart from the ones that mean something.
+		///
+		/// Spawns are culled to a client's viewport and removal notices are not, so a
+		/// client is routinely told that an item it was never told about has been picked
+		/// up. That is not a divergence - PendingRemovals already holds those notices for
+		/// ten seconds in case the spawn is merely late, and drops them otherwise.
+		///
+		/// Counting them as failures buried the real number. Of a sample of unresolved
+		/// ids, 63% were objects the host no longer had either, and the top two askers
+		/// were the two removal packets. Meanwhile the registries differed by 113 out of
+		/// 8,268 - which is the actual gap, twenty times smaller than the alarm.
+		/// </summary>
+		public static int ExpectedMisses => _expectedMisses;
+
+		private static int _expectedMisses;
+
+		/// <summary>
+		/// Depth of "a miss here is normal" scopes. Nested so a handler can call
+		/// another without either having to know.
+		/// </summary>
+		private static int _expectedMissDepth;
+
+		public static System.IDisposable ExpectedMissScope() => new ExpectedMiss();
+
+		private sealed class ExpectedMiss : System.IDisposable
+		{
+			public ExpectedMiss() { _expectedMissDepth++; }
+			public void Dispose() { _expectedMissDepth--; }
+		}
+
+		private static int _lookupFailsResolvedLater;
+
+		/// <summary>
+		/// Ids seen to fail at least once, so a later success can be recognised.
+		///
+		/// Bounded by clearing with the session; it holds ids, not objects, so a
+		/// stale entry costs one dictionary slot and can never destroy anything -
+		/// unlike the pending-removal queues, where a stale entry used to kill the
+		/// next object issued the same id.
+		/// </summary>
+		private static readonly System.Collections.Generic.HashSet<int> _everFailed =
+			new System.Collections.Generic.HashSet<int>();
 
 		/// <summary>
 		/// Registrations refused because the id was already held by a different
@@ -66,6 +152,84 @@ namespace ONI_Together.Networking
 				return;
 
 			identities.Remove(netId);
+
+			// Retired, not returned to the pool.
+			//
+			// The other peer may still be holding the object this id named. A live pair
+			// showed the whole chain: the host dropped a resource as -885421119, told the
+			// client, the drop was consumed, the id came free, and a MushBar then took it
+			// - while the client still had the dead pile under that number. From then on
+			// every packet about the host's food arrived addressed to the client's
+			// rubble, and the id tables disagreed in a way no single-peer check can see.
+			//
+			// Two separate attempts to explain this by arithmetic were both wrong: the
+			// walk was changed and the same ids came back, and a collision test over
+			// every id every live object could take passes on both peers. It was never
+			// about which number - it is about the number being handed out twice.
+			//
+			// Ids are 32-bit and a session retires a few thousand, so refusing to reuse
+			// them costs a set and nothing else.
+			if (netId != 0)
+			{
+				_retired.Add(netId);
+
+				// Who had it, so the same object can take it back.
+				//
+				// Retiring ids outright was tried and reverted: objects unregister and
+				// re-register during normal life - a cell change, a move into storage -
+				// and refusing the id to its own former owner pushed them onto fresh
+				// numbers, taking the host's collision count from 0 to 13.
+				//
+				// The dangerous case is narrower than "this id was used once". It is
+				// "somebody else takes a number another peer still associates with the
+				// dead object". Remembering the owner separates the two.
+				if (owner != null && !owner.IsNullOrDestroyed())
+					_retiredBy[netId] = owner.GetInstanceID();
+				else
+					_retiredBy.Remove(netId);
+			}
+		}
+
+		/// <summary>
+		/// Ids that have been used and freed. Never issued again this session.
+		///
+		/// Cleared with the session, along with the registry itself - a new session
+		/// starts from a save both peers load identically, so nothing carries over.
+		/// </summary>
+		private static readonly System.Collections.Generic.HashSet<int> _retired =
+			new System.Collections.Generic.HashSet<int>();
+
+		public static int RetiredIdCount => _retired.Count;
+
+		/// <summary>Whether this id is in use or was used earlier in this session.</summary>
+		public static bool ExistsOrRetired(int netId) =>
+			identities.ContainsKey(netId) || _retired.Contains(netId);
+
+		private static readonly System.Collections.Generic.Dictionary<int, int> _retiredBy =
+			new System.Collections.Generic.Dictionary<int, int>();
+
+		/// <summary>
+		/// Whether this id is unavailable to <paramref name="asker"/> specifically.
+		///
+		/// In use by someone else, or retired by a different object. An object may
+		/// always reclaim the number it was using a moment ago - that is the ordinary
+		/// unregister-and-register that normal play does constantly, and treating it as
+		/// reuse is what broke the first attempt at this.
+		/// </summary>
+		public static bool IsTakenFrom(int netId, NetworkIdentity asker)
+		{
+			if (identities.TryGetValue(netId, out var held))
+				return !ReferenceEquals(held, asker);
+
+			if (!_retired.Contains(netId)) return false;
+
+			// Retired: only its former owner may have it back.
+			if (asker != null && !asker.IsNullOrDestroyed()
+				&& _retiredBy.TryGetValue(netId, out int ownerId)
+				&& ownerId == asker.GetInstanceID())
+				return false;
+
+			return true;
 		}
 
 
@@ -83,7 +247,7 @@ namespace ONI_Together.Networking
 
 			if (!identities.ContainsKey(netId))
 			{
-				identities[netId] = entity;
+				File(netId, entity);
 				return true;
 			}
 
@@ -99,7 +263,7 @@ namespace ONI_Together.Networking
 			// logged 261 NullReferenceExceptions out of this one line.
 			if (identities[netId].IsNullOrDestroyed())
 			{
-				identities[netId] = entity;
+				File(netId, entity);
 				return true;
 			}
 
@@ -150,6 +314,20 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+			// Zero is the sentinel for "no id" everywhere else in this codebase -
+			// GetNetId returns it when there is no identity, and every lookup
+			// failure counts it separately - so filing an object under it makes the
+			// absence of an id resolve to a real object. A live client did exactly
+			// that: "Registered overridden NetId 0 for SwampLily", after which any
+			// packet carrying an unset id would have found that plant.
+			if (netId == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[NetEntityRegistry] refusing to file '{SafeName(entity)}' under NetId 0; " +
+					"zero means 'no id', and registering it would make every unset id resolve here");
+				return;
+			}
+
 			if (identities.ContainsKey(netId))
 			{
 				var incumbent = identities[netId];
@@ -166,25 +344,86 @@ namespace ONI_Together.Networking
 				// id means. The incumbent is moved rather than abandoned.
 				if (!ReferenceEquals(incumbent, entity))
 				{
-					DebugConsole.LogWarning(
-						$"[NetEntityRegistry] NetId {netId} reassigned from '{SafeName(incumbent)}' " +
-						$"to '{SafeName(entity)}'");
+					// Counted and bounded. Unbounded, this line alone accounted for
+					// 3116 entries in one session's log while two ColdWheat plants
+					// traded a single id back and forth several times a second - and
+					// in a DEBUG build every one of them is string formatting done on
+					// the packet path. The count is what says "thrash" rather than
+					// "a reassignment happened"; the individual lines say nothing the
+					// first five do not.
+					_reassignments++;
+					if (_reassignments <= 5 || _reassignments % 250 == 0)
+					{
+						DebugConsole.LogWarning(
+							$"[NetEntityRegistry] NetId {netId} reassigned from '{SafeName(incumbent)}' " +
+							$"to '{SafeName(entity)}' (reassignment #{_reassignments})");
+					}
 
-					identities[netId] = entity;
+					File(netId, entity);
 					if (incumbent != null && !incumbent.IsNullOrDestroyed())
 						incumbent.RehouseAfterEviction(netId);
 					return;
 				}
 
-				identities[netId] = entity;
+				File(netId, entity);
 			}
 			else
 			{
-				identities.Add(netId, entity);
+				File(netId, entity);
 				DebugConsole.Log($"[NetEntityRegistry] Registered overridden NetId {netId} for {entity.name}");
 			}
 		}
 		public static bool Exists(int netId) => identities.ContainsKey(netId);
+
+		/// <summary>
+		/// Whether this exact object is the one filed under <paramref name="netId"/>.
+		///
+		/// Exists() answers "is that id taken", which callers have been using as if
+		/// it answered "did my registration take". Those differ precisely in the
+		/// case that matters: the id is occupied by somebody else.
+		/// </summary>
+		public static bool Holds(int netId, NetworkIdentity entity) =>
+			identities.TryGetValue(netId, out var held) && ReferenceEquals(held, entity);
+
+		/// <summary>
+		/// Files an object under an id and makes its own field agree, so the two
+		/// can never drift apart.
+		///
+		/// They did drift. A live client held NetId 514590772 twice: a SandStone
+		/// filed under 514590772 and believing 514590772, and a DreckoBaby filed
+		/// under -366979648 and also believing 514590772. Everything the critter
+		/// sent was stamped with the sandstone's id and applied to the sandstone,
+		/// and the critter itself was reachable only at a number nobody used.
+		///
+		/// Which sequence produced that could not be settled by reading the code -
+		/// eviction, rehousing and override all touch both the dictionary and the
+		/// field, and every ordering I traced was self-consistent. So rather than
+		/// keep guessing, the invariant moves here: one place writes both, the
+		/// mismatch becomes unrepresentable, and the correction is logged so a
+		/// caller that was getting it wrong still says so once.
+		/// </summary>
+		private static void File(int netId, NetworkIdentity entity)
+		{
+			identities[netId] = entity;
+
+			if (entity.IsNullOrDestroyed() || entity.NetId == netId)
+				return;
+
+			_fieldCorrections++;
+			if (_fieldCorrections <= 5 || _fieldCorrections % 100 == 0)
+			{
+				DebugConsole.LogWarning(
+					$"[NetEntityRegistry] filing '{SafeName(entity)}' under {netId} while it believed " +
+					$"{entity.NetId}; corrected (#{_fieldCorrections}). Anything it sends would have " +
+					"carried the wrong id.");
+			}
+			entity.NetId = netId;
+		}
+
+		private static int _fieldCorrections;
+
+		/// <summary>How many times an object's id had to be corrected to match where it was filed.</summary>
+		public static int FieldCorrections => _fieldCorrections;
 
 		/// <summary>
 		/// A name that will not throw. Unity reports a destroyed object as null
@@ -309,8 +548,34 @@ namespace ONI_Together.Networking
 			}
 
 			bool found = identities.TryGetValue(netId, out entity);
+
+			// An id that failed before and resolves now was early, not wrong.
+			//
+			// These two are the same number today and they are not the same problem.
+			// A work-progress update that arrives before the building finishes is
+			// harmless: the next one lands, and the client's own dump ends the run
+			// holding the host's id for that object. A pickup notice for an item this
+			// peer never gets told about is permanent - nothing re-sends it.
+			//
+			// Reading them together sent me after three regressions that were not
+			// there: the total moved for reasons that had nothing to do with anything
+			// being wrong, and "4 failures" turned out to mean the id layer had been
+			// crippled by an exception rather than that it was healthy. Splitting them
+			// makes the harmful half small enough to name.
+			if (found && _everFailed.Remove(netId))
+				_lookupFailsResolvedLater++;
+
+			// A miss inside an expected-miss scope is not a divergence signal. Counted
+			// separately so the behaviour is visible rather than silently dropped.
+			if (!found && _expectedMissDepth > 0)
+			{
+				_expectedMisses++;
+				return false;
+			}
+
 			if (!found && _diagnosticDepth == 0)
 			{
+				_everFailed.Add(netId);
 				_lookupFailCount++;
 				Blame(_failuresByCaller, caller, callerFile);
 
@@ -365,7 +630,31 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+			// Tell the objects, not just the dictionary.
+			//
+			// This cleared its own map and left every identity believing it was still
+			// filed, because IsRegistered lives on the component. RegisterIdentity
+			// returns immediately for anything that believes that, so after a reconnect
+			// eight thousand objects were unaddressable and nothing could repair them -
+			// measured on a client: registry 8085 before the drop, 41 after, failed
+			// lookups 4,586 to 90,068, with the world fully intact.
+			//
+			// Their ids are left alone. The id came from a save both peers load the same
+			// way, so re-filing under the same number restores the exact mapping.
+			foreach (var identity in identities.Values)
+			{
+				if (identity.IsNullOrDestroyed()) continue;
+				identity.ForgetRegistration();
+			}
+
 			identities.Clear();
+
+			// Retired ids go with the session. A new one starts from a save both peers
+			// load identically, so nothing an old session retired means anything now -
+			// and keeping them would leak across joins.
+			_retired.Clear();
+			_retiredBy.Clear();
+
 			_lookupFailCount = 0;
 			_unsetIdLookupCount = 0;
 			_failuresByCaller.Clear();
@@ -379,6 +668,48 @@ namespace ONI_Together.Networking
 			StorageItemPacket.ClearPending();
 
 			PlayAnimPacket.ClearState();
+		}
+
+		/// <summary>Objects re-filed after a session began with a world already loaded.</summary>
+		public static int ReattachedOnJoin { get; private set; }
+
+		/// <summary>How many sweeps have run - once per join, so a rising number is churn.</summary>
+		public static int ReattachSweeps { get; private set; }
+
+		/// <summary>
+		/// Re-file every identity in the loaded world.
+		///
+		/// Registration happens in OnSpawn, and on a reconnect nothing spawns: the world
+		/// is already there. So the objects sit with their ids and no entry in this
+		/// registry, and every packet about them lands on nothing. The client reported
+		/// "connected" and 90,068 failed lookups.
+		///
+		/// Deliberately a sweep over the scene rather than a hook in one of the several
+		/// join paths. There are four places that clear this registry and more than one
+		/// way to end up in a session, and picking one of them is how the last bug of
+		/// this shape survived - the exclusion rule that was placed in OnSpawn while
+		/// ninety-one callers went around it.
+		///
+		/// Cheap and once per join: one FindObjectsByType and a dictionary insert each.
+		/// </summary>
+		public static int ReattachAll()
+		{
+			using var _ = Profiler.Scope();
+
+			int reattached = 0;
+			foreach (var identity in UnityEngine.Object.FindObjectsByType<NetworkIdentity>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (identity.IsNullOrDestroyed() || identity.gameObject.IsNullOrDestroyed()) continue;
+				if (Exists(identity.NetId) && Holds(identity.NetId, identity)) continue;
+
+				identity.RegisterIdentity();
+				if (identity.NetId != 0) reattached++;
+			}
+
+			ReattachedOnJoin += reattached;
+			ReattachSweeps++;
+			return reattached;
 		}
 
 		public static IEnumerable<NetworkIdentity> AllIdentities => identities.Values;
@@ -395,3 +726,4 @@ namespace ONI_Together.Networking
 		public static IEnumerable<KeyValuePair<int, NetworkIdentity>> AllEntries => identities;
 	}
 }
+

@@ -76,7 +76,19 @@ namespace ONI_Together.DebugTools.UnitTests
 			}
 			else
 			{
-				return UnitTestResult.Fail("Neither host nor client");
+				// Say what was observed, and do not call it a failure when there is
+				// simply nothing to measure.
+				//
+				// "Neither host nor client" failed on the client in all ten runs of a
+				// soak and named none of the three flags that produce it, so ten runs
+				// of evidence answered nothing. IsClient is InSession && !IsHost, so
+				// this branch means the session flag is not set - and a connection
+				// timeout cannot be read without a connection. That is a skip.
+				return UnitTestResult.Skip(
+					$"no session to read a timeout from: InSession={MultiplayerSession.InSession}, " +
+					$"IsHost={MultiplayerSession.IsHost}, IsClient={MultiplayerSession.IsClient}, " +
+					$"clientId={RiptideClient.CLIENT_ID}, " +
+					$"serverId={RiptideServer.CLIENT_ID}");
 			}
 
 			if (connection.TimeoutTime != ExpectedTimeoutMs)

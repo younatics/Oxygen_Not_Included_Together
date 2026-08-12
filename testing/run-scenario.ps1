@@ -30,6 +30,37 @@ param(
     [int]$Port = 8080,
     [string]$Share = 'C:\ONI_MP_Share',
     [int]$PeerDigCells = 0,
+    # Construction orders, per side. Zero means that side does not build, which
+    # is how a scenario asks "does the client's own order work" separately from
+    # "does the host's".
+    [int]$BuildCells = 0,
+    [int]$PeerBuildCells = 0,
+    # Deconstruction, after the ladders have had time to be built. Only touches
+    # what this scenario put there.
+    [int]$DeconstructCells = 0,
+    # Eggs to bring to term before unpausing, so the client-side hatch block is
+    # actually exercised instead of reporting zero for want of an event.
+    [int]$HatchEggs = 0,
+    # Products to ask the peer's fabricators for, so the client-side product guard
+    # is exercised instead of reporting zero for want of a duplicant to work them.
+    [int]$FabricateOrders = 0,
+    # Construction sites to finish outright, because duplicants do not finish one
+    # inside a run and the completion path was therefore never reached.
+    [int]$FinishBuilds = 0,
+    # Repairable buildings to damage on the host before the settle, so the repair
+    # path exists at all. Wire repair was reported broken from play and the lab
+    # never reproduced it: nothing here ever damaged anything.
+    [int]$DamageBuildings = 0,
+    # Drop the client and rejoin before comparing. "Reconnect never succeeds" is
+    # listed as a known trap with a named cause and a test for that cause, but no
+    # live session was ever put through it.
+    [switch]$Reconnect,
+    # Comma-separated game types to dump the members of, so an accessor can be copied
+    # instead of guessed. Empty for normal runs.
+    [string]$AskApi = '',
+    # What the build orders place. Tiles keep their scaffold on a different object
+    # layer from ladders, which is the case the leftover sweep exists for.
+    [string]$BuildWhat = 'Ladder',
     [int]$SettleSeconds = 45,
     [ValidateRange(0, 3)][int]$Speed = 3
 )
@@ -176,9 +207,101 @@ if ($PeerDigCells -gt 0) {
     Ok 'peer dig requested'
 }
 
+# Building, from whichever side is asked to.
+#
+# Digging was the only action a run ever took, and that left the half of the
+# protocol that creates objects unmeasured. Two fixes landed on paths a run has
+# never once exercised - the fabricator product block and the egg hatch block
+# both reported zero across three runs, which reads like "no duplicates" and
+# means "never tried". Counting that as verified is how a fix ships broken.
+#
+# Ordered before the unpause, so the sites exist when duplicants start moving
+# and the run measures construction rather than an order sitting in a queue.
+if ($BuildCells -gt 0) {
+    Step "ordering $BuildCells ladders on the host"
+    $mark = HostLogLines
+    Send-Host "build $BuildCells $BuildWhat"
+    $built = Wait-HostLog '\[SCENARIO\] OK build' 60 $mark
+
+    # A warning, not a Die.
+    #
+    # The build verb threw on its first cell and Die killed the run before the
+    # collect step, so three runs produced no logs at all - and the analysis then
+    # read the previous run's files and reported its numbers as though they were
+    # new. A broken action should cost that action, not the whole run's evidence.
+    if ($built) {
+        Ok $built.Substring($built.IndexOf('[SCENARIO]'))
+    } else {
+        Write-Host '    WARN host build did not report - continuing so the run still collects logs' -ForegroundColor Yellow
+    }
+}
+
+if ($PeerBuildCells -gt 0) {
+    Step "ordering $PeerBuildCells ladders from the peer"
+    Send-Peer "build $PeerBuildCells $BuildWhat"
+    Start-Sleep -Seconds 6
+    Ok 'peer build requested'
+}
+
 # Without this the run proves only that markers spawn and replicate. Paused,
 # no duplicant moves and nothing is ever mined, so the ore-spawn, chore and
 # pathing paths - where the bugs actually are - go untouched.
+# Eggs, brought to term so hatching happens inside a run.
+#
+# The client-side hatch block shipped and reported zero every time. The
+# patch-attachment test has since proved the hook is on the method, so the zero
+# means incubation never finishes in 150 seconds - eggs take cycles. Waiting for
+# one is not a test.
+if ($HatchEggs -gt 0) {
+    Step "bringing $HatchEggs eggs to term on the host"
+    $mark = HostLogLines
+    Send-Host "hatch $HatchEggs"
+    $hatched = Wait-HostLog '\[SCENARIO\] OK hatch' 60 $mark
+    if ($hatched) { Ok $hatched.Substring($hatched.IndexOf('[SCENARIO]')) }
+    else { Write-Host '    WARN hatch did not report' -ForegroundColor Yellow }
+
+    # And on the client, because the block being tested lives there.
+    #
+    # Forcing only the host's eggs left the client's counter at zero, which is
+    # correct behaviour and proves nothing: the client's own eggs never reached
+    # term, so its SpawnBaby never ran and there was nothing to refuse. A
+    # suppression can only be exercised on the peer that would otherwise act.
+    Send-Peer "hatch $HatchEggs"
+    Start-Sleep -Seconds 4
+    Ok 'peer eggs brought to term'
+}
+
+# The fabricator guard, exercised on the peer that has it.
+#
+# A fabricator needs a duplicant to work it and the client's AI is off, so the
+# client will never finish an order by itself - the guard could sit there
+# forever reporting zero. Asking directly is the only way to find out whether it
+# refuses.
+if ($FabricateOrders -gt 0) {
+    Step "asking the peer's fabricators for $FabricateOrders product(s)"
+    Send-Peer "fabricate $FabricateOrders"
+    Start-Sleep -Seconds 4
+    Ok 'peer fabricate requested'
+}
+
+# Damage, before the settle, so duplicants have the run to repair it.
+#
+# Wire repair not appearing on the client was reported from play and never
+# reproduced here, because nothing in this scenario damages anything - so the
+# damage test passed every run on an empty set. That is the same vacuous pass that
+# hid the egg block and the fabricator block.
+#
+# Only the host damages. The client's damage is suppressed on purpose, so asking it
+# would measure the suppression, not the repair.
+if ($DamageBuildings -gt 0) {
+    Step "damaging $DamageBuildings repairable building(s) on the host"
+    $mark = HostLogLines
+    Send-Host "damage $DamageBuildings"
+    $hit = Wait-HostLog '\[SCENARIO\] OK damage' 60 $mark
+    if ($hit) { Ok $hit.Substring($hit.IndexOf('[SCENARIO]')) }
+    else { Write-Host '    WARN damage did not report' -ForegroundColor Yellow }
+}
+
 Step "unpausing at speed $Speed"
 $mark = HostLogLines
 Send-Host "play $Speed"
@@ -196,6 +319,68 @@ Start-Sleep -Seconds $SettleSeconds
 # Asked of the peer, not of this box. WorldDamageSpawnResourcePacket is logged
 # by whoever receives it, and the host is the one sending - so looking here
 # reported "no mining observed" for a run that mined 26 ore, every time.
+# Deconstruction goes after the settle, so it tears down ladders that were
+# actually built rather than sites still waiting for a duplicant. Marking a site
+# for deconstruction is a different path from marking a finished building, and
+# the finished one is the case the removal fix was about.
+if ($DeconstructCells -gt 0) {
+    Step "marking $DeconstructCells ladders for deconstruction on the host"
+    $mark = HostLogLines
+    Send-Host "deconstruct $DeconstructCells"
+    $torn = Wait-HostLog '\[SCENARIO\] OK deconstruct' 60 $mark
+    if ($torn) { Ok $torn.Substring($torn.IndexOf('[SCENARIO]')) } else { Write-Host '    WARN deconstruct did not report' -ForegroundColor Yellow }
+
+    # Long enough for a duplicant to walk over and finish the job, so the run
+    # measures a building actually disappearing on both peers.
+    Start-Sleep -Seconds 45
+}
+
+# Finish what was ordered, so completion is actually replicated.
+#
+# A run produced zero BuildCompletePacket applications: duplicants do not finish a
+# tile inside 150 seconds, so the completion path - and the leftover-scaffold sweep
+# that hangs off it - was never reached. The counter read zero for want of the
+# event, the same way the egg block did.
+if ($FinishBuilds -gt 0) {
+    Step "finishing $FinishBuilds construction sites on the host"
+    $mark = HostLogLines
+    Send-Host "finishbuild $FinishBuilds"
+    $finished = Wait-HostLog '\[SCENARIO\] OK finishbuild' 60 $mark
+    if ($finished) { Ok $finished.Substring($finished.IndexOf('[SCENARIO]')) }
+    else { Write-Host '    WARN finishbuild did not report' -ForegroundColor Yellow }
+    Start-Sleep -Seconds 5
+}
+
+# Drop the client and bring it back, before anything is compared.
+#
+# This is the highest-value untested path in the project and it needed no new game
+# code at all - stop-net and join-lan were already there. The notes list "reconnect
+# never succeeds" as a known trap with a named cause, and a test was written for the
+# cause; nothing ever put a live session through it. So a fix that landed cannot be
+# distinguished from a fix that did not.
+#
+# Placed before the comparisons on purpose: every check that follows - hit points,
+# container contents, the id tables - then describes a session that has reconnected.
+# A rejoin that appears to work and leaves the two peers disagreeing is the failure
+# worth catching, and it is invisible if the run ends at "connected".
+if ($Reconnect) {
+    Step 'dropping the client and reconnecting'
+    Send-Peer 'stop-net'
+    Start-Sleep -Seconds 10
+
+    Send-Peer "join-lan $HostIp $Port"
+    $rejoined = Wait-PeerStatus 'insession=True.*game=True' 300
+    if (-not $rejoined) {
+        Write-Host '    FAIL the client never rejoined - reconnect is broken' -ForegroundColor Red
+        Write-Host '         the comparisons below describe a solo host and mean nothing' -ForegroundColor Red
+    } else {
+        Ok $rejoined.Substring($rejoined.IndexOf('[SCENARIO]'))
+        # Time to receive the world again before anything is compared, or the
+        # comparison measures the handshake rather than the session.
+        Start-Sleep -Seconds 30
+    }
+}
+
 Step 'checking that mining actually happened'
 & $peerCmd -Verb push-log -Label "$Label-mining" -Share $Share -TimeoutSeconds 120 | Out-Null
 $peerLog = Join-Path $Share "drop\$Label-mining\client.log"
@@ -225,6 +410,54 @@ if (Wait-HostLog '\[SCENARIO\] (OK|FAIL) pause' 60 $mark) { Ok 'host paused' }
 else { Write-Host '    WARN host did not confirm pause - state comparison may drift' -ForegroundColor Yellow }
 Send-Peer 'pause'
 Start-Sleep -Seconds 3
+
+# Both peers describe their damaged buildings, while both are paused.
+#
+# Asked after the pause on purpose. An earlier version of the state comparison read
+# two snapshots taken 4.2 seconds apart at speed 3 and reported two buildings as
+# diverged; nothing had diverged, the colony had simply been repaired in between.
+# Health changes fast enough for that to matter, so this is the one place it can be
+# asked honestly.
+if ($DamageBuildings -gt 0) {
+    Step 'asking both peers about damaged buildings'
+    Send-Host 'hp'
+    Send-Peer 'hp'
+    Start-Sleep -Seconds 3
+}
+
+# What is inside every container, from both peers, while both are paused.
+#
+# Asked unconditionally: this is the last big disagreement and it has no scenario
+# step to switch on. The dump is bounded by containers, not cells.
+Step 'asking both peers what is in their containers'
+Send-Host 'storage'
+Send-Peer 'storage'
+Start-Sleep -Seconds 4
+
+# What state each building type carries, and how much of it anything is watching.
+#
+# A single-peer audit, so only the host is asked. This is the generalisation of how
+# the storage gap was found: seven Harmony patches each naming one game type, no list
+# anywhere of what should be on the list, and therefore no way to notice a type that
+# was left off. Storage cost 96 divergent containers before a cross-peer comparison
+# happened to catch it.
+Step 'auditing what state is tracked at all'
+Send-Host 'coverage'
+Start-Sleep -Seconds 4
+
+# The accessors for player-set building state, asked of the running game.
+#
+# Door control state, the building enable toggle and the manual delivery amount are
+# only touched by event patches, and none of those reads the current value - so there
+# was no call site to copy, and the rule here is not to guess ONI API names. Offline
+# reflection cannot answer it either: PowerShell 5.1 refuses to load Assembly-CSharp.
+if ($AskApi) {
+    Step "asking the game about $AskApi"
+    foreach ($type in ($AskApi -split ',')) {
+        Send-Host "api $($type.Trim())"
+        Start-Sleep -Seconds 3
+    }
+}
 
 Step 'analysing'
 & (Join-Path $root 'analyze-session.ps1') -Label $Label -Share $Share

@@ -42,7 +42,8 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			InstantBuild = instantBuild;
 
 			if (PlanScreen.Instance)
-				Priority = PlanScreen.Instance.GetBuildingPriority();
+				// Guarded and validated - see PriorityWire and BuildPacket.
+			Priority = PriorityWire.SampleBuilding();
 		}
 		public void Serialize(BinaryWriter writer)
 		{
@@ -59,8 +60,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			writer.Write(MaterialTags.Count);
 			foreach (var tag in MaterialTags)
 				writer.Write(tag);
-			writer.Write((int)Priority.priority_class);
-			writer.Write(Priority.priority_value);
+			PriorityWire.Write(writer, Priority);
 			writer.Write(InstantBuild);
 		}
 
@@ -96,9 +96,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 			for (int i = 0; i < matCount; i++)
 				MaterialTags.Add(reader.ReadString());
 
-			Priority = new PrioritySetting(
-					(PriorityScreen.PriorityClass)reader.ReadInt32(),
-					reader.ReadInt32());
+			Priority = PriorityWire.Read(reader);
 			InstantBuild = reader.ReadBoolean();
 		}
 

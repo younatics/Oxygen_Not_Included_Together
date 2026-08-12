@@ -18,10 +18,25 @@ namespace ONI_Together.Patches.KleiPatches
 	{
 		/// Playing Overrides
 
-		static bool _allowedToPlayAnims = false;
-		public static void AllowAnims() => _allowedToPlayAnims = true;
-		public static void ForbidAnims() => _allowedToPlayAnims = false;
-		public static bool CanPlayAnims => true;// (MultiplayerSession.InSession && MultiplayerSession.IsClient) ? _allowedToPlayAnims : true;
+		/// <summary>
+		/// Animations are never blocked. Stated plainly, because it used to be
+		/// disguised.
+		///
+		/// There was a flag here - _allowedToPlayAnims - with AllowAnims and
+		/// ForbidAnims called from eight places around the code that applies received
+		/// animations. Nothing read it: CanPlayAnims returned a literal true and the
+		/// expression that would have consulted the flag was commented out beside it.
+		/// So eight call sites carefully toggled a value with no effect, and anyone
+		/// reading them would reasonably conclude that a client's local animations are
+		/// gated while a remote one is being applied. They are not.
+		///
+		/// Removed rather than repaired. Restoring the gate means changing what the
+		/// client draws, and that has to be measured, not assumed - twice yesterday a
+		/// change to animation and UI paths made on reasoning alone killed the client.
+		/// Deleting the machinery leaves the behaviour exactly as it has been, and
+		/// stops the code claiming a control it does not have.
+		/// </summary>
+		public static bool CanPlayAnims => true;
 
 
 
@@ -136,35 +151,92 @@ namespace ONI_Together.Patches.KleiPatches
 		/// Kanim Overrides
 
 		private static bool TogglingOverrideFromPacket = false;
+
+		/// <summary>
+		/// Whether this controller can carry an anim override at all.
+		///
+		/// This killed a client. Klei's AddAnimOverrides asserts "Anim overrides
+		/// containing additional symbols require a symbol override controller"
+		/// when the target has no SymbolOverrideController, and RemoveAnimOverrides
+		/// walks straight into SymbolOverrideControllerUtil.TryRemoveBuildOverride
+		/// with a null controller and throws. Both happened, in that order, at
+		/// 13:15:38.395 - the assert at ERROR level, the NullReferenceException
+		/// 10 ms later - and the process ran OnApplicationQuit a second after.
+		///
+		/// Nothing on the receiving side checked the target. The sender only sends
+		/// for BaseMinion, but the id it sends is resolved on the other peer, and
+		/// when an id resolves to the wrong object - which this session did
+		/// repeatedly, 39 VitalStats packets landing on something with no Calories
+		/// in the same twenty seconds - the override is applied to whatever came
+		/// back. A duplicant has a SymbolOverrideController; a critter, an item or
+		/// a building does not.
+		///
+		/// Checking is not a substitute for resolving ids correctly. It is the
+		/// difference between a missing animation and a closed game.
+		/// </summary>
+		private static bool CanCarryOverrides(KAnimControllerBase kbac, string kanim, bool adding)
+		{
+			if (kbac.IsNullOrDestroyed() || kbac.gameObject.IsNullOrDestroyed())
+				return false;
+
+			if (kbac.GetComponent<SymbolOverrideController>() == null)
+			{
+				ThrottledLog.Warn(
+					$"[AnimOverride] refusing to {(adding ? "add" : "remove")} '{kanim}' on " +
+					$"'{kbac.gameObject.PrefabID()}': it has no SymbolOverrideController. " +
+					"Applying it asserts inside Klei and then throws, which closes the game. " +
+					"The id this packet carried almost certainly resolved to the wrong object.");
+				return false;
+			}
+			return true;
+		}
+
 		internal static void AddKanimOverride(KAnimControllerBase kbac, string kanim, float priority)
 		{
 			using var _ = Profiler.Scope();
 
-			TogglingOverrideFromPacket = true;
-			if (Assets.TryGetAnim(kanim, out var anim))
-			{
-				kbac.AddAnimOverrides(anim, priority);
-			}
-			else
-				DebugConsole.LogWarning("could not find anim " + kanim);
+			if (!CanCarryOverrides(kbac, kanim, adding: true))
+				return;
 
-			Console.WriteLine("Adding Kanim Override " + kanim);
-			TogglingOverrideFromPacket = false;
+			TogglingOverrideFromPacket = true;
+			try
+			{
+				if (Assets.TryGetAnim(kanim, out var anim))
+				{
+					kbac.AddAnimOverrides(anim, priority);
+				}
+				else
+					DebugConsole.LogWarning("could not find anim " + kanim);
+
+				// Was one unthrottled line per override. 2037 additions and 2069
+				// removals in a fourteen-minute session, and they are what the tail
+				// of a dying log is made of - which is exactly when the log has to
+				// be readable.
+				ThrottledLog.Info("[AnimOverride] overrides added");
+			}
+			finally { TogglingOverrideFromPacket = false; }
 		}
 
 		internal static void RemoveKanimOverride(KAnimControllerBase kbac, string kanim)
 		{
 			using var _ = Profiler.Scope();
 
+			if (!CanCarryOverrides(kbac, kanim, adding: false))
+				return;
+
 			TogglingOverrideFromPacket = true;
-			if (Assets.TryGetAnim(kanim, out var anim))
+			try
 			{
-				kbac.RemoveAnimOverrides(anim);
+				if (Assets.TryGetAnim(kanim, out var anim))
+				{
+					kbac.RemoveAnimOverrides(anim);
+				}
+				else
+					DebugConsole.LogWarning("could not find anim " + kanim);
+
+				ThrottledLog.Info("[AnimOverride] overrides removed");
 			}
-			else
-				DebugConsole.LogWarning("could not find anim " + kanim);
-			Console.WriteLine("Removing Kanim Override " + kanim);
-			TogglingOverrideFromPacket = false;
+			finally { TogglingOverrideFromPacket = false; }
 		}
 
 

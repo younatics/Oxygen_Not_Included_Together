@@ -365,6 +365,10 @@ namespace ONI_Together.Networking.Components
 					{
 						if (entry.NetId != 0
 							&& existing.TryGetComponent<NetworkIdentity>(out var have)
+							// Nameless only. Adopting an object that already has a name -
+							// even one it gave itself - let an announcement rename a pile
+							// that already agreed with the host, and then nothing held the
+							// host's id at all.
 							&& (have.IsClientPreview || have.NetId == 0))
 						{
 							have.OverrideNetId(entry.NetId);

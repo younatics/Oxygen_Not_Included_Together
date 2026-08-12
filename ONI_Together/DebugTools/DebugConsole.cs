@@ -74,10 +74,23 @@ namespace ONI_Together.DebugTools
         {
             using var _ = Profiler.Scope();
 
+            // Marked when a test caused it, so a log reader can tell the two apart.
+            //
+            // The handler sweep hands every packet an address that resolves to
+            // nothing, and some handlers report that as an error - three per run, with
+            // text like "[SecureTransfer] Packet 0 CORRUPTED" and "Failed to spawn".
+            // The run gate counts errors in the log, and it counted these: two whole
+            // soak batches reported "errors=3" on both peers for failures the game
+            // never had. Filtering on the test name did not work because these lines
+            // carry the packet's tag, not the test's.
+            //
+            // A marker in the line itself is the only thing a later grep can rely on.
+            string tag = Networking.NetworkIdentityRegistry.InDiagnosticScope ? "[test-scope] " : "";
+
             if (trigger_error_screen)
-                Debug.LogError($"[ONI_Together] {message}");
+                Debug.LogError($"[ONI_Together] {tag}{message}");
 			else //put it in the log file but don't trigger the error screen
-				Debug.LogWarning($"-[ERROR] [ONI_Together] {message}");
+				Debug.LogWarning($"-[ERROR] [ONI_Together] {tag}{message}");
 
 			EnsureInstance();
             _instance.AddLog(message, "", LogType.Error);
@@ -86,6 +99,39 @@ namespace ONI_Together.DebugTools
         public static void LogErrorTriggerInGameScreen(string message)
         {
             LogError(message, true);
+        }
+
+        /// <summary>
+        /// Unity errors and exceptions seen since load, counted so a test can assert
+        /// that a path produced none.
+        ///
+        /// Klei raises asserts and exceptions from inside its own code while the
+        /// method that triggered them returns normally, so "did it throw" is not the
+        /// same question as "did it work". Both printing-pod crashes were invisible
+        /// to the first test and obvious to this counter.
+        /// </summary>
+        public static int UnityErrorCount { get; private set; }
+
+        /// <summary>
+        /// Errors raised while a test was deliberately provoking them, counted apart
+        /// from the ones gameplay caused.
+        ///
+        /// The handler sweep feeds every packet an unresolvable target on purpose, and
+        /// some of those make ONI log an error - "Could not find Tech:
+        /// packet-robustness-probe" is the sweep's own probe string coming back. Left
+        /// in one counter, the run reported nine errors that gameplay never produced
+        /// and the health gate failed on its own test suite.
+        ///
+        /// Third time this shape of mistake has appeared here: a test polluting the
+        /// number it is measured by. The split belongs at the counter, not in each
+        /// test's arithmetic.
+        /// </summary>
+        public static int UnityErrorsInTests { get; private set; }
+
+        public static void NoteUnityError()
+        {
+            if (Networking.NetworkIdentityRegistry.InDiagnosticScope) UnityErrorsInTests++;
+            else UnityErrorCount++;
         }
 
         public static void LogException(Exception ex)
