@@ -7,6 +7,9 @@ using UnityEngine;
 namespace ONI_Together.Networking.Components.StructureStateSyncers
 {
 	/// <summary>
+	/// NOT ATTACHED. Written, measured, and held back for one reason - see the end of
+	/// this comment. Kept because the analysis was the expensive part, not the code.
+	///
 	/// Replicates the building state a player sets by clicking: enabled or disabled, a
 	/// door's control state, a manual delivery amount.
 	///
@@ -34,6 +37,19 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 	/// Every accessor here was read out of the running game with the api verb, not
 	/// guessed: Door.CurrentState and QueueStateChange, BuildingEnabledButton.IsEnabled
 	/// (get and set), ManualDeliveryKG.capacity and paused.
+	///
+	/// Why it is not attached: this architecture allows one StructureSyncerBase per
+	/// object. Most machines have both storage and an enable toggle, so attaching this
+	/// put two on the same building - and StructureStatePacket is identified by NetId
+	/// alone, with nothing to say which syncer produced it. The storage syncer began
+	/// applying flag packets and reporting "Key: stor not found", 149 to 229 times a run
+	/// on a client that had been at zero errors. The flags themselves behaved: 700
+	/// buildings watched, 10 to 26 repairs a run, frame time unchanged.
+	///
+	/// What has to happen first: StructureStatePacket needs a syncer discriminator so a
+	/// receiver can route it. That is a wire-format change, so both peers move together.
+	/// Until then the flags stay on the event-only path, which is where they always were -
+	/// the risk documented above is unchanged, not newly introduced.
 	/// </summary>
 	public class BuildingFlagsSyncer : StructureSyncerBase
 	{

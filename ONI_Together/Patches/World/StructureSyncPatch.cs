@@ -141,42 +141,20 @@ namespace ONI_Together.Patches.World
     }
     */
 
-    /// <summary>
-    /// Attach the player-set-flag syncer wherever such a flag exists.
-    ///
-    /// Triggered by the state rather than by a list of building types: whatever declares
-    /// a BuildingEnabledButton, a Door or a ManualDeliveryKG has something a player sets
-    /// and therefore something that can drift. A type list would need extending for
-    /// every building the game adds, which is how storage syncing came to name four types
-    /// and miss forty.
-    ///
-    /// All three declare their own OnSpawn - checked with the api verb rather than
-    /// assumed, because patching an inherited KMonoBehaviour.OnSpawn would attach to
-    /// every object in the game.
-    /// </summary>
-    [HarmonyPatch]
-    public static class BuildingFlagsAttachPatch
-    {
-        [HarmonyPostfix]
-        public static void Postfix(object __instance)
-        {
-            using var _ = Profiler.Scope();
-
-            var component = __instance as KMonoBehaviour;
-            if (component.IsNullOrDestroyed() || component.gameObject.IsNullOrDestroyed()) return;
-
-            component.gameObject.AddOrGet<BuildingFlagsSyncer>();
-        }
-
-        [HarmonyTargetMethods]
-        internal static IEnumerable<MethodBase> TargetMethods()
-        {
-            const string name = nameof(KMonoBehaviour.OnSpawn);
-            yield return AccessTools.Method(typeof(BuildingEnabledButton), name);
-            yield return AccessTools.Method(typeof(Door), name);
-            yield return AccessTools.Method(typeof(ManualDeliveryKG), name);
-        }
-    }
+    // BuildingFlagsSyncer is deliberately NOT attached. See its file header.
+    //
+    // Attaching it produced 149 to 229 errors a run on the client, from a peer that had
+    // been at zero: "[Storage/RebuildStorageFromData] Key: stor not found". Two
+    // StructureSyncerBase components ended up on the same building - very common, since
+    // most machines have both storage and an enable toggle - and StructureStatePacket is
+    // identified by NetId alone, so the receiver cannot tell which syncer sent it. The
+    // storage syncer was applying flag packets and looking for contents that were never
+    // in them.
+    //
+    // This architecture is one syncer per object. Fixing it means giving the packet a
+    // syncer discriminator, which changes the wire format; until then the flags stay on
+    // the event-only path they were always on. Measured cost against an unrealised
+    // benefit is a revert.
 
     [HarmonyPatch(typeof(FlushToilet), nameof(FlushToilet.OnSpawn))]
     public static class FlushToiletSpawnPatch
