@@ -158,8 +158,33 @@ namespace ONI_Together.Patches.GamePatches
 					// way the base game creates it and the stats are set immediately:
 					// KMonoBehaviour.Spawn is scheduled, not immediate, so the same
 					// frame is early enough. The deferral was the whole defect.
-					CharacterContainer characterContainer = Util.KInstantiateUI<CharacterContainer>(
-						instance.containerPrefab.gameObject, instance.containerParent);
+					// force_active: true, and this is the whole fix.
+				//
+				// The reasoning above was right and the code did not do it. KInstantiateUI
+				// takes a third argument that activates the object, it was not passed, and
+				// the default is false - so whether the container came out live depended on
+				// whether its parent happened to be active at that moment. During
+				// ImmigrantScreen.Initialize it is not, and an inactive container sends
+				// SetMinion into ApplyTraits against a MinionSelectPreview that is still
+				// the prefab. Measured on the host, from a click on the printing pod:
+				//
+				//   NullReferenceException at Klei.AI.Modifier.AddTo (Attributes)
+				//     Klei.AI.Traits.Add <- MinionStartingStats.ApplyTraits
+				//     CharacterContainer.SetAnimator <- CharacterContainer.SetMinion
+				//     ImmigrantScreenPatch.ApplyOptionsToScreen
+				//     ImmigrantScreenInitializePatch.Postfix
+				//     ImmigrantScreen.InitializeImmigrantScreen <- TelepadSideScreen click
+				//
+				// ONI raised it and closed the game seconds later, taking the session with
+				// it. Every other KInstantiateUI in this repository that needs a live
+				// object passes true; this was the one that did not.
+				//
+				// The unit test missed it because it mirrors this call exactly and runs
+				// against an already-shown screen, where the child inherits an active
+				// parent. Its own comment flags that difference. Passing true removes the
+				// dependency on the parent's state, so both paths behave the same.
+				CharacterContainer characterContainer = Util.KInstantiateUI<CharacterContainer>(
+						instance.containerPrefab.gameObject, instance.containerParent, force_active: true);
 					characterContainer.SetController(instance);
 					characterContainer.SetReshufflingState(canRerollMinions);
 					characterContainer.SetMinion(stats);

@@ -131,9 +131,31 @@ namespace ONI_Together.DebugTools.UnitTests
                 // Exactly what the patch does, in the same order. If this ever stops
                 // matching ApplyOptionsToScreen, the test stops being about it.
                 container = Util.KInstantiateUI<CharacterContainer>(
-                    screen.containerPrefab.gameObject, screen.containerParent);
+                    screen.containerPrefab.gameObject, screen.containerParent, force_active: true);
                 container.SetController(screen);
                 container.SetReshufflingState(false);
+
+                // The precondition, asserted rather than waited for.
+                //
+                // This test used to only catch the exception, and it could not catch this
+                // one: it runs against a screen that is already shown, so the container
+                // inherited an active parent and survived. In the real path the screen is
+                // mid-Initialize, the parent is not active yet, and the same call produced
+                // an inactive container - which sends SetMinion into ApplyTraits against a
+                // prefab and closed the host.
+                //
+                // Whether the container is live is the thing SetMinion requires, so that
+                // is what gets checked. An assertion on the precondition holds in both
+                // paths; waiting for the crash only holds in the one that crashes.
+                if (!container.gameObject.activeInHierarchy)
+                {
+                    Cleanup(container);
+                    return UnitTestResult.Fail(
+                        "the choice container is not active before SetMinion - traits would " +
+                        "be applied to a prefab, which is the crash that closed the host. " +
+                        "KInstantiateUI needs force_active: true here.");
+                }
+
                 container.SetMinion(stats);
             }
             catch (Exception ex)
