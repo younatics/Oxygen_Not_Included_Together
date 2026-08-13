@@ -17,6 +17,13 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		public int TargetDiseaseCount;
 		public int NetId;
 
+		/// <summary>
+		/// Times a duplicant vital arrived above or below what this peer allows and was
+		/// trimmed to fit. Non-zero means the peers disagree about a limit, which no
+		/// amount of resending can fix.
+		/// </summary>
+		public static int AmountsClamped { get; private set; }
+
 		public VitalStatsPacket() { }
 		public VitalStatsPacket(int netId, Amounts amounts, PrimaryElement element)
 		{
@@ -120,7 +127,42 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 						$"'{kvp.Key}'; skipping it rather than throwing");
 					continue;
 				}
+				// SetValue clamps, and says nothing when it does.
+				//
+				// Its IL is Max(GetMin(), Min(GetMax(), value)), and GetMax reads an
+				// attribute - maxAttribute.GetTotalValue() - so the ceiling is not a
+				// constant. It moves with traits and effects. If a modifier is on the
+				// host and not on this peer, the host's value is above this peer's
+				// ceiling and every packet is silently trimmed to fit: a divergence that
+				// resending cannot close, because the send is not what is failing.
+				//
+				// That is the shape of the one duplicant that does not fit the rest of
+				// the measurement. Every other duplicant's calories sit a uniform 4,335
+				// behind the host - one and a half seconds of consumption, the sync
+				// period, and it does not grow with a longer run. Humphrey is 60,166
+				// behind with the host reading 4,016,666, which is above the 4,000,000
+				// this peer clamps to.
+				//
+				// Counted rather than assumed. Whether Humphrey is clamping is a fact
+				// the next run can state, and guessing at it is how three earlier
+				// diagnoses in this project went wrong.
+				// Read back rather than take a return value: Amounts.SetValue on the
+				// collection returns void. It is AmountInstance.SetValue underneath it
+				// that returns the clamped number, and that is the one whose IL shows
+				// the clamp.
 				amounts.SetValue(kvp.Key, kvp.Value);
+				float applied = amounts.Get(kvp.Key).value;
+				if (!Mathf.Approximately(applied, kvp.Value))
+				{
+					AmountsClamped++;
+					if (AmountsClamped <= 5)
+					{
+						DebugTools.ThrottledLog.Warn(
+							$"[VitalStatsPacket] '{identity.GetProperName()}' {kvp.Key}: " +
+							$"host says {kvp.Value}, this peer clamped it to {applied} - " +
+							"the two peers disagree about the limit, not about the value");
+					}
+				}
 			}
 			if (identity.TryGetComponent<PrimaryElement>(out var element))
 			{

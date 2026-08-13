@@ -413,7 +413,21 @@ namespace ONI_Together.DebugTools
 			if (def == null) throw new InvalidOperationException($"{defName} building def not found");
 
 			int origin = FindDuplicantCell();
-			var material = new List<Tag> { SimHashes.SandStone.CreateTag() };
+
+			// The materials this building is actually made of, not sandstone.
+			//
+			// Sandstone was hardcoded, which is fine for a ladder or a tile and wrong
+			// for everything else: a wire is metal and TryPlace refuses a material the
+			// def does not accept. So a run could only ever build the two things whose
+			// construction sites sit on their own object layer - and the branch that
+			// handles a site on a different layer, which is the reported "host says
+			// built, client says scheduled" bug, has never once been exercised.
+			//
+			// The accessor and the fallback are copied from BuildingSyncer, which has
+			// been doing this correctly all along.
+			var material = def.DefaultElements();
+			if (material == null || material.Count == 0)
+				material = new List<Tag> { SimHashes.SandStone.CreateTag() };
 
 			var seen = new HashSet<int> { origin };
 			var frontier = new Queue<int>();
@@ -435,7 +449,14 @@ namespace ONI_Together.DebugTools
 					// Nothing already standing there - placing over an existing
 					// building produces a refusal, not an order, and the run would
 					// report a build it never made.
-					if (Grid.Objects[n, (int)ObjectLayer.Building] != null) continue;
+					//
+					// On the def's own layer, not on Building. A wire does not occupy
+					// the Building layer, so this check asked about a slot the wire was
+					// never going into: every free cell looked occupied or every
+					// occupied one looked free, depending on the cell. The layer a
+					// building lives on is the same fact that decides where its
+					// construction site goes, which is what this whole scenario is for.
+					if (Grid.Objects[n, (int)def.ObjectLayer] != null) continue;
 
 					// A visualizer and a facade, because that is what TryPlace needs.
 					//
@@ -451,7 +472,9 @@ namespace ONI_Together.DebugTools
 					// pick the likely null produced a fix that did not work and then a
 					// second one that did not either. Each step says what it is about to
 					// do, so the next run names the null instead of me nominating one.
-					Vector3 pos = Grid.CellToPosCBC(n, Grid.SceneLayer.Building);
+					// The def's scene layer, for the same reason as the object layer
+					// above - a wire and a tile do not render on the same one.
+					Vector3 pos = Grid.CellToPosCBC(n, def.SceneLayer);
 
 					if (def.BuildingPreview == null)
 					{
