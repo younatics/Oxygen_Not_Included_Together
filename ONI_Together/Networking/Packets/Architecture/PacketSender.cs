@@ -326,6 +326,11 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+			// Here too, not only in the broadcasts. The viewport-culled senders reach
+			// clients through this path, and WorkableProgressPacket - one of the two
+			// packets measured arriving with no id - is one of them.
+			if (Unaddressed(packet)) return false;
+
 			// Prevent host from sending packets to itself (can cause loops and errors)
 			if (MultiplayerSession.IsHost && steamID == MultiplayerSession.HostUserID)
 			{
@@ -393,6 +398,51 @@ namespace ONI_Together.Networking
 		/// of the session, which is far worse than the warnings this avoids - so
 		/// after the host's own timeout the gate lifts on its own.
 		/// </summary>
+		/// <summary>
+		/// Packets dropped because the object they are about has no address, grouped by
+		/// packet name.
+		///
+		/// Counted, not silent. Blocking a send does not remove a failure by itself - it
+		/// usually moves it to an earlier counter, and this project has already read one
+		/// such move as an improvement. The prediction this makes is checkable in one
+		/// run: the client's "packets arrived carrying NetId 0" should fall to zero and
+		/// this should rise by about the same amount. If it does not, the reasoning was
+		/// wrong somewhere else.
+		/// </summary>
+		public static int SendsSkippedNoId { get; private set; }
+
+		private static readonly Dictionary<string, int> _skippedNoIdByPacket =
+			new Dictionary<string, int>();
+
+		/// <summary>Which packets were about objects with no address, worst first.</summary>
+		public static string SkippedNoIdBreakdown()
+		{
+			if (_skippedNoIdByPacket.Count == 0) return "none";
+			var parts = new List<string>();
+			foreach (var kv in _skippedNoIdByPacket.OrderByDescending(kv => kv.Value).Take(6))
+				parts.Add($"{kv.Key}:{kv.Value}");
+			return string.Join(" ", parts);
+		}
+
+		/// <summary>
+		/// True when the packet is about one object and that object has no NetId.
+		///
+		/// See IAddressedPacket. The receiver cannot act on such a packet - it logs
+		/// "Could not resolve workable 0" and drops it - so the only thing sending it
+		/// buys is a warning at the far end and bandwidth spent during a hard sync.
+		/// </summary>
+		private static bool Unaddressed(IPacket packet)
+		{
+			if (!(packet is IAddressedPacket addressed) || addressed.IsAddressable)
+				return false;
+
+			SendsSkippedNoId++;
+			string name = packet.GetType().Name;
+			_skippedNoIdByPacket.TryGetValue(name, out int n);
+			_skippedNoIdByPacket[name] = n + 1;
+			return true;
+		}
+
 		private static bool NotReadyFor(MultiplayerPlayer player, IPacket packet)
 		{
 			if (!(packet is IRequiresLoadedWorld)) return false;
@@ -485,6 +535,11 @@ namespace ONI_Together.Networking
 		{
 			using var _ = Profiler.Scope();
 
+			// Before the loop, so one unaddressable send counts once rather than once
+			// per recipient - a count that scales with player numbers cannot be
+			// compared between runs.
+			if (Unaddressed(packet)) return 0;
+
             // Only send this packet if its being observed by a someone
             bool cull = WantsCulling(packet, out int cell);
             int sent = 0;
@@ -527,6 +582,9 @@ namespace ONI_Together.Networking
 		public static int SendToAllExcluding(IPacket packet, HashSet<ulong> excludedIds, PacketSendMode sendType = PacketSendMode.Reliable)
 		{
 			using var _ = Profiler.Scope();
+
+			// Counted once per send, as in SendToAll.
+			if (Unaddressed(packet)) return 0;
 
             bool cull = WantsCulling(packet, out int cell);
             int sent = 0;

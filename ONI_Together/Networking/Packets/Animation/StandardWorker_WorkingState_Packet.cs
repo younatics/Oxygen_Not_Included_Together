@@ -15,8 +15,22 @@ using static RancherChore;
 
 namespace ONI_Together.Networking.Packets.Animation
 {
-	internal class StandardWorker_WorkingState_Packet : IPacket, IRequiresLoadedWorld
+	internal class StandardWorker_WorkingState_Packet : IPacket, IRequiresLoadedWorld, IAddressedPacket
 	{
+		/// <summary>
+		/// Both ends of this packet are addresses, and either can be missing.
+		///
+		/// Measured on a client: "Could not resolve workable 0 for worker Humphrey" -
+		/// the worker was fine and the workable had no id, because it was something ONI
+		/// refuses one to. The receiver's only option is to drop it, so it is dropped
+		/// here instead, where it is counted and costs no bandwidth.
+		///
+		/// The workable is only checked when starting, because that is the only case
+		/// that serialises it.
+		/// </summary>
+		public bool IsAddressable =>
+			WorkerNetId != 0 && (!StartingToWork || WorkableNetId != 0);
+
 		public StandardWorker_WorkingState_Packet() { }
 
 		public StandardWorker_WorkingState_Packet(StandardWorker worker, Workable workable, bool startedWorking)

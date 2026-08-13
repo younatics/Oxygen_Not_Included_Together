@@ -9,8 +9,17 @@ using UnityEngine;
 
 namespace ONI_Together.Networking.Packets.World
 {
-	internal class WorkableProgressPacket : IPacket, IRequiresLoadedWorld
+	internal class WorkableProgressPacket : IPacket, IRequiresLoadedWorld, IAddressedPacket
 	{
+		/// <summary>
+		/// This packet is a progress bar for one object; with no address it is nothing.
+		///
+		/// Named alongside StandardWorker_WorkingState_Packet in the gate that counts
+		/// packets arriving with no id, and it has form here - it once accounted for 826
+		/// of a client's 904 failed lookups on its own.
+		/// </summary>
+		public bool IsAddressable => TargetNetId != 0;
+
 		private int TargetNetId;
 		private string TargetTypeName;
 		private RemoteProgressKind ProgressKind;

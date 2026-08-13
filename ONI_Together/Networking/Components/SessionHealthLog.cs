@@ -289,6 +289,16 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Duplicant vitals trimmed on arrival because this peer's limit is
+				// lower than the host's. A divergence that resending cannot close.
+				$"|vitalClamped={Packets.DuplicantActions.VitalStatsPacket.AmountsClamped}" +
+				// Sends dropped because the object had no address, and which packets
+				// they were. The prediction: the client's "arrived carrying NetId 0"
+				// goes to zero and this rises by about as much. If the first happens
+				// and the second does not, the failure moved somewhere unnamed.
+				// PacketSender lives in ONI_Together.Networking, not in the
+				// Packets.Architecture namespace its folder suggests.
+				$"|noIdSkipped={PacketSender.SendsSkippedNoId}" +
 				// Doors finished in place because the queued change was waiting on a
 				// duplicant chore that a client never runs, and doors that were already
 				// right. The second is the activity number: doorForced=0 means nothing
