@@ -112,6 +112,20 @@ namespace ONI_Together.Patches.ToolPatches.Build
                     instantBuild
                 );
 
+                // The address this peer's site holds, so the receiver's copy can share
+                // it. Only the host has one to give - a client refuses to mint, and its
+                // own site stays nameless until the host names it.
+                //
+                // Read from the object already fetched above rather than looking it up
+                // again: that lookup is the one whose result the log line above is
+                // careful about.
+                // TryGetNetIdentity, because GetNetId is an extension on MonoBehaviour
+                // and this is a GameObject - the same accessor Extensions.GetNetId uses
+                // underneath.
+                if (MultiplayerSession.IsHost && obj != null && !obj.IsNullOrDestroyed()
+                    && obj.TryGetNetIdentity(out var siteIdentity))
+                    packet.SiteNetId = siteIdentity.NetId;
+
                 PacketSender.SendToAllOtherPeers(packet);
             }
             catch (Exception ex)

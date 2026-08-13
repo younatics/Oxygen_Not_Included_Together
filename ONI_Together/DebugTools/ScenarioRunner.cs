@@ -527,13 +527,24 @@ namespace ONI_Together.DebugTools
 					//
 					// A scenario that takes a shortcut the game does not take measures
 					// the shortcut.
-					PacketSender.SendToAllOtherPeers(new Networking.Packets.Tools.Build.BuildPacket(
+					var order = new Networking.Packets.Tools.Build.BuildPacket(
 						def.PrefabID,
 						n,
 						Orientation.Neutral,
 						material,
 						def.ObjectLayer,
-						instantBuild: false));
+						instantBuild: false);
+
+					// The site's address travels with the order, so the other peer's
+					// copy answers to the same number. Without it the receiver builds
+					// the site and cannot file it - measured as four wire sites standing
+					// unaddressed on a client at the exact cells the comparison called
+					// host-only.
+					if (MultiplayerSession.IsHost && !site.IsNullOrDestroyed()
+						&& site.TryGetNetIdentity(out var siteIdentity))
+						order.SiteNetId = siteIdentity.NetId;
+
+					PacketSender.SendToAllOtherPeers(order);
 
 					placed++;
 					DebugConsole.Log($"{Tag} build site at cell {n}");

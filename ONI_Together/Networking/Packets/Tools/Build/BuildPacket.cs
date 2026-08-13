@@ -1,4 +1,5 @@
 ﻿using ONI_Together.DebugTools;
+using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using Steamworks;
 using System.Collections.Generic;
@@ -22,6 +23,19 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         /// </summary>
         public static int OrdersThatBuiltNothing { get; private set; }
 
+        /// <summary>
+        /// Construction sites given the host's address on arrival. Before this they were
+        /// built and left nameless, which is not the same failure it looked like.
+        /// </summary>
+        public static int SitesNamedByHost { get; private set; }
+
+        /// <summary>
+        /// Orders that arrived carrying no address for their site. Expected from a
+        /// client, since clients do not mint; from a host it means a site was announced
+        /// before it had been filed.
+        /// </summary>
+        public static int SitesArrivingUnnamed { get; private set; }
+
         private string PrefabID;
         private int Cell;
         private Orientation Orientation;
@@ -29,6 +43,22 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         private PrioritySetting Priority;
         private ObjectLayer ObjectLayer;
         private bool InstantBuild;
+
+        /// <summary>
+        /// The address the sender's construction site holds, or zero.
+        ///
+        /// Without it a client builds the site and has nothing to file it under - it
+        /// will not invent one, and refusing to is correct, since two peers inventing
+        /// addresses independently is the divergence this whole registry exists to
+        /// avoid. So the site stood in the colony with no address, invisible to every
+        /// comparison in this project, and read for three rounds as a building the
+        /// client never received.
+        ///
+        /// Measured: [UNFILED] WireUnderConstruction|4|46707,46452,46450,46449 on the
+        /// client, at exactly the four cells the comparer called host-only, with the
+        /// host holding all four filed.
+        /// </summary>
+        public int SiteNetId;
 
         public BuildPacket()
         {
@@ -105,6 +135,11 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 
             writer.Write((int)ObjectLayer);
             writer.Write(InstantBuild);
+
+            // The address the sender's own copy has, so the receiver's copy can share
+            // it. Zero when the sender has none, which is every client-issued order -
+            // clients do not mint addresses.
+            writer.Write(SiteNetId);
         }
 
         public void Deserialize(BinaryReader reader)
@@ -129,6 +164,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             Priority = PriorityWire.Read(reader);
             ObjectLayer = (ObjectLayer)reader.ReadInt32();
             InstantBuild = reader.ReadBoolean();
+            SiteNetId = reader.ReadInt32();
         }
 
         public void OnDispatched()
@@ -193,7 +229,43 @@ namespace ONI_Together.Networking.Packets.Tools.Build
                 return;
             }
 
+            NameSiteFromSender(builtItem);
             DebugConsole.Log($"[BuildPacket] Built {PrefabID} at cell {Cell}");
+        }
+
+        /// <summary>
+        /// Give the site the address the sender's copy has.
+        ///
+        /// OverrideNetId is the same call AssignmentPacket and BuildingConfigPacket use
+        /// for this - it moves the registry entry and the component together, so the two
+        /// cannot end up disagreeing about which number the object answers to.
+        ///
+        /// Only on a client. The host is where addresses come from, and a host adopting
+        /// a client's number would be the peers deciding ids independently, which is the
+        /// failure mode the registry exists to prevent.
+        /// </summary>
+        private void NameSiteFromSender(GameObject builtItem)
+        {
+            if (MultiplayerSession.IsHost) return;
+
+            if (SiteNetId == 0)
+            {
+                SitesArrivingUnnamed++;
+                return;
+            }
+
+            if (!builtItem.TryGetComponent<NetworkIdentity>(out var identity)
+                || identity.IsNullOrDestroyed())
+            {
+                SitesArrivingUnnamed++;
+                ThrottledLog.Warn(
+                    $"[BuildPacket] {PrefabID} at cell {Cell} has no NetworkIdentity to " +
+                    $"put the host's id {SiteNetId} on - it stays unaddressable here");
+                return;
+            }
+
+            identity.OverrideNetId(SiteNetId);
+            SitesNamedByHost++;
         }
 
         private GameObject QueueBuild(BuildingDef def, List<Tag> selected_elements, Vector3 pos)

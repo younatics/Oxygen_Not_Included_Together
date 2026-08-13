@@ -328,6 +328,12 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Construction sites the host named on arrival, and orders that arrived
+				// with no name. A site with no address is invisible to every comparison
+				// here, which is what made four of them read as buildings the client
+				// never received.
+				$"|siteNamed={Packets.Tools.Build.BuildPacket.SitesNamedByHost}" +
+				$"|siteUnnamed={Packets.Tools.Build.BuildPacket.SitesArrivingUnnamed}" +
 				// Build orders that were applied and produced no building. Every one is
 				// a building the other peer has and this one does not, and every one
 				// used to print as a success.
