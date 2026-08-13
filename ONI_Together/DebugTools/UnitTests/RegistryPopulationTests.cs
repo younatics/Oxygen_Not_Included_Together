@@ -1,5 +1,7 @@
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace ONI_Together.DebugTools.UnitTests
@@ -45,6 +47,24 @@ namespace ONI_Together.DebugTools.UnitTests
 			// matter is refused outright - a colony full of those is correct.
 			int addressable = 0;
 			int filed = 0;
+
+			// What is unfiled, not just how much of it.
+			//
+			// Every cross-peer comparison in this project reads the NetId dump, and that
+			// dump walks the registry rather than the world - so an object standing in a
+			// colony with no address is invisible to it, and the comparer reports the
+			// other peer's copy as "the client never built or received it". That sentence
+			// is not something a registry walk can support, and it sent three rounds of
+			// this investigation after a replication path for buildings that were never
+			// missing: the client held 11,047 addressable objects against the host's
+			// 9,632 and had filed 81% of them where the host filed 95%.
+			//
+			// Naming them is what separates "absent" from "not visible". Grouped by
+			// prefab so the log stays readable, with a few cells each, because the
+			// question that keeps coming up is whether one specific cell has the thing.
+			var unfiledByPrefab = new Dictionary<string, int>();
+			var unfiledCells = new Dictionary<string, List<int>>();
+
 			foreach (var identity in identities)
 			{
 				if (identity.IsNullOrDestroyed() || identity.gameObject.IsNullOrDestroyed()) continue;
@@ -52,7 +72,29 @@ namespace ONI_Together.DebugTools.UnitTests
 
 				addressable++;
 				if (identity.NetId != 0 && NetworkIdentityRegistry.Holds(identity.NetId, identity))
+				{
 					filed++;
+					continue;
+				}
+
+				string prefab = identity.gameObject.PrefabID().ToString();
+				unfiledByPrefab.TryGetValue(prefab, out int n);
+				unfiledByPrefab[prefab] = n + 1;
+
+				if (!unfiledCells.TryGetValue(prefab, out var cells))
+					unfiledCells[prefab] = cells = new List<int>();
+				if (cells.Count < 6)
+				{
+					int c = Grid.PosToCell(identity.gameObject);
+					if (Grid.IsValidCell(c)) cells.Add(c);
+				}
+			}
+
+			foreach (var kv in unfiledByPrefab.OrderByDescending(kv => kv.Value).Take(20))
+			{
+				DebugConsole.Log(
+					$"[UNFILED] {kv.Key}|{kv.Value}|" +
+					string.Join(",", unfiledCells[kv.Key]));
 			}
 
 			// A world with almost no objects says nothing either way, and reporting a

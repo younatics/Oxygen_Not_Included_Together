@@ -233,12 +233,24 @@ def main():
               f'- the other peer has the same building at a different stage')
     if not hb or not cb:
         print('  (no [NETID] building dump on one side - cannot compare presence)')
+    # Both sides of this compare the [NETID] dump, and that dump walks the registry -
+    # not the world. An object standing in a colony with no address does not appear in
+    # it, so "one peer only" means "one peer has it filed", which is not the same claim.
+    #
+    # It used to say the client never built or received it. That sentence cost three
+    # rounds of this investigation: it was read as missing replication, and the search
+    # went looking for a way to send buildings that were never missing. The registry
+    # population test says the client had 11,047 addressable objects against the host's
+    # 9,632 and had filed 81% of them where the host filed 95%, so the peer with fewer
+    # rows here is the one that files less, not the one that has less.
+    #
+    # The [UNFILED] rows are what settles it for a given cell.
     for (prefab, cell) in host_missing[:10]:
-        print(f'    client-only  {prefab} at cell {cell} (netid {cb[(prefab, cell)]}) '
-              f'- a phantom: the host has nothing here')
+        print(f'    client-filed-only  {prefab} at cell {cell} (netid {cb[(prefab, cell)]}) '
+              f'- not in the host registry; check [UNFILED] before calling it absent')
     for (prefab, cell) in client_missing[:10]:
-        print(f'    host-only    {prefab} at cell {cell} (netid {hb[(prefab, cell)]}) '
-              f'- the client never built or received it')
+        print(f'    host-filed-only    {prefab} at cell {cell} (netid {hb[(prefab, cell)]}) '
+              f'- not in the client registry; check [UNFILED] before calling it absent')
 
     # Damage is separate because it is what a player sees first.
     def present(buildings, prefab, cell):
