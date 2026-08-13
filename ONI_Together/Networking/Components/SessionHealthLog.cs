@@ -339,6 +339,7 @@ namespace ONI_Together.Networking.Components
 				// here, which is what made four of them read as buildings the client
 				// never received.
 				$"|siteNamed={Packets.Tools.Build.BuildPacket.SitesNamedByHost}" +
+				$"|siteEchoed={Packets.Tools.Build.BuildPacket.SitesEchoedBack}" +
 				$"|siteUnnamed={Packets.Tools.Build.BuildPacket.SitesArrivingUnnamed}" +
 				// Build orders that were applied and produced no building. Every one is
 				// a building the other peer has and this one does not, and every one

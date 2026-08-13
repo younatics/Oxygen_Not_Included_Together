@@ -36,6 +36,12 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         /// </summary>
         public static int SitesArrivingUnnamed { get; private set; }
 
+        /// <summary>
+        /// Client-issued orders the host has built and named back. Zero with a non-zero
+        /// peer build count means the echo is not running.
+        /// </summary>
+        public static int SitesEchoedBack { get; private set; }
+
         private string PrefabID;
         private int Cell;
         private Orientation Orientation;
@@ -184,6 +190,35 @@ namespace ONI_Together.Networking.Packets.Tools.Build
                 return;
             }
 
+            // Already standing here? Then this is a naming, not an order.
+            //
+            // A client cannot mint an address, so an order it issues leaves its own copy
+            // nameless while the host files the copy it makes. Measured: the client's
+            // unfiled list held InsulatedLiquidConduitUnderConstruction at 46706, 46449
+            // and 46453, which are exactly the three cells the client itself ordered,
+            // while the host held all three filed and the comparison called them
+            // host-only. The three the host ordered were named correctly in the same run.
+            //
+            // So the host echoes the order back with the id it assigned, and this is
+            // where that echo lands. Building again would put an order on an occupied
+            // cell, TryPlace would refuse it, and the refusal would be counted as a
+            // failure that did not happen.
+            //
+            // It also makes a replayed order harmless if the window is ever generous
+            // enough to repeat one.
+            if (SiteNetId != 0 && !MultiplayerSession.IsHost)
+            {
+                var standing = Grid.Objects[Cell, (int)def.ObjectLayer];
+                if (standing != null && !standing.IsNullOrDestroyed()
+                    && standing.TryGetComponent<Building>(out var already)
+                    && !already.IsNullOrDestroyed()
+                    && already.Def != null && already.Def.PrefabID == PrefabID)
+                {
+                    NameSiteFromSender(standing);
+                    return;
+                }
+            }
+
             var selected_elements = MaterialTags.Select(t => TagManager.Create(t)).ToList();
 
             // The def's own scene layer, not Building.
@@ -230,6 +265,7 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             }
 
             NameSiteFromSender(builtItem);
+            EchoNameToPeers(builtItem);
             DebugConsole.Log($"[BuildPacket] Built {PrefabID} at cell {Cell}");
         }
 
@@ -266,6 +302,34 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 
             identity.OverrideNetId(SiteNetId);
             SitesNamedByHost++;
+        }
+
+        /// <summary>
+        /// Tell the peers what this site is called, once the host has built it.
+        ///
+        /// Only the host has an address to give, and a client-issued order arrives with
+        /// none - so without this the ordering client is left holding a building it can
+        /// never name, and every comparison in this project reads that as the building
+        /// being absent. The echo carries the same cell and prefab, so the client
+        /// recognises what it already has and names it instead of building it twice.
+        ///
+        /// Sent only when the order came in with no name, which is exactly the
+        /// client-issued case. Echoing the host's own orders would be a packet per build
+        /// for nothing, since those already went out named.
+        /// </summary>
+        private void EchoNameToPeers(GameObject builtItem)
+        {
+            if (!MultiplayerSession.IsHost) return;
+            if (SiteNetId != 0) return;
+            if (builtItem.IsNullOrDestroyed()) return;
+            if (!builtItem.TryGetNetIdentity(out var identity) || identity.NetId == 0) return;
+
+            var echo = new BuildPacket(PrefabID, Cell, Orientation, MaterialTags.Select(TagManager.Create), ObjectLayer, InstantBuild)
+            {
+                SiteNetId = identity.NetId,
+            };
+            PacketSender.SendToAllClients(echo);
+            SitesEchoedBack++;
         }
 
         private GameObject QueueBuild(BuildingDef def, List<Tag> selected_elements, Vector3 pos)
