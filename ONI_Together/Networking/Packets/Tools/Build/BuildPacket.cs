@@ -15,6 +15,13 @@ namespace ONI_Together.Networking.Packets.Tools.Build
     {
         private const int MaxMaterialTagCount = 64;
 
+        /// <summary>
+        /// Build orders that were applied and produced nothing. Each one is a building
+        /// the other peer has and this one does not, and until now each was logged as a
+        /// success.
+        /// </summary>
+        public static int OrdersThatBuiltNothing { get; private set; }
+
         private string PrefabID;
         private int Cell;
         private Orientation Orientation;
@@ -142,7 +149,15 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             }
 
             var selected_elements = MaterialTags.Select(t => TagManager.Create(t)).ToList();
-            Vector3 pos = Grid.CellToPosCBC(Cell, Grid.SceneLayer.Building);
+
+            // The def's own scene layer, not Building.
+            //
+            // This was hardcoded, and a wire does not live on the Building layer. The
+            // same hardcoding in the scenario's own build verb is what stopped it from
+            // ever placing a wire, so this is the second copy of a defect already
+            // measured once - the pattern this project's notes say to grep for before
+            // fixing the instance in hand.
+            Vector3 pos = Grid.CellToPosCBC(Cell, def.SceneLayer);
 
             GameObject builtItem;
             if (InstantBuild)
@@ -154,7 +169,31 @@ namespace ONI_Together.Networking.Packets.Tools.Build
                 builtItem = HandleReplacementInstant(def, pos, selected_elements) ?? HandleReplacementQueued(def, pos, selected_elements);
 
             SetPriority(builtItem);
-            DebugConsole.Log("[BuildPacket] Built item " + def);
+
+            // Only say it was built if something was.
+            //
+            // This line ran unconditionally, so a null result printed "[BuildPacket]
+            // Built item Wire (BuildingDef)" - def.ToString(), which is why the message
+            // looks like a success with a type name stuck on the end. A client logged
+            // four of them in a run while creating none of the four sites, and the
+            // cross-peer comparison found the host holding WireUnderConstruction at
+            // 46449, 46450, 46452 and 46707 with nothing at those cells on the client.
+            //
+            // The log was the reason this looked like an architectural gap - a building
+            // the client "has" cannot be a replication failure, so the search went to
+            // why the host could not send an existing object instead of to why the
+            // order that was sent did nothing. A success message that cannot fail is
+            // worse than no message.
+            if (builtItem == null)
+            {
+                OrdersThatBuiltNothing++;
+                ThrottledLog.Warn(
+                    $"[BuildPacket] {PrefabID} at cell {Cell}: the order was applied and " +
+                    "produced no building - this peer is now missing what the other one has");
+                return;
+            }
+
+            DebugConsole.Log($"[BuildPacket] Built {PrefabID} at cell {Cell}");
         }
 
         private GameObject QueueBuild(BuildingDef def, List<Tag> selected_elements, Vector3 pos)
