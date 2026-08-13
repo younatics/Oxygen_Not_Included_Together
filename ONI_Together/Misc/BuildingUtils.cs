@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using ONI_Together.DebugTools;
 using UnityEngine;
@@ -253,6 +254,29 @@ namespace ONI_Together.Misc
             if (TryUpdateInPlace(storage, diseaseReason))
                 return;
 
+            // Not an exact match, but almost always a near one - so correct the
+            // difference instead of destroying the container.
+            //
+            // The all-or-nothing rule meant one missing prefab condemned everything
+            // beside it. A MicrobeMusher holding Dirt, Water and BasicPlantFood on the
+            // host and only Dirt and Water on the client had its dirt and water
+            // destroyed and rebuilt on every packet because of the third item, and the
+            // client rebuilt that food 47 times in a single run - measured once the
+            // rebuild counter was broken down by prefab - while ending the run without
+            // it. 1,928 rebuilds against 13,318 in-place corrections.
+            //
+            // Destroying what is already right is also how this file's oldest pathology
+            // works: every rebuilt object takes a new NetId, and a client once
+            // registered the same water pile 2,109 times in 29 minutes. Extending the
+            // in-place path to the partial case removes the churn for every container
+            // that differs by an item rather than only for those that match exactly.
+            //
+            // The full clear stays below for the cases this cannot express - an object
+            // that has no PrimaryElement, or a container holding something the sender
+            // does not describe at all.
+            if (TryReconcile(storage, diseaseReason))
+                return;
+
             // Every rebuild destroys objects and creates new ones, and every new object
             // takes a new NetId. Counted so the ratio is visible: a healthy session
             // rebuilds when contents genuinely change and updates in place otherwise, so
@@ -312,6 +336,17 @@ namespace ONI_Together.Misc
                     scrapObject.SetActive(true);
                     storage.Store(scrapObject, true, true);
 
+                    // Which items, not just how many.
+                    //
+                    // storeMade says 44 to 68 items are rebuilt a run and says nothing
+                    // about whether the one item that disagrees is among them. That is
+                    // the difference between "the client keeps being given this food and
+                    // it keeps being destroyed" and "the last packet before the snapshot
+                    // simply did not carry it", and those are a fix and a non-bug.
+                    string madeName = scrapObject.PrefabID().ToString();
+                    _madeByPrefab.TryGetValue(madeName, out int madeCount);
+                    _madeByPrefab[madeName] = madeCount + 1;
+
                     // Did it actually land in the container?
                     //
                     // Store's result was discarded, and a container can refuse - a
@@ -365,6 +400,18 @@ namespace ONI_Together.Misc
         /// that still disagrees at the end of the run, means something removes it after.
         /// </summary>
         public static int ContentsMissingAfterApply { get; private set; }
+
+        private static readonly Dictionary<string, int> _madeByPrefab = new Dictionary<string, int>();
+
+        /// <summary>What this peer rebuilt into containers, worst first.</summary>
+        public static string MadeBreakdown()
+        {
+            if (_madeByPrefab.Count == 0) return "none";
+            var parts = new List<string>();
+            foreach (var kv in _madeByPrefab.OrderByDescending(kv => kv.Value).Take(8))
+                parts.Add($"{kv.Key}:{kv.Value}");
+            return string.Join(" ", parts);
+        }
 
         /// <summary>Storages corrected without destroying anything.</summary>
         public static int StorageUpdatedInPlace { get; private set; }
@@ -494,6 +541,134 @@ namespace ONI_Together.Misc
             StorageUpdatedInPlace++;
             return true;
         }
+
+        /// <summary>
+        /// Bring a container to what the sender described by changing only what differs.
+        ///
+        /// Returns false when the local contents cannot be reasoned about item by item,
+        /// leaving the caller to fall back on the full rebuild.
+        ///
+        /// Every skip rule here mirrors one in TryUpdateInPlace and in the encoder,
+        /// because a thing the sender cannot see must be invisible to this too: massless
+        /// working buffers, which a pump holds for part of a tick, and assigned objects
+        /// like atmo suits, whose owner and oxygen a rebuild destroys.
+        /// </summary>
+        private static bool TryReconcile(Storage storage, string diseaseReason)
+        {
+            var items = storage.items;
+            if (items == null) return false;
+
+            var localByPrefab = new Dictionary<int, List<PrimaryElement>>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                var go = items[i];
+                if (go.IsNullOrDestroyed()) return false;
+                if (!go.TryGetComponent<PrimaryElement>(out var pe) || pe.IsNullOrDestroyed()) return false;
+
+                if (pe.Mass <= 0f) continue;
+                if (go.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed()) continue;
+                if (!go.TryGetComponent<KPrefabID>(out var id) || id.IsNullOrDestroyed()) return false;
+
+                int hash = id.PrefabTag.GetHashCode();
+                if (!localByPrefab.TryGetValue(hash, out var list))
+                    localByPrefab[hash] = list = new List<PrimaryElement>();
+                list.Add(pe);
+            }
+
+            // Correct or create, one prefab at a time.
+            var wanted = new HashSet<int>();
+            for (int i = 0; i < _incoming.Count; i++)
+            {
+                if (_incoming[i].Mass <= 0f) continue;
+                wanted.Add(_incoming[i].Hash);
+
+                if (localByPrefab.TryGetValue(_incoming[i].Hash, out var local))
+                {
+                    // Spread the total over however many objects this peer split it
+                    // into, as the exact-match path does.
+                    float share = _incoming[i].Mass / local.Count;
+                    foreach (var pe in local)
+                    {
+                        pe.Mass = share;
+                        pe.Temperature = _incoming[i].Temperature;
+                        if (_incoming[i].DiseaseIdx != byte.MaxValue && pe.DiseaseIdx != _incoming[i].DiseaseIdx)
+                            pe.AddDisease(_incoming[i].DiseaseIdx, _incoming[i].DiseaseCount / local.Count, diseaseReason);
+                    }
+                    continue;
+                }
+
+                if (!CreateInto(storage, _incoming[i], diseaseReason))
+                    return false;
+            }
+
+            // Remove only what the sender no longer lists, and only whole prefabs.
+            foreach (var pair in localByPrefab)
+            {
+                if (wanted.Contains(pair.Key)) continue;
+                foreach (var pe in pair.Value)
+                {
+                    if (pe.IsNullOrDestroyed()) continue;
+                    storage.Remove(pe.gameObject);
+                    pe.gameObject.DeleteObject();
+                }
+            }
+
+            StorageReconciled++;
+            return true;
+        }
+
+        /// <summary>
+        /// Put one described item into a container. False when it cannot be built or the
+        /// container will not take it - both already counted, and both mean the caller
+        /// should not pretend the container is now correct.
+        /// </summary>
+        private static bool CreateInto(Storage storage, StoredItem item, string diseaseReason)
+        {
+            Tag tag = new Tag(item.Hash);
+
+            Element element = ElementLoader.GetElement(tag);
+            if (element != null)
+            {
+                storage.AddElement(element.id, item.Mass, item.Temperature, item.DiseaseIdx, item.DiseaseCount);
+                return true;
+            }
+
+            var prefab = Assets.GetPrefab(tag);
+            if (prefab == null)
+            {
+                ItemsNoPrefab++;
+                return false;
+            }
+
+            var made = GameUtil.KInstantiate(prefab, storage.transform.position, Grid.SceneLayer.Ore);
+            if (made.TryGetComponent<PrimaryElement>(out var pe))
+            {
+                pe.Mass = item.Mass;
+                pe.Temperature = item.Temperature;
+                if (item.DiseaseIdx != byte.MaxValue)
+                    pe.AddDisease(item.DiseaseIdx, item.DiseaseCount, diseaseReason);
+            }
+            made.SetActive(true);
+            storage.Store(made, true, true);
+
+            if (!storage.items.Contains(made))
+            {
+                ItemsRefusedByStorage++;
+                return false;
+            }
+
+            string madeName = made.PrefabID().ToString();
+            _madeByPrefab.TryGetValue(madeName, out int madeCount);
+            _madeByPrefab[madeName] = madeCount + 1;
+            ItemsRecreated++;
+            return true;
+        }
+
+        /// <summary>
+        /// Containers corrected by adding or removing only what differed, without
+        /// destroying the items that were already right.
+        /// </summary>
+        public static int StorageReconciled { get; private set; }
 
         private static void ClearStorage(Storage storage)
         {

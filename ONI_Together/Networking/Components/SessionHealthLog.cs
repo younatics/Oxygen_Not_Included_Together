@@ -304,6 +304,13 @@ namespace ONI_Together.Networking.Components
 				// Contents missing the instant after the packet was applied. Splits
 				// "the packet never landed" from "something removed it afterwards".
 				$"|storeNotLanded={Misc.BuildingUtils.ContentsMissingAfterApply}" +
+				// Which items were rebuilt, so the one container that disagrees can be
+				// checked against the list rather than assumed to be on it.
+				$"|made[{Misc.BuildingUtils.MadeBreakdown()}]" +
+				// Containers corrected by changing only what differed. This should take
+				// most of what storeRebuild used to, since a container that differs by
+				// one item no longer has everything in it destroyed.
+				$"|storeMended={Misc.BuildingUtils.StorageReconciled}" +
 				// Keyframes: structure states sent because the clock came due, not
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.
