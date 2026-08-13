@@ -293,6 +293,11 @@ namespace ONI_Together.Networking.Components
 				// loses its owner and leaves the locker's status item pointing at a deleted
 				// object, which closes the game on the next hover.
 				$"|storeEntities={Misc.BuildingUtils.EntitiesLeftAlone}" +
+				// Items rebuilt from a storage packet, and items dropped because no
+				// prefab answered to their hash. The pair separates "nothing was
+				// dropped" from "nothing was rebuilt".
+				$"|storeMade={Misc.BuildingUtils.ItemsRecreated}" +
+				$"|storeNoPrefab={Misc.BuildingUtils.ItemsNoPrefab}" +
 				// Keyframes: structure states sent because the clock came due, not
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.

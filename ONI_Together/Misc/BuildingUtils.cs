@@ -221,7 +221,25 @@ namespace ONI_Together.Misc
                 else
                 {
                     var item = Assets.GetPrefab(tag);
-                    if (item == null) continue;
+                    if (item == null)
+                    {
+                        // Silent until now, and it is the difference between two very
+                        // different diagnoses.
+                        //
+                        // A MicrobeMusher holds BasicPlantFood on the host and none on
+                        // the client, every run, while the Dirt and Water in the same
+                        // container agree exactly. Dirt and Water are elements and take
+                        // the branch above; BasicPlantFood is an item and takes this
+                        // one. If the prefab cannot be found here the item is dropped
+                        // and nobody is told, which looks identical to the client
+                        // eating it a moment later - and those need opposite fixes.
+                        ItemsNoPrefab++;
+                        DebugTools.ThrottledLog.Warn(
+                            $"[Storage] no prefab for stored item hash {hash} - it is " +
+                            "dropped from this container and the peers will not agree " +
+                            "about its contents");
+                        continue;
+                    }
 
                     var scrapObject = GameUtil.KInstantiate(item, storage.transform.position, Grid.SceneLayer.Ore);
                     if (scrapObject.TryGetComponent<PrimaryElement>(out var pe))
@@ -233,10 +251,24 @@ namespace ONI_Together.Misc
                     }
                     scrapObject.SetActive(true);
                     storage.Store(scrapObject, true, true);
+                    ItemsRecreated++;
                 }
             }
         }
         
+        /// <summary>
+        /// Stored items the receiver could not build because no prefab answered to their
+        /// hash. Each one is a container the two peers cannot agree about.
+        /// </summary>
+        public static int ItemsNoPrefab { get; private set; }
+
+        /// <summary>
+        /// Items this peer created from a storage packet. The activity number beside
+        /// ItemsNoPrefab: nothing dropped means nothing wrong only when this is not
+        /// also zero.
+        /// </summary>
+        public static int ItemsRecreated { get; private set; }
+
         /// <summary>Storages corrected without destroying anything.</summary>
         public static int StorageUpdatedInPlace { get; private set; }
 
