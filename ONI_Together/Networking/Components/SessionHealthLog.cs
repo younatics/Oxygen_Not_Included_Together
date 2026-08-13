@@ -46,9 +46,59 @@ namespace ONI_Together.Networking.Components
 		/// <summary>A quarter of a second. Not a dropped frame, a pause the player notices.</summary>
 		private const float HitchSeconds = 0.25f;
 
+		/// <summary>
+		/// Re-file the world under the ids it already has, the moment the registry is
+		/// found empty rather than a minute later.
+		///
+		/// A reconnect wipes the registry and nothing re-files the world, because
+		/// registration happens at spawn and a reconnect spawns nothing. Detecting that
+		/// by state rather than by hooking a join path is deliberate and stays - the last
+		/// bug of this shape got past ninety-one callers of the event. What was wrong was
+		/// how often the state was looked at.
+		///
+		/// It sat inside the health row, so it ran once per logging interval. Measured on
+		/// a reconnect run: the client reconnected at 07:37:42, the registry held 20
+		/// entries for a colony of nine thousand objects, and nothing noticed until
+		/// 07:38:37. In those fifty-four seconds 49,181 duplicant vital packets could not
+		/// find their minion, and 57 resolved to a Creature instead. The state dump
+		/// twenty seconds later still showed twice the usual vital divergence - calories
+		/// and stress differing on fourteen duplicants each, against one or two on a run
+		/// with no reconnect. Both reconnect runs in the batch did this and neither
+		/// non-reconnect run did.
+		///
+		/// Every frame is affordable because the cheap test comes first: an integer
+		/// comparison against the registry count, which is false on a healthy peer.
+		/// FindObjectsByType only runs once the count has already collapsed, which is the
+		/// state this exists to end.
+		/// </summary>
+		private static void ReattachIfWorldUnfiled()
+		{
+			if (!MultiplayerSession.InSession) return;
+			if (NetworkIdentityRegistry.Count >= 100) return;
+
+			// The threshold is deliberately crude. A real colony files thousands; the
+			// broken state measured 20 against 9062. Anything in between does not happen.
+			if (UnityEngine.Object.FindObjectsByType<Components.NetworkIdentity>(
+					FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length <= 100)
+				return;
+
+			// Read before the sweep. Subtracting afterwards printed "-17 entries",
+			// which is the kind of number that gets quoted back as a finding.
+			int heldBefore = NetworkIdentityRegistry.Count;
+			int reattached = NetworkIdentityRegistry.ReattachAll();
+			DebugConsole.LogWarning(
+				$"[REATTACH] the registry held {heldBefore} entries for a loaded colony - " +
+				$"re-filed {reattached} object(s) under the ids they already had");
+		}
+
 		private void Update()
 		{
 			using var _ = Profiler.Scope();
+
+			// Before the interval gate, not inside it. A registry that has been emptied
+			// by a reconnect is total desync for as long as it lasts, and the check that
+			// ends it must not wait for the next health row.
+			ReattachIfWorldUnfiled();
 
 			// A loaded colony is measurable whether or not anyone is connected.
 			//
@@ -126,19 +176,8 @@ namespace ONI_Together.Networking.Components
 			//
 			// The threshold is deliberately crude. A real colony files thousands; the
 			// broken state measured 31 against 8085. Anything in between does not happen.
-			if (MultiplayerSession.InSession
-				&& NetworkIdentityRegistry.Count < 100
-				&& UnityEngine.Object.FindObjectsByType<Components.NetworkIdentity>(
-					   FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length > 100)
-			{
-				// Read before the sweep. Subtracting afterwards printed "-17 entries",
-				// which is the kind of number that gets quoted back as a finding.
-				int heldBefore = NetworkIdentityRegistry.Count;
-				int reattached = NetworkIdentityRegistry.ReattachAll();
-				DebugConsole.LogWarning(
-					$"[REATTACH] the registry held {heldBefore} entries for a loaded colony - " +
-					$"re-filed {reattached} object(s) under the ids they already had");
-			}
+			// Moved to every frame - see ReattachIfWorldUnfiled, called from the top of
+			// Update. Checking it here meant checking it once per health row.
 			if (GhostSiteScan.GhostSites > 0)
 			{
 				DebugConsole.LogWarning(
