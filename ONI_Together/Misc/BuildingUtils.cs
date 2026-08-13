@@ -45,6 +45,31 @@ namespace ONI_Together.Misc
                 var pe = go.GetComponent<PrimaryElement>();
                 if (pe == null || pe.Mass <= 0f) continue;
                 if (!go.TryGetComponent<KPrefabID>(out _)) continue;
+
+                // An assigned object is an entity, not bulk mass.
+                //
+                // This blob is applied by clearing the container and rebuilding it, which
+                // is fine for a pile of dirt and destructive for anything carrying state of
+                // its own. An atmo suit has an owner, a durability and its own oxygen, and
+                // the rebuild replaced it with a fresh one: the client log shows
+                // "'Atmo_Suit' created ... by GameUtil.KInstantiate" next to
+                // "[Assignable_Unassign_Patch] Unassigned Atmo_Suit". The assignment was
+                // being lost every time the locker resynced.
+                //
+                // It also closed the game. ONI's status item on the locker still pointed at
+                // the suit that had just been deleted, so hovering over the locker threw
+                // once per frame - measured on the client in six runs out of six, and in a
+                // live session it ended the session.
+                //
+                // Assignable is the line because assignment is exactly the per-instance
+                // state a rebuild cannot reproduce. Such items are left out of the blob
+                // entirely, so the receiver has nothing to act on and cannot delete them.
+                if (go.TryGetComponent<Assignable>(out var assignable) && !assignable.IsNullOrDestroyed())
+                {
+                    EntitiesLeftAlone++;
+                    continue;
+                }
+
                 validItems.Add(go);
             }
 
@@ -224,6 +249,12 @@ namespace ONI_Together.Misc
         public static int MasslessEntriesPreserved { get; private set; }
 
         /// <summary>
+        /// Assigned objects left out of the sync - suits and anything else whose owner,
+        /// durability or contents a rebuild would destroy.
+        /// </summary>
+        public static int EntitiesLeftAlone { get; private set; }
+
+        /// <summary>
         /// True if the storage already holds the same set of prefabs, in which case
         /// only mass, temperature and disease need correcting - no object is destroyed
         /// and none is created, so nothing takes a new NetId.
@@ -269,6 +300,14 @@ namespace ONI_Together.Misc
                 if (pe.Mass <= 0f)
                 {
                     MasslessEntriesPreserved++;
+                    continue;
+                }
+
+                // Assigned objects are invisible to the sender, so they must be invisible
+                // here too - see the matching skip in EncodeStorageContents.
+                if (go.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed())
+                {
+                    EntitiesLeftAlone++;
                     continue;
                 }
                 // The same accessor the encoder used. Tag exposes GetHash() and
@@ -351,6 +390,16 @@ namespace ONI_Together.Misc
                     && !keep.IsNullOrDestroyed() && keep.Mass <= 0f)
                 {
                     MasslessEntriesPreserved++;
+                    continue;
+                }
+
+                // Never an assigned object. Deleting a suit loses its owner and its
+                // oxygen, and leaves the locker's status item pointing at a destroyed
+                // GameObject - which throws once per frame the moment anybody hovers over
+                // it, and ends the session.
+                if (item.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed())
+                {
+                    EntitiesLeftAlone++;
                     continue;
                 }
 

@@ -250,6 +250,10 @@ namespace ONI_Together.Networking.Components
 				// massless entry, so deleting one was this peer's pump losing what it
 				// dispenses from.
 				$"|storeKept={Misc.BuildingUtils.MasslessEntriesPreserved}" +
+				// Assigned objects kept out of storage sync - suits, mostly. Rebuilding one
+				// loses its owner and leaves the locker's status item pointing at a deleted
+				// object, which closes the game on the next hover.
+				$"|storeEntities={Misc.BuildingUtils.EntitiesLeftAlone}" +
 				// Keyframes: structure states sent because the clock came due, not
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.
