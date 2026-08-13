@@ -81,7 +81,16 @@ namespace ONI_Together.Networking.Components
 				if (!Grid.IsValidCell(cell)) continue;
 				scanned++;
 
-				string prefab = building.gameObject.PrefabID().Name;
+				// The building definition, not the prefab tag.
+				//
+				// A site's prefab tag is "<Prefab>UnderConstruction" and the finished
+				// building's is "<Prefab>", so comparing the two names can never match.
+				// This scan reported zero contradictions in every run it has ever been
+				// in, and that zero was quoted as evidence that leftover sites do not
+				// happen - while a cross-peer comparison was naming them the whole time.
+				// The check was not passing; it was unable to fail.
+				if (building.Def == null) continue;
+				string prefab = building.Def.PrefabID;
 
 				// Every layer, because which layer the site sits on is the thing this
 				// bug has already survived two guesses about. Reading all of them
@@ -102,8 +111,9 @@ namespace ONI_Together.Networking.Components
 
 					// Same building, or it is a legitimate pair - a wire on the wire
 					// layer under a tile being built on the foundation layer is normal
-					// and must not be reported.
-					if (other.PrefabID().Name != prefab) continue;
+					// and must not be reported. Compared by definition for the reason
+					// above.
+					if (finished.Def == null || finished.Def.PrefabID != prefab) continue;
 
 					ghosts++;
 					if (_examples.Count < 8)

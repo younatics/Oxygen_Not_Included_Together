@@ -24,6 +24,12 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         public static int LeftoverScaffoldsCleared { get; private set; }
 
         /// <summary>
+        /// Completions whose construction site turned out to be on a different layer than
+        /// the finished building. Every one of these used to be dropped in silence.
+        /// </summary>
+        public static int SitesFoundOnOtherLayer { get; private set; }
+
+        /// <summary>
         /// Scaffolds found in the cell that belong to a different building.
         ///
         /// Left alone, and counted, because deleting them is what the first version did:
@@ -138,6 +144,76 @@ namespace ONI_Together.Networking.Packets.Tools.Build
 					existing = Grid.Objects[secondToCheck, layerIndex];
 			}
 
+            // Already finished here? Then this packet has nothing to do.
+            //
+            // Checked before anything is destroyed, because the repair below builds even
+            // when no site was found and a second application would otherwise replace a
+            // perfectly good building.
+            // Named, not discarded: '_' is the Profiler scope in this method and 'out _'
+            // will not compile against it. Recorded in the project notes and repeated
+            // anyway, which is what a named variable costs nothing to avoid.
+            if (existing != null
+                && !existing.TryGetComponent<BuildingUnderConstruction>(out var alreadySite)
+                && existing.PrefabID().Name == PrefabID)
+            {
+                DebugConsole.Log($"[BuildCompletePacket] {PrefabID} at {Cell} is already complete");
+                return;
+            }
+
+            // The site may be on another layer, and if it is, this handler used to do
+            // nothing at all.
+            //
+            // The lookup above reads one slot - Grid.Objects[Cell, def.ObjectLayer]. For a
+            // wire or a conduit the construction site does not live there, so `existing`
+            // came back null, the bridge branch did not apply, and the whole method fell
+            // through: no delete, no Build. The client kept its scaffold forever and never
+            // received the building.
+            //
+            // Measured across peers, three at a time, always in the same direction:
+            //   host HighWattageWire@42635          client HighWattageWireUnderConstruction
+            //   host HighWattageWire@45217          client HighWattageWireUnderConstruction
+            //   host InsulatedLiquidConduit@48803   client InsulatedLiquidConduitUnderConstruction
+            //
+            // This is the bug a player reported as "the host says the tile is built and the
+            // client still shows it scheduled", and it was dismissed once already: the
+            // scenario that was supposed to reproduce it built Ladders and Tiles, whose
+            // sites do sit on the building's own layer. Wires and conduits are the case,
+            // and choosing the wrong thing to build is what made a correct hypothesis look
+            // refuted.
+            if (existing == null)
+            {
+                for (int layer = 0; layer < (int)ObjectLayer.NumLayers && existing == null; layer++)
+                {
+                    var candidate = Grid.Objects[Cell, layer];
+                    if (candidate == null || candidate.IsNullOrDestroyed()) continue;
+                    if (!candidate.TryGetComponent<BuildingUnderConstruction>(out var site)
+                        || site.IsNullOrDestroyed()) continue;
+
+                    // The unfinished version of this very building, never a neighbour's -
+                    // matched on the building definition, not on the prefab name.
+                    //
+                    // ONI names a construction site "<Prefab>UnderConstruction", so
+                    // comparing its prefab tag against the finished building's PrefabID
+                    // can never be true. Three counters read zero for that reason -
+                    // scaffoldsCleared, siteOtherLayer and ghostSites - and all three
+                    // zeroes were read as "no leftover sites exist". The check could not
+                    // fire; it was not reporting a clean colony.
+                    //
+                    // Def.PrefabID is the same string for both, which is what makes this
+                    // the comparison that was meant all along.
+                    if (!candidate.TryGetComponent<Building>(out var candidateBuilding)
+                        || candidateBuilding.IsNullOrDestroyed()
+                        || candidateBuilding.Def == null
+                        || candidateBuilding.Def.PrefabID != PrefabID) continue;
+
+                    existing = candidate;
+                    SitesFoundOnOtherLayer++;
+                    DebugConsole.LogWarning(
+                        $"[BuildCompletePacket] {PrefabID} at {Cell}: its site was on layer " +
+                        $"{(ObjectLayer)layer}, not {ObjectLayer} - this used to be dropped silently");
+                }
+            }
+
             if (existing != null)
             {
                 //if (existing.TryGetComponent<Constructable>(out Constructable con))
@@ -214,11 +290,15 @@ namespace ONI_Together.Networking.Packets.Tools.Build
                 //
                 // The prefab is what makes this safe: the object being removed has to be
                 // the unfinished version of the thing that just finished.
-                string scaffoldPrefab = leftover.TryGetComponent<KPrefabID>(out var leftoverId) && !leftoverId.IsNullOrDestroyed()
-                    ? leftoverId.PrefabTag.Name
-                    : leftover.name;
-
-                if (scaffoldPrefab != PrefabID)
+                // Matched on the building definition, not the prefab name. A site is
+                // called "<Prefab>UnderConstruction", so the name comparison this used to
+                // do could never be true - which is why scaffoldsCleared read zero in
+                // every run ever measured, and why that zero was mistaken for "there are
+                // no leftover sites".
+                if (!leftover.TryGetComponent<Building>(out var leftoverBuilding)
+                    || leftoverBuilding.IsNullOrDestroyed()
+                    || leftoverBuilding.Def == null
+                    || leftoverBuilding.Def.PrefabID != PrefabID)
                 {
                     ScaffoldsLeftAlone++;
                     continue;

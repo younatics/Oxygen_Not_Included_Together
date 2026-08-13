@@ -289,6 +289,12 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Completions whose site was on another layer. Every one of these was
+				// silently dropped before, leaving the client with a scaffold and no
+				// building - the "host says built, client says scheduled" report. Wires and
+				// conduits are the cases; tiles and ladders are not, which is why the
+				// scenario that built ladders made a correct hypothesis look refuted.
+				$"|siteOtherLayer={Packets.Tools.Build.BuildCompletePacket.SitesFoundOnOtherLayer}" +
 				// Cells holding a finished building and that same building's unfinished
 				// site at once - the reported "host built it, client says scheduled",
 				// judged from this peer alone. sites= is the activity number beside it:
