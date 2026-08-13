@@ -157,19 +157,17 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 			if (!door.IsNullOrDestroyed()
 				&& packet.OptionalValues.TryGetValue(KeyDoorState, out var doorState))
 			{
+				// Through DoorControl, which is the only place that knows a queued door
+				// change waits on a duplicant chore no client will ever run.
+				//
+				// This used to queue the change and judge on RequestedState, which is the
+				// wrong axis - the sender samples CurrentState - and a door whose request
+				// already matched but whose control state never followed was skipped every
+				// keyframe forever. Two pressure doors sat Locked on the host and Opened
+				// on the client for a full run with this syncer watching them.
 				var wanted = (Door.ControlState)Mathf.RoundToInt(doorState.Float);
-				// Through QueueStateChange, which is how the game changes a door - the
-				// fields are read-only and setting one would skip the animation and the
-				// pathing update. RequestedState, not CurrentState: a door in transit is
-				// already heading somewhere and re-queueing the same destination every
-				// keyframe would restart it.
-				if (door.RequestedState != wanted)
-				{
-					door.QueueStateChange(wanted);
+				if (DoorControl.Converge(door, wanted))
 					FlagsRepaired++;
-					Note($"door at {Grid.PosToCell(gameObject)} was heading to " +
-						 $"{door.RequestedState} and the host says {wanted}");
-				}
 			}
 
 			if (!delivery.IsNullOrDestroyed())

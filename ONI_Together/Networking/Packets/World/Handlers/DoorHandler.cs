@@ -1,5 +1,6 @@
 using UnityEngine;
 using ONI_Together.DebugTools;
+using ONI_Together.Misc;
 using Shared.Profiling;
 
 namespace ONI_Together.Networking.Packets.World.Handlers
@@ -27,16 +28,20 @@ namespace ONI_Together.Networking.Packets.World.Handlers
 
 			Door.ControlState state = (Door.ControlState)(int)packet.Value;
 
-			// Skip if already transitioning to this state. Without this check,
-			// the host relay (which re-serializes the packet with the host's Sender ID)
-			// causes the client to receive its own state change back.
-			// QueueStateChange sees requestedState == nextState and takes the cancel
-			// path: requestedState = controlState, which resets the door to its old state.
-			if (door.RequestedState == state)
-				return true;
-
-			door.QueueStateChange(state);
-			//DebugConsole.Log($"[DoorHandler] Set DoorState={state} on {go.name}");
+			// Through DoorControl, which holds both rules this needed.
+			//
+			// The first was already here: the host relay sends a client its own change
+			// back, and QueueStateChange with requestedState == nextState takes the
+			// cancel path - requestedState = controlState - resetting the door to the
+			// state it was leaving. That is still handled, inside Converge.
+			//
+			// The second was not. Returning early on RequestedState == state leaves a
+			// door whose request matches and whose control state never followed, and on
+			// a client that is the normal outcome rather than an edge case: the queue
+			// ends in a Toggle chore and client duplicants have no chores. So the event
+			// path could not converge a door either, and the periodic syncer had the
+			// same defect in its own words. Two places, one shape - now one place.
+			DoorControl.Converge(door, state);
 			return true;
 		}
 	}

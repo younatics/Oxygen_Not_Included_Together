@@ -150,6 +150,33 @@ HEALTH 행을 통째로 diff 하고, 새로 0이 아니게 된 항목을 먼저 
 식별자 비교는 **이름 문자열이 아니라 정의**로 한다(`Building.Def.PrefabID`) — 발판과 완성본이
 같은 값을 갖는 유일한 축이다.
 
+### 보내는 축과 받는 축이 다르면 수리 검사는 영원히 통과한다
+
+`BuildingFlagsSyncer` 는 `door.CurrentState` 를 **샘플링**하고 `door.RequestedState` 로
+**비교**했다. 두 필드는 다른 것이다(`controlState` vs `requestedState`). 그래서 요청은 맞는데
+제어 상태가 따라오지 않은 문은 "이미 맞다"로 읽혀 매 키프레임 건너뛰어졌다 — 압력문 2개가 한
+실행 내내 호스트 Locked / 클라 Opened 로 남았고, **syncer 는 그 문을 보고 있으면서 한 번도
+고치지 않았다**(`flagRepaired=10` 은 다른 것들이었다).
+
+**방지책:** 수리 조건은 **보낸 쪽이 샘플링한 그 필드**로 판정한다. 다른 필드로 비교하면 검사는
+통과하는 게 아니라 **볼 수 없는 상태**를 만든다 — "참이 될 수 없었다" 와 같은 계열이다.
+
+### "클라 AI 꺼짐" 전제가 적용 경로를 조용히 무력화한다
+
+문 상태 적용은 `QueueStateChange` 하나였는데, 그 함수는 IL 로 확인한 결과 `ChoreTypes.Toggle`
+작업을 만든다 — **듀플이 문까지 걸어가야** `controlState` 가 바뀐다. 클라는 `ChoreConsumer` 가
+꺼져 있어 그 작업이 영원히 실행되지 않는다. 이벤트 경로(`DoorHandler`)와 주기 경로
+(`BuildingFlagsSyncer`) **둘 다** 같은 이유로 문을 수렴시킬 수 없었다.
+
+같은 함수의 또 다른 함정도 IL 이 알려줬다: `QueueStateChange(x)` 를 `requestedState == x` 인
+상태에서 부르면 **취소 경로**로 가서 `requestedState = controlState` 로 되돌린다. 원하는 값을
+두 번 요청하는 것이 그 값을 잃는 방법이다.
+
+**방지책:** 상태를 적용하는 게임 API 를 쓰기 전에 **그것이 듀플 작업(chore)을 만드는지** 본다.
+만든다면 클라에서는 완료 함수(`ApplyRequestedControlState` 같은)를 직접 불러야 한다.
+그리고 이 저장소의 `PublicisedAssembly` 는 **IL 을 읽을 수 있다** — 이름으로 추측하지 말고
+본문을 본다. 리플렉션 로드는 이 어셈블리에서 실패하므로 메타데이터 리더를 쓴다.
+
 ### 이미 측정되고 있는 것을 안 읽고 새로 만들었다
 
 `analyze-session.ps1` 이 실행마다 `state_compare.py` 를 돌려 **`mid-construction ... the other

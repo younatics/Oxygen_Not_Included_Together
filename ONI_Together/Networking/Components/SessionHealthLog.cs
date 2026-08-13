@@ -289,6 +289,12 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Doors finished in place because the queued change was waiting on a
+				// duplicant chore that a client never runs, and doors that were already
+				// right. The second is the activity number: doorForced=0 means nothing
+				// drifted only when doorOk is not also zero.
+				$"|doorForced={Misc.DoorControl.CompletedWithoutWorker}" +
+				$"|doorOk={Misc.DoorControl.AlreadyMatching}" +
 				// Completions whose site was on another layer. Every one of these was
 				// silently dropped before, leaving the client with a scaffold and no
 				// building - the "host says built, client says scheduled" report. Wires and
