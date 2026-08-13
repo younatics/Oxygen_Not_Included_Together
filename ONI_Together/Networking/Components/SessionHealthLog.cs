@@ -328,6 +328,12 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Build packets resent to a client that had been disconnected, and
+				// rejoins that found nothing to resend. The second is the activity
+				// number: replayed=0 means the client missed nothing only when
+				// replayNone is not also zero.
+				$"|replayed={BuildJournal.Replayed}" +
+				$"|replayNone={BuildJournal.ReplaysWithNothingToSend}" +
 				// Construction sites the host named on arrival, and orders that arrived
 				// with no name. A site with no address is invisible to every comparison
 				// here, which is what made four of them read as buildings the client

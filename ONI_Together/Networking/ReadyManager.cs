@@ -93,7 +93,24 @@ namespace ONI_Together.Networking
 			if (player.PlayerId == MultiplayerSession.HostUserID)
 				return;
 
+			// Read before the transition: a client becoming Ready having been away is
+			// the only moment the host knows it can be told what it missed.
+			bool returning = state == ClientReadyState.Ready
+				&& player.readyState != ClientReadyState.Ready
+				&& player.AwaySince > 0f;
+			float awaySince = player.AwaySince;
+
 			player.SetReadyState(state);
+
+			// Build orders are announced once and never repeated, so a peer that was
+			// disconnected when one went out never learns the building exists. Measured
+			// on both reconnect runs of a six-run batch: four conduit sites and a ladder
+			// on the host, absent from the client's world and from its unfiled list too.
+			if (returning)
+			{
+				BuildJournal.ReplayTo(player, awaySince);
+				player.AwaySince = 0f;
+			}
 		}
 
 		public static void RefreshScreen()

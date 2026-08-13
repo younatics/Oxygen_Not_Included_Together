@@ -33,11 +33,28 @@ public class MultiplayerPlayer
 	/// Ready - the default. So world packets kept flowing to a peer with no
 	/// world, and each one became a failed lookup on arrival.
 	/// </summary>
+	/// <summary>
+	/// When this player stopped being able to receive world traffic.
+	///
+	/// A first join transfers the whole save and starts level. A reconnect keeps the
+	/// world it already had, and anything announced once while it was away - a build
+	/// order, a completion - is never said again. This is the start of the window the
+	/// host replays from; zero means the player has never been away, and nothing is
+	/// replayed for it.
+	/// </summary>
+	public float AwaySince;
+
 	public void SetReadyState(ClientReadyState state)
 	{
+		// Read before the assignment, because "was it Ready until now" is the question.
+		bool wasReceiving = readyState == ClientReadyState.Ready;
+
 		readyState = state;
 		if (state == ClientReadyState.Loading)
 			LoadingSince = UnityEngine.Time.unscaledTime;
+
+		if (state != ClientReadyState.Ready && wasReceiving)
+			AwaySince = UnityEngine.Time.unscaledTime;
 	}
 
     public MultiplayerPlayer(ulong playerId)

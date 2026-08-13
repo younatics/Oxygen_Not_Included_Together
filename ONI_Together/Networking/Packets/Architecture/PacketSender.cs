@@ -540,6 +540,12 @@ namespace ONI_Together.Networking
 			// compared between runs.
 			if (Unaddressed(packet)) return 0;
 
+			// Kept for a client that is not here to receive it. A build order is
+			// announced once and never repeated, so a peer that was disconnected when it
+			// went out never learns the building exists. Recorded at the broadcast rather
+			// than at each sender, so a new sender cannot forget to.
+			BuildJournal.Record(packet);
+
             // Only send this packet if its being observed by a someone
             bool cull = WantsCulling(packet, out int cell);
             int sent = 0;

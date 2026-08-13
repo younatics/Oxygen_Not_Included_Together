@@ -12,7 +12,7 @@ using static STRINGS.MISC;
 
 namespace ONI_Together.Networking.Packets.Tools.Build
 {
-    public class BuildPacket : IPacket
+    public class BuildPacket : IPacket, Shared.Interfaces.Networking.IReplayableOnRejoin
     {
         private const int MaxMaterialTagCount = 64;
 

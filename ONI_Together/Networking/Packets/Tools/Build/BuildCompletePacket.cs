@@ -10,7 +10,7 @@ using Rendering;
 
 namespace ONI_Together.Networking.Packets.Tools.Build
 {
-    public class BuildCompletePacket : IPacket
+    public class BuildCompletePacket : IPacket, Shared.Interfaces.Networking.IReplayableOnRejoin
     {
         private const int MaxMaterialTagCount = 64;
 
