@@ -38,6 +38,8 @@ namespace ONI_Together.DebugTools.UnitTests
             // diagnosis being refuted rather than the check never having run.
             ("ComplexFabricator", "DropExcessIngredients",
                 "a client throwing out ingredients the host still holds empties one container every run"),
+            ("ComplexFabricator", "StartWorkingOrder",
+                "a client running its own orders moves the ingredients the host just synced into it"),
             ("BuildingHP", "OnDoBuildingDamage",
                 "client-side damage must be refused, and conduit damage recorded"),
             ("Pickupable", "OnCleanUp",

@@ -45,6 +45,47 @@ namespace ONI_Together.Patches.World.Buildings
 		/// </summary>
 		public static int ClientIngredientDropsBlocked { get; private set; }
 
+		/// <summary>
+		/// Working orders a client's fabricator was stopped from starting.
+		/// </summary>
+		public static int ClientOrdersBlocked { get; private set; }
+
+		[HarmonyPatch(typeof(ComplexFabricator), "StartWorkingOrder")]
+		public class ComplexFabricator_StartWorkingOrder_Patch
+		{
+			/// <summary>
+			/// A client's fabricator does not run orders. The host runs them and says
+			/// what came out.
+			///
+			/// The storage packet lands correctly - verified at the moment of applying,
+			/// storeNotLanded is 0 while the same container still disagrees at the end
+			/// of the run - so the ingredients are put in and then taken out again.
+			/// Three specific removers have been eliminated: the prefab is found, the
+			/// container accepts the item, and DropExcessIngredients is already blocked
+			/// and fired 34 to 61 times a run without changing the outcome.
+			///
+			/// What remains is the order machinery, and naming one more method inside it
+			/// would be a fourth guess. Starting an order is the door all of it goes
+			/// through: StartWorkingOrder calls TransferCurrentRecipeIngredientsForBuild,
+			/// which moves the host's ingredients out of the storage that was just
+			/// synced, and everything downstream follows from there.
+			///
+			/// This is the same rule SpawnOrderProduct already follows, applied one step
+			/// earlier. The client keeps showing progress and queue counts, which arrive
+			/// as packets rather than being simulated here.
+			/// </summary>
+			public static bool Prefix()
+			{
+				using var _ = Profiler.Scope();
+
+				if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+					return true;
+
+				ClientOrdersBlocked++;
+				return false;
+			}
+		}
+
 		[HarmonyPatch(typeof(ComplexFabricator), "DropExcessIngredients")]
 		public class ComplexFabricator_DropExcessIngredients_Patch
 		{

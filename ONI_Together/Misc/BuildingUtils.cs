@@ -180,6 +180,66 @@ namespace ONI_Together.Misc
                 });
             }
 
+            // Whatever path is taken below, check afterwards that it worked.
+            //
+            // Three explanations for one container's disagreement have now been
+            // eliminated and the food still leaves, and every one of those rounds cost a
+            // deploy because the question "did the apply do what it was told" had no
+            // answer. Asking the container immediately afterwards separates "the packet
+            // was not applied" from "it was applied and something removed it later",
+            // which is the fork the remaining candidates hang off.
+            //
+            // The comparison is by prefab and presence, not mass: mass is corrected
+            // continuously and a difference in it is not this defect.
+            ApplyAndVerify(storage, diseaseReason);
+        }
+
+        /// <summary>
+        /// Apply the decoded contents, then read the container back and say so when the
+        /// two disagree. Named separately so the verification cannot be skipped by an
+        /// early return in the middle of the apply.
+        /// </summary>
+        private static void ApplyAndVerify(Storage storage, string diseaseReason)
+        {
+            // What the sender said should be here, captured before applying, since the
+            // apply path reuses the shared buffer.
+            var expected = new HashSet<int>();
+            for (int i = 0; i < _incoming.Count; i++)
+                if (_incoming[i].Mass > 0f) expected.Add(_incoming[i].Hash);
+
+            ApplyDecoded(storage, diseaseReason);
+
+            if (expected.Count == 0) return;
+
+            var present = new HashSet<int>();
+            var items = storage.items;
+            if (items != null)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var go = items[i];
+                    if (go.IsNullOrDestroyed()) continue;
+                    if (go.TryGetComponent<KPrefabID>(out var id) && !id.IsNullOrDestroyed())
+                        present.Add(id.PrefabTag.GetHashCode());
+                }
+            }
+
+            foreach (int hash in expected)
+            {
+                if (present.Contains(hash)) continue;
+
+                ContentsMissingAfterApply++;
+                DebugTools.ThrottledLog.Warn(
+                    $"[Storage] '{storage.gameObject.PrefabID()}' was told to hold " +
+                    $"'{new Tag(hash)}' and does not, immediately after applying - the " +
+                    "packet did not land, so nothing later removed it");
+            }
+        }
+
+        private static void ApplyDecoded(Storage storage, string diseaseReason)
+        {
+            int count = _incoming.Count;
+
             // Update in place when the same things are still in there.
             //
             // This used to clear the storage and build it again on every packet.
@@ -298,6 +358,13 @@ namespace ONI_Together.Misc
         /// colony gains an object nobody asked for.
         /// </summary>
         public static int ItemsRefusedByStorage { get; private set; }
+
+        /// <summary>
+        /// Contents the sender listed that are not in the container the instant after
+        /// applying. Non-zero means the packet is not landing; zero, with a container
+        /// that still disagrees at the end of the run, means something removes it after.
+        /// </summary>
+        public static int ContentsMissingAfterApply { get; private set; }
 
         /// <summary>Storages corrected without destroying anything.</summary>
         public static int StorageUpdatedInPlace { get; private set; }

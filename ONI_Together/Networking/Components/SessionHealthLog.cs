@@ -301,6 +301,9 @@ namespace ONI_Together.Networking.Components
 				// Items the container refused after they were rebuilt for it. Each one
 				// is left loose in the world and the container stays wrong.
 				$"|storeRefused={Misc.BuildingUtils.ItemsRefusedByStorage}" +
+				// Contents missing the instant after the packet was applied. Splits
+				// "the packet never landed" from "something removed it afterwards".
+				$"|storeNotLanded={Misc.BuildingUtils.ContentsMissingAfterApply}" +
 				// Keyframes: structure states sent because the clock came due, not
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.
@@ -404,6 +407,9 @@ namespace ONI_Together.Networking.Components
 				// host decides what a fabricator holds; a client throwing its own
 				// ingredients out is how one container disagreed on every run.
 				$"|dropsBlocked={Patches.World.Buildings.ComplexFabricator_Patches.ClientIngredientDropsBlocked}" +
+				// Orders a client's fabricator was stopped from starting. Starting one
+				// moves the ingredients the host had just synced into it.
+				$"|ordersBlocked={Patches.World.Buildings.ComplexFabricator_Patches.ClientOrdersBlocked}" +
 				// Objects the host holds and this peer does not, and which cannot be
 				// sent as loose items. Used to be silence, counted as a failed lookup
 				// and indistinguishable from a lost packet.
