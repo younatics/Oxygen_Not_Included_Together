@@ -370,6 +370,10 @@ namespace ONI_Together.Networking.Components
 				// Duplicant vitals trimmed on arrival because this peer's limit is
 				// lower than the host's. A divergence that resending cannot close.
 				$"|vitalClamped={Packets.DuplicantActions.VitalStatsPacket.AmountsClamped}" +
+				// Per duplicant: corrections landed and their average size. Fewer applies
+				// means packets are being missed; the same applies with a bigger average
+				// means that duplicant is simply burning faster.
+				$"|drift[{Packets.DuplicantActions.VitalStatsPacket.DriftBreakdown()}]" +
 				// Sends dropped because the object had no address, and which packets
 				// they were. The prediction: the client's "arrived carrying NetId 0"
 				// goes to zero and this rises by about as much. If the first happens

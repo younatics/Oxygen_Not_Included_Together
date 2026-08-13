@@ -3,6 +3,7 @@ using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Shared.Profiling;
 using UnityEngine;
 using static STRINGS.UI.OUTFITS;
@@ -23,6 +24,39 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		/// amount of resending can fix.
 		/// </summary>
 		public static int AmountsClamped { get; private set; }
+
+		private class Drift { public int Applies; public double Total; public float Worst; }
+		private static readonly Dictionary<string, Drift> _drift = new Dictionary<string, Drift>();
+
+		private static void NoteCorrection(string who, float delta)
+		{
+			if (string.IsNullOrEmpty(who)) return;
+			if (!_drift.TryGetValue(who, out var d)) _drift[who] = d = new Drift();
+
+			d.Applies++;
+			float size = delta < 0 ? -delta : delta;
+			d.Total += size;
+			if (size > d.Worst) d.Worst = size;
+		}
+
+		/// <summary>
+		/// Per duplicant: how many corrections landed and how big the average one was.
+		/// A peer that is behind by a fixed lag shows the same average as everyone else
+		/// multiplied by how fast that duplicant is burning; a peer that is missing
+		/// packets shows fewer applies.
+		/// </summary>
+		public static string DriftBreakdown()
+		{
+			if (_drift.Count == 0) return "none";
+			var parts = new List<string>();
+			foreach (var kv in _drift.OrderByDescending(kv => kv.Value.Total / (kv.Value.Applies == 0 ? 1 : kv.Value.Applies)).Take(4))
+			{
+				int n = kv.Value.Applies;
+				double avg = n == 0 ? 0 : kv.Value.Total / n;
+				parts.Add($"{kv.Key}:{n}x avg{avg:0}");
+			}
+			return string.Join(" ", parts);
+		}
 
 		public VitalStatsPacket() { }
 		public VitalStatsPacket(int netId, Amounts amounts, PrimaryElement element)
@@ -146,6 +180,25 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 				// Counted rather than assumed. Whether Humphrey is clamping is a fact
 				// the next run can state, and guessing at it is how three earlier
 				// diagnoses in this project went wrong.
+				// How far this peer had drifted before the correction landed.
+				//
+				// One duplicant sits ten to twenty times further from the host than the
+				// rest - 36,000 calories against a uniform 4,335 - and the clamp theory
+				// is dead, vitalClamped having read 0 in every row since it was added.
+				// The two live explanations are that his packets arrive less often and
+				// that his calories simply move faster, and both peers report him at
+				// maximum stress, which in this game means binge eating.
+				//
+				// The correction size per apply separates them. If he is fed the same
+				// number of packets and each one moves him ten times further, the lag is
+				// the same 1.5 seconds everyone has and the rate is what differs, which
+				// is not a defect. If his packets are rarer, it is.
+				if (kvp.Key == Db.Get().Amounts.Calories.Id)
+				{
+					var before = amounts.Get(kvp.Key);
+					if (before != null) NoteCorrection(identity.GetProperName(), kvp.Value - before.value);
+				}
+
 				// Read back rather than take a return value: Amounts.SetValue on the
 				// collection returns void. It is AmountInstance.SetValue underneath it
 				// that returns the clamped number, and that is the one whose IL shows
