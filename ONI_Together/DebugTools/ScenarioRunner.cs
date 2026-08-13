@@ -1144,6 +1144,7 @@ namespace ONI_Together.DebugTools
 
 			var rows = new List<string>();
 
+			DumpSnapshotClock(rows);
 			DumpResearchState(rows);
 			DumpRecipeQueues(rows);
 			DumpBuildingFlags(rows);
@@ -1162,6 +1163,28 @@ namespace ONI_Together.DebugTools
 				"that guesses is worse than one that admits the gap.");
 
 			return rows.Count;
+		}
+
+		/// <summary>
+		/// When this snapshot was taken, in simulation time.
+		///
+		/// The two peers are told to dump by separate commands and the client's has a
+		/// round trip in front of it, so the snapshots are not simultaneous. That is
+		/// invisible for a door, which is Locked or not, and decisive for anything that
+		/// moves continuously: 44 of 48 differing duplicant vital rows had the host
+		/// higher than the client, which is not what noise looks like - noise goes both
+		/// ways. Either the client's simulation lags or its snapshot is later, and
+		/// without a clock on the row there is no way to tell those apart.
+		///
+		/// One row, so the comparison can state the gap instead of the reader guessing
+		/// at it. Not a fact about agreement, so the comparer keeps it out of the
+		/// compared set - the peers are supposed to differ here.
+		/// </summary>
+		private static void DumpSnapshotClock(List<string> rows)
+		{
+			// The accessor already used in BuildPacket and BuildCompletePacket.
+			if (GameClock.Instance == null) return;
+			rows.Add($"meta|_snapshot|simTime|{Math.Round(GameClock.Instance.GetTime(), 2)}");
 		}
 
 		/// <summary>

@@ -25,6 +25,21 @@
     how the building count comparison wasted three rounds of this project. Fields that
     are not numbers are compared exactly.
 
+    A flat tolerance is not enough on its own. Duplicant calories run into the millions
+    and move every tick, and the two peers do not dump at the same instant, so 48 of 84
+    vital rows were reported as divergence on numbers like 3,066,579 against 3,062,743 -
+    a tenth of a percent apart. Real vital divergence, a duplicant starving on one peer,
+    would have been buried in that.
+
+    So a difference within a relative tolerance is reported as NEAR rather than folded
+    into agreement. Nothing is hidden - the row is still named and countable - but the
+    DIFFERENT column goes back to meaning something a player would see. A number that is
+    small in absolute terms still passes on the flat tolerance, since a percentage moving
+    from 0 to 1 is not a tenth of a percent of anything.
+
+    NEAR does not fail the gate. It is drift between two snapshots taken moments apart,
+    and treating it as failure is the same mistake in the other direction.
+
     A category present on neither peer is reported as "not measured" rather than passing
     silently. A pass over an empty set is how the damage test stayed green for a hundred
     runs while damage replication was never exercised at all.
@@ -36,7 +51,13 @@ param(
     [int]$Examples = 6,
     # A tenth is below anything a player can read off a building, and well above
     # float noise between two simulations.
-    [double]$Tolerance = 0.15
+    [double]$Tolerance = 0.15,
+    # Half a percent of the larger side. Chosen against the measured spread rather
+    # than picked: the calorie rows sit near a tenth of a percent apart and the stamina
+    # and research rows that are worth seeing are 1% and 31%, so this separates them
+    # with room on both sides. Raise it and real drift starts disappearing; the two
+    # numbers to check it against are printed in every report.
+    [double]$RelativeTolerance = 0.005
 )
 
 $ErrorActionPreference = 'Stop'
@@ -105,6 +126,7 @@ function Bucket($category) {
     if (-not $cats.ContainsKey($category)) {
         $cats[$category] = [pscustomobject]@{
             Different = New-Object System.Collections.ArrayList
+            Near      = New-Object System.Collections.ArrayList
             HostOnly  = New-Object System.Collections.ArrayList
             PeerOnly  = New-Object System.Collections.ArrayList
             Shared    = 0
@@ -113,8 +135,26 @@ function Bucket($category) {
     return $cats[$category]
 }
 
+# How far apart the two snapshots were taken, before anything is judged.
+#
+# The peers dump on separate commands and the client's has a round trip in front of
+# it, so continuously-moving values differ for a reason that has nothing to do with
+# replication. Reported rather than corrected for: a reader who knows the gap can
+# judge a calorie difference, and a comparer that silently normalised it would be
+# hiding the case where the gap is zero and the values still disagree.
+$simKey = 'meta|_snapshot|simTime'
+if ($h.ContainsKey($simKey) -and $c.ContainsKey($simKey)) {
+    $gap = [double]$c[$simKey] - [double]$h[$simKey]
+    Write-Output ("[state] snapshots taken {0:N2}s apart in sim time (host {1}, client {2})" -f
+        $gap, $h[$simKey], $c[$simKey])
+} else {
+    Write-Output "[state] snapshot clock missing on at least one peer - continuous values cannot be judged"
+}
+
 foreach ($key in $h.Keys) {
     $category = ($key -split '\|')[0]
+    # The clock is not a fact about agreement; the peers are meant to differ on it.
+    if ($category -eq 'meta') { continue }
     $b = Bucket $category
 
     if (-not $c.ContainsKey($key)) {
@@ -129,7 +169,17 @@ foreach ($key in $h.Keys) {
     # Numbers within tolerance are agreement, not divergence.
     $hn = 0.0; $cn = 0.0
     if ([double]::TryParse($hv, [ref]$hn) -and [double]::TryParse($cv, [ref]$cn)) {
-        if ([Math]::Abs($hn - $cn) -le $Tolerance) { continue }
+        $delta = [Math]::Abs($hn - $cn)
+        if ($delta -le $Tolerance) { continue }
+
+        # Large values that moved a little between two snapshots taken moments apart.
+        # Named and counted, never dropped - see the header.
+        $scale = [Math]::Max([Math]::Abs($hn), [Math]::Abs($cn))
+        if ($scale -gt 0 -and ($delta / $scale) -le $RelativeTolerance) {
+            [void]$b.Near.Add(("{0}  host={1} client={2}  ({3:P3} apart)" -f
+                $key, $hv, $cv, ($delta / $scale)))
+            continue
+        }
     }
 
     [void]$b.Different.Add(("{0}  host={1} client={2}" -f $key, $hv, $cv))
@@ -137,15 +187,19 @@ foreach ($key in $h.Keys) {
 
 foreach ($key in $c.Keys) {
     if ($h.ContainsKey($key)) { continue }
-    $b = Bucket ($key -split '\|')[0]
+    $category = ($key -split '\|')[0]
+    if ($category -eq 'meta') { continue }
+    $b = Bucket $category
     [void]$b.PeerOnly.Add(("{0} = {1}" -f $key, $c[$key]))
 }
 
 $anyProblem = $false
 foreach ($category in ($cats.Keys | Sort-Object)) {
     $b = $cats[$category]
-    Write-Output ("[state] {0,-9} shared {1,5}   DIFFERENT {2,4}   HOST-ONLY {3,4}   PEER-ONLY {4,4}" -f
-        $category, $b.Shared, $b.Different.Count, $b.HostOnly.Count, $b.PeerOnly.Count)
+    Write-Output ("[state] {0,-9} shared {1,5}   DIFFERENT {2,4}   NEAR {3,4}   HOST-ONLY {4,4}   PEER-ONLY {5,4}" -f
+        $category, $b.Shared, $b.Different.Count, $b.Near.Count, $b.HostOnly.Count, $b.PeerOnly.Count)
+    # NEAR is deliberately not here. It is two snapshots taken moments apart, and
+    # failing the gate on it is how a comparison becomes noise nobody reads.
     if ($b.Different.Count -gt 0 -or $b.HostOnly.Count -gt 0 -or $b.PeerOnly.Count -gt 0) {
         $anyProblem = $true
     }
@@ -153,13 +207,18 @@ foreach ($category in ($cats.Keys | Sort-Object)) {
 
 foreach ($category in ($cats.Keys | Sort-Object)) {
     $b = $cats[$category]
-    if ($b.Different.Count -eq 0 -and $b.HostOnly.Count -eq 0 -and $b.PeerOnly.Count -eq 0) { continue }
+    if ($b.Different.Count -eq 0 -and $b.HostOnly.Count -eq 0 -and $b.PeerOnly.Count -eq 0 -and
+        $b.Near.Count -eq 0) { continue }
 
     Write-Output ""
     Write-Output ("--- {0} ---" -f $category)
     if ($b.Different.Count -gt 0) {
         Write-Output "  both hold it, values differ:"
         $b.Different | Select-Object -First $Examples | ForEach-Object { Write-Output ("    " + $_) }
+    }
+    if ($b.Near.Count -gt 0) {
+        Write-Output "  near - drift between two snapshots, not a gate failure:"
+        $b.Near | Select-Object -First $Examples | ForEach-Object { Write-Output ("    " + $_) }
     }
     if ($b.HostOnly.Count -gt 0) {
         Write-Output "  host only:"

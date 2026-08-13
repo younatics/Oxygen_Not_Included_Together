@@ -265,10 +265,31 @@ for ($i = 1; $i -le $Runs; $i++) {
 
         # Everything else: research, recipe queues, player-set flags, duplicant vitals.
         # One line per category, so a silent category cannot hide behind a noisy one.
+        #
+        # The examples come too, and that is the point of this block rather than a detail
+        # of it. The filter here used to take only the "shared" summary lines, so the
+        # summary said "research DIFFERENT 1" and never which row - and three open
+        # findings sat undiagnosable for a day behind counts with no names. Running the
+        # comparer by hand showed all three in one pass: two pressure doors Locked
+        # against Opened, a research percentage 0.67 against 0.46, and vitals that were
+        # a tenth of a percent of calorie drift.
+        #
+        # This is the third time in this project that a verdict existed and did not
+        # reach the summary. A judgement that is not in the summary does not exist.
         $state = & (Join-Path $root 'compare-state.ps1') -HostLog $hostLog -ClientLog $clientLog -Examples 4 2>&1
         foreach ($line in $state) {
-            if ("$line" -match 'shared\s+\d|facts dumped|cannot answer|not covered yet') {
-                Add-Content -Path $Summary -Value ("      state  " + ("$line").Trim()) -Encoding UTF8
+            $text = "$line"
+            # 'snapshot' is in here because leaving it out dropped the one line that
+            # says whether the continuous values can be judged at all - caught by
+            # running the filter against real output instead of trusting it.
+            if ($text -match 'shared\s+\d|facts dumped|cannot answer|not covered yet|snapshot') {
+                Add-Content -Path $Summary -Value ("      state  " + $text.Trim()) -Encoding UTF8
+            }
+            # The category header and its examples: "--- flag ---", the bucket label,
+            # and the indented rows underneath. Bounded by -Examples above rather than
+            # by a filter here, so raising the cap is one number in one place.
+            elseif ($text -match '^\s*---\s|^\s{2}\S.*:$|^\s{4}\S') {
+                Add-Content -Path $Summary -Value ("      state    " + $text.Trim()) -Encoding UTF8
             }
         }
     }
