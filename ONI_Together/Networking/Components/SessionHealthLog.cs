@@ -289,6 +289,10 @@ namespace ONI_Together.Networking.Components
 				// that used to be destruction.
 				$"|scaffoldsCleared={Packets.Tools.Build.BuildCompletePacket.LeftoverScaffoldsCleared}" +
 				$"|scaffoldsSpared={Packets.Tools.Build.BuildCompletePacket.ScaffoldsLeftAlone}" +
+				// Completed builds not announced because the cell was off-grid or the
+				// building had no name. Each one is a finished building the other peer
+				// is never told about.
+				$"|buildRefused={ConstructablePatch.BuildSendsRefused}" +
 				// Duplicant vitals trimmed on arrival because this peer's limit is
 				// lower than the host's. A divergence that resending cannot close.
 				$"|vitalClamped={Packets.DuplicantActions.VitalStatsPacket.AmountsClamped}" +
