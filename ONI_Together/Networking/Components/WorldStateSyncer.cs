@@ -230,12 +230,33 @@ namespace ONI_Together.Networking.Components
 				if (Time.unscaledTime - _lastSyncTime > STAGGERED_SYNC_INTERVAL)
 				{
 					_lastSyncTime = Time.unscaledTime;
-					switch (_syncCycleIndex++ % 4)
+					switch (_syncCycleIndex++ % 5)
 					{
 						case 0: SyncDigging(); break;
 						case 1: SyncChores(); break;
 						case 2: SyncResearchProgress(); break;
-						case 3: SteamLobby.UpdateGameInfo(); break; // Update lobby metadata
+						// The completed-research list, which nothing was sending.
+						//
+						// SyncResearch builds a ResearchStatePacket carrying every unlocked
+						// tech, and the client has had a working apply path for it all
+						// along - but the only caller was the join handshake answering a
+						// request. After that the client received progress percentages for
+						// whatever tech was active and nothing else, so a completion never
+						// reached it: the host finished basic research and the client sat at
+						// the last percentage it had been told, which is what a player
+						// reported as "research is only half done over here".
+						//
+						// The event hook that was supposed to cover this does not fire.
+						// ResearchCompletePatch hangs off TechInstance.Purchased, that method
+						// does exist - asked of the running game rather than assumed - and it
+						// logged zero calls across an entire session. ONI completes a tech
+						// through some other path inside Research.AddResearchPoints.
+						//
+						// So this stops trying to catch the moment and states the whole set
+						// periodically instead, which does not care which internal path ONI
+						// takes. Same move that took storage from 99 mass disagreements to 6.
+						case 3: SyncResearch(); break;
+						case 4: SteamLobby.UpdateGameInfo(); break; // Update lobby metadata
 					}
 				}
 			}
