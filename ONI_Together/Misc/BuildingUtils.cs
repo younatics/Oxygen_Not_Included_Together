@@ -251,6 +251,29 @@ namespace ONI_Together.Misc
                     }
                     scrapObject.SetActive(true);
                     storage.Store(scrapObject, true, true);
+
+                    // Did it actually land in the container?
+                    //
+                    // Store's result was discarded, and a container can refuse - a
+                    // fabricator's input storage takes only what its recipes call for,
+                    // and a full one takes nothing. A refused item does not vanish; it
+                    // is left standing in the world where the container is, which is
+                    // exactly what the measurement looks like: a MicrobeMusher holding
+                    // BasicPlantFood on the host and none on the client, with the client
+                    // holding twenty-two of them loose in the colony.
+                    //
+                    // Checked by asking the storage rather than trusting the call, since
+                    // that is the thing in doubt.
+                    if (!storage.items.Contains(scrapObject))
+                    {
+                        ItemsRefusedByStorage++;
+                        DebugTools.ThrottledLog.Warn(
+                            $"[Storage] '{scrapObject.PrefabID()}' was rebuilt for " +
+                            $"'{storage.gameObject.PrefabID()}' and the container did not " +
+                            "take it - it is loose in the world and the peers disagree");
+                        continue;
+                    }
+
                     ItemsRecreated++;
                 }
             }
@@ -268,6 +291,13 @@ namespace ONI_Together.Misc
         /// also zero.
         /// </summary>
         public static int ItemsRecreated { get; private set; }
+
+        /// <summary>
+        /// Items rebuilt for a container that then refused to hold them. They are left
+        /// loose in the world, so the container disagrees with the other peer and the
+        /// colony gains an object nobody asked for.
+        /// </summary>
+        public static int ItemsRefusedByStorage { get; private set; }
 
         /// <summary>Storages corrected without destroying anything.</summary>
         public static int StorageUpdatedInPlace { get; private set; }

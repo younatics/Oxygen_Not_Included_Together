@@ -298,6 +298,9 @@ namespace ONI_Together.Networking.Components
 				// dropped" from "nothing was rebuilt".
 				$"|storeMade={Misc.BuildingUtils.ItemsRecreated}" +
 				$"|storeNoPrefab={Misc.BuildingUtils.ItemsNoPrefab}" +
+				// Items the container refused after they were rebuilt for it. Each one
+				// is left loose in the world and the container stays wrong.
+				$"|storeRefused={Misc.BuildingUtils.ItemsRefusedByStorage}" +
 				// Keyframes: structure states sent because the clock came due, not
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.
