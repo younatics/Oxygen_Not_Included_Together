@@ -96,7 +96,19 @@ $deconstructs = @(0, 0, 3)
 # What each run builds. Tiles keep their scaffold on a different object layer from
 # ladders, and the leftover-scaffold sweep exists for exactly that mismatch - a
 # matrix that only ever built ladders could never reach the case it guards.
-$buildWhat = @('Ladder', 'Tile', 'Tile')
+# Wire and conduit on purpose, not only ladders and tiles.
+#
+# A ladder's and a tile's construction site sits on the building's own object layer.
+# A wire's and a conduit's does not, and that is the case behind the reported "host
+# says the tile is built, the client still shows it scheduled" - measured across peers
+# as HighWattageWire and InsulatedLiquidConduit finished on the host and still
+# UnderConstruction on the client. The handler for it has been in for four commits and
+# siteOtherLayer has read zero every run since, because nothing here could reach it.
+#
+# Both names are ones this colony's own logs have printed, rather than names that look
+# right - Assets.GetBuildingDef takes the PrefabID and a wrong one costs a whole run.
+# Tile stays in the rotation so the case that already passes keeps being checked.
+$buildWhat = @('Wire', 'Tile', 'InsulatedLiquidConduit')
 
 # Which run drops the client and rejoins.
 #
