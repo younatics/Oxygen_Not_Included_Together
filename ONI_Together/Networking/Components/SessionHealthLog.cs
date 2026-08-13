@@ -400,6 +400,10 @@ namespace ONI_Together.Networking.Components
 				// Fabricator products the client did not make for itself. Zero on a
 				// host; on a client it should track the host's production.
 				$"|productsBlocked={Patches.World.Buildings.ComplexFabricator_Patches.ClientProductsBlocked}" +
+				// Ingredient dumps a client's fabricator was stopped from making. The
+				// host decides what a fabricator holds; a client throwing its own
+				// ingredients out is how one container disagreed on every run.
+				$"|dropsBlocked={Patches.World.Buildings.ComplexFabricator_Patches.ClientIngredientDropsBlocked}" +
 				// Objects the host holds and this peer does not, and which cannot be
 				// sent as loose items. Used to be silence, counted as a failed lookup
 				// and indistinguishable from a lost packet.

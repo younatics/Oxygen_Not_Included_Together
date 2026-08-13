@@ -32,6 +32,12 @@ namespace ONI_Together.DebugTools.UnitTests
                 "a client hatching its own egg is a second creature the host never issued"),
             ("ComplexFabricator", "SpawnOrderProduct",
                 "a client fabricating its own product duplicates what the host announces"),
+            // Private, so it is named by string and nameof cannot check it - which is
+            // exactly the case this test exists for. Without it a patch that failed to
+            // attach would report dropsBlocked=0, and that zero would read as the
+            // diagnosis being refuted rather than the check never having run.
+            ("ComplexFabricator", "DropExcessIngredients",
+                "a client throwing out ingredients the host still holds empties one container every run"),
             ("BuildingHP", "OnDoBuildingDamage",
                 "client-side damage must be refused, and conduit damage recorded"),
             ("Pickupable", "OnCleanUp",

@@ -39,6 +39,48 @@ namespace ONI_Together.Patches.World.Buildings
 			}
 		}
 
+		/// <summary>
+		/// Times a client's fabricator was stopped from throwing its ingredients away.
+		/// Zero means this is not what empties them, whatever else is.
+		/// </summary>
+		public static int ClientIngredientDropsBlocked { get; private set; }
+
+		[HarmonyPatch(typeof(ComplexFabricator), "DropExcessIngredients")]
+		public class ComplexFabricator_DropExcessIngredients_Patch
+		{
+			/// <summary>
+			/// The host decides what a fabricator holds; a client must not throw it out.
+			///
+			/// One container disagrees on every run and always the same one: a
+			/// MicrobeMusher with BasicPlantFood on the host and none on the client,
+			/// while the Dirt and Water beside it agree to the decimal. Two explanations
+			/// were eliminated by counters rather than argument - the item's prefab is
+			/// found (storeNoPrefab 0 with storeMade 44 to 68) and the container accepts
+			/// it (storeRefused 0) - so it is put in and then taken out again.
+			///
+			/// This is the candidate that fits both halves of what is measured: the
+			/// musher is empty and the client holds twenty-two of that food loose in the
+			/// colony, which is where dropped ingredients go. A client's fabricator has
+			/// its own idea of what its orders need, because only SpawnOrderProduct is
+			/// blocked and the rest of the order machinery runs.
+			///
+			/// Counted as well as blocked, so this round answers whether it was right.
+			/// A zero here with the container still disagreeing refutes it outright and
+			/// costs nothing, since a client that never drops ingredients is corrected
+			/// by the next storage keyframe anyway.
+			/// </summary>
+			public static bool Prefix()
+			{
+				using var _ = Profiler.Scope();
+
+				if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+					return true;
+
+				ClientIngredientDropsBlocked++;
+				return false;
+			}
+		}
+
 		[HarmonyPatch(typeof(ComplexFabricator), nameof(ComplexFabricator.CancelWorkingOrder))]
 		public class ComplexFabricator_CancelWorkingOrder_Patch
 		{
