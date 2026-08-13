@@ -630,6 +630,16 @@ namespace ONI_Together.Networking.Components
 					Progress = progressPercent
 				};
 
+				// The points themselves, not just the fraction they add up to.
+				//
+				// The fraction alone cannot be turned back into per-type points when a
+				// tech's research types cost different amounts, and the client was
+				// rebuilding them as cost * fraction. Host 0.67 against client 0.46, the
+				// same two numbers in six runs out of six - deterministic, because it is
+				// arithmetic rather than timing.
+				foreach (var kvp in techInstance.progressInventory.PointsByTypeID)
+					packet.PointsByType[kvp.Key] = kvp.Value;
+
 				PacketSender.SendToAllClients(packet, PacketSendMode.Unreliable);
 
 				sw.Stop();
