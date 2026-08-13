@@ -1,0 +1,224 @@
+﻿[08-13 10:15:13] soak starting: 6 runs on '싱크검증본'
+[08-13 10:15:13] run 1/6  label=soak01 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-13 10:15:13]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:18:04] soak starting: 6 runs on '싱크검증본'
+[08-13 10:18:04] run 1/6  label=soak01 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-13 10:18:04]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:24:14]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.8 | 1 prefabs only got an identity when a packet needed one: PuftAlphaEgg x1
+      host  errors=0  row=4|role=host|frameMs=77.2|worstMs=244|stutters=776|hitches=0|rttMs=-1|registry=9181|lookupFails=77|lookupFailsPerRow=16|failsResolvedLater=0|unresolvedIds=77|expectedMisses=0|retiredIds=152|removedByCell=0|removalsUnmatched=0|framesThisRow=778|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=510|ephemeral=171|refusedAsked=730|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=1900|resyncs=8236|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1499|cost[BuildingDamageSyncer=2081ms/778,PacketSender.SendToAllClients=1188ms/103013,AnimSyncCoordinator=835ms/778,KAnimControllerBase_Patches.SendAnimPacketToClients=176ms/12946,KAnimControllerBase_Play_Patch.Prefix=154ms/6384,ConduitFlowSyncer=93ms/778,KAnimControllerBase_Queue_Patch.Prefix=44ms/7338,WorldStateSyncer=43ms/778]|gap[SwampLilyFlower:1announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PlantFiber:4announced PacuBaby:2announced Pacu:1announced MushBar:1announced Lettuce:1announced]
+      FAIL client  NetId | No registry lookup failures | 1.1 | 129 packets arrived carrying NetId 0 - a sender is not filling the id in. Asked by: StandardWorker_WorkingState_Packet.TryApply x77, WorkableProgressPacket. ...
+      client  errors=0  row=4|role=client|frameMs=17.4|worstMs=367|stutters=24|hitches=1|rttMs=66|registry=8976|lookupFails=2336|lookupFailsPerRow=225|failsResolvedLater=822|unresolvedIds=2466|expectedMisses=110|retiredIds=179|removedByCell=0|removalsUnmatched=110|framesThisRow=3449|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5404|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=455/29|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=2|localOnly=511|ephemeral=221|refusedAsked=0|storeSync=602|skipConduit=0|storeInPlace=13146|storeRebuild=1771|storeKept=4641|storeEntities=64|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=434|mintsRefused=3526|adoptRefused=6|scaffoldsCleared=0|scaffoldsSpared=1|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=213|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=2|heldNotSent=17|instAdopted=24|byCell=24|staleIndex=1|minionsRefused=0|renamesRefused=0|idMoves=110|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=7|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1429|cost[ClientDamageWatcher=2733ms/3449,NetworkIdentityRegistry.TryGet=286ms/73243,KAnimControllerBase_Play_Patch.Prefix=213ms/3361,BuildingDamageSyncer=151ms/3449,PacketSender.SendToHost=75ms/680,CursorManager=73ms/3449,MissingEntityResolver=5ms/3449,KAnimControllerBase_Queue_Patch.Prefix=5ms/3805]|gap[SwampLilyFlower:1unnamed/1drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced PlantFiber:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:3unnamed/3drawn/0announced LadderUnderConstruction:1unnamed/1drawn/0announced HighWattageWireComplete:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 8975   pointing at different things: 4
+      netid  [netid] ids the host issued that the client never heard of: 206
+      netid  [netid] MISMATCH 9   HOST-ONLY 196   CLIENT-ONLY 5
+      hp     [hp] damaged buildings - host 84, client 84
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 555, client 495
+      store  [store] COUNT 0   MASS 1   HOST-ONLY 63   PEER-ONLY 3
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      1
+      xstate host only   4
+      xstate client only 1
+      xstate buildings: host 5617, client 5612, client-only 0, host-only 5, mid-construction 2
+      xstate mid-construction  HighWattageWire at cell 49014 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 49014 - the other peer has the same building at a different stage
+      xstate damaged buildings: host 84, client 84, disagreeing 0
+      state  [state] facts dumped - host 2534, client 2531
+      state  [state] flag      shared  1306   DIFFERENT    2   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   949   DIFFERENT    1   HOST-ONLY    4   PEER-ONLY    1
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   50   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 10:24:16] run 2/6  label=soak02 dig=6 settle=120s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-13 10:24:16]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:30:03]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.9 | 1 prefabs only got an identity when a packet needed one: PuftEgg x1
+      host  errors=0  row=4|role=host|frameMs=80.7|worstMs=1524|stutters=741|hitches=5|rttMs=-1|registry=9154|lookupFails=55|lookupFailsPerRow=5|failsResolvedLater=0|unresolvedIds=55|expectedMisses=2|retiredIds=117|removedByCell=0|removalsUnmatched=2|framesThisRow=744|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=509|ephemeral=177|refusedAsked=709|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=1905|resyncs=8238|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=1|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1474|cost[BuildingDamageSyncer=2074ms/744,AnimSyncCoordinator=1088ms/744,PacketSender.SendToAllClients=922ms/54077,KAnimControllerBase_Patches.SendAnimPacketToClients=279ms/5415,KAnimControllerBase_Play_Patch.Prefix=269ms/2670,ConduitFlowSyncer=94ms/744,WorldStateSyncer=28ms/744,PlantGrowthSyncer=26ms/744]|gap[SwampLilyFlower:1announced PuftEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced Pacu:1announced MushBar:1announced Lettuce:1announced]
+      FAIL client  NetId | No registry lookup failures | 1.1 | 77 packets arrived carrying NetId 0 - a sender is not filling the id in. Asked by: StandardWorker_WorkingState_Packet.TryApply x77 ;; 1 NetIds could not be  ...
+      client  errors=0  row=3|role=client|frameMs=17.4|worstMs=217|stutters=23|hitches=0|rttMs=74|registry=9014|lookupFails=1170|lookupFailsPerRow=600|failsResolvedLater=809|unresolvedIds=2431|expectedMisses=82|retiredIds=104|removedByCell=0|removalsUnmatched=82|framesThisRow=3456|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5406|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=357/19|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=4|localOnly=509|ephemeral=204|refusedAsked=0|storeSync=602|skipConduit=0|storeInPlace=9860|storeRebuild=1485|storeKept=3657|storeEntities=48|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=342|mintsRefused=2984|adoptRefused=6|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=3|productsBlocked=2|heldNotSent=18|instAdopted=18|byCell=18|staleIndex=2|minionsRefused=0|renamesRefused=0|idMoves=70|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=7|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1436|cost[ClientDamageWatcher=2520ms/3456,PacketSender.SendToHost=270ms/755,CursorManager=263ms/3456,KAnimControllerBase_Queue_Patch.Prefix=208ms/8816,BuildingDamageSyncer=145ms/3456,NetworkIdentityRegistry.TryGet=135ms/133573,KAnimControllerBase_Play_Patch.Prefix=16ms/7851,MissingEntityResolver=14ms/3456]|gap[TileUnderConstruction:1unnamed/1drawn/0announced SwampLilyFlower:2unnamed/2drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:2unnamed/2drawn/0announced EggShell:2unnamed/2drawn/0announced BasicPlantFood:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 9014   pointing at different things: 3
+      netid  [netid] ids the host issued that the client never heard of: 140
+      netid  [netid] MISMATCH 7   HOST-ONLY 130   CLIENT-ONLY 4
+      hp     [hp] damaged buildings - host 85, client 85
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 532, client 496
+      store  [store] COUNT 0   MASS 1   HOST-ONLY 37   PEER-ONLY 1
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   3
+      xstate client only 0
+      xstate buildings: host 5618, client 5615, client-only 0, host-only 3, mid-construction 0
+      xstate damaged buildings: host 85, client 85, disagreeing 0
+      state  [state] facts dumped - host 2534, client 2531
+      state  [state] flag      shared  1306   DIFFERENT    3   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   950   DIFFERENT    2   HOST-ONLY    3   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   46   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 10:30:04] run 3/6  label=soak03 dig=3 settle=180s build=3 peerBuild=3 deconstruct=3 reconnect=True
+[08-13 10:30:04]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:38:51]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.8 | 1 prefabs only got an identity when a packet needed one: PuftAlphaEgg x1
+      host  errors=0  row=7|role=host|frameMs=76.9|worstMs=345|stutters=779|hitches=1|rttMs=-1|registry=9152|lookupFails=371|lookupFailsPerRow=238|failsResolvedLater=0|unresolvedIds=70|expectedMisses=0|retiredIds=199|removedByCell=0|removalsUnmatched=0|framesThisRow=781|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=508|ephemeral=201|refusedAsked=1063|storeSync=604|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=3415|resyncs=14795|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=214|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=3|prioFixed=3|prioDefaulted=0|removalsApplied=0|gcMB=1445|cost[BuildingDamageSyncer=2067ms/781,PacketSender.SendToAllClients=1089ms/54061,AnimSyncCoordinator=669ms/781,ConduitFlowSyncer=92ms/781,KAnimControllerBase_Patches.SendAnimPacketToClients=83ms/5295,KAnimControllerBase_Play_Patch.Prefix=72ms/2513,WorldStateSyncer=28ms/781,PlantGrowthSyncer=27ms/781]|gap[SwampLilyFlower:1announced RotPile:3announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PrickleFruit:1announced PlantFiber:2announced PacuBaby:2announced Pacu:1announced]
+      client  errors=0  row=6|role=client|frameMs=17.4|worstMs=433|stutters=25|hitches=1|rttMs=86|registry=9021|lookupFails=97842|lookupFailsPerRow=97842|failsResolvedLater=886|unresolvedIds=4883|expectedMisses=162|retiredIds=33|removedByCell=0|removalsUnmatched=162|framesThisRow=3449|collisions=18|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=498|hpTracked=5400|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=48/5|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=529|ephemeral=238|refusedAsked=0|storeSync=604|skipConduit=0|storeInPlace=17166|storeRebuild=2719|storeKept=6479|storeEntities=79|resyncs=0|multiStore=22|reattached=9049|reattachSweeps=1|flagWatched=0|flagRepaired=0|previewsNoId=629|mintsRefused=7931|adoptRefused=22|scaffoldsCleared=0|scaffoldsSpared=2|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=217|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=2|heldNotSent=244|instAdopted=1|byCell=1|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=205|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=6|prioFixed=3|prioDefaulted=0|removalsApplied=0|gcMB=1457|cost[ClientDamageWatcher=2355ms/3449,NetworkIdentityRegistry.TryGet=218ms/123962,BuildingDamageSyncer=159ms/3449,PacketSender.SendToHost=79ms/1004,CursorManager=55ms/3449,MissingEntityResolver=24ms/3449,NetworkIdentity.RegisterIdentity=13ms/12264,KAnimControllerBase_Play_Patch.Prefix=9ms/2724]|gap[<link="TOXICSAND">오염된 흙</link>:2unnamed/2drawn/0announced <link="METHANE">천연가스</link>:1unnamed/2drawn/0announced <link="CREATURE">유전적 무른감탕</link>:33unnamed/40drawn/0announced <link="CLAY">점토</link>:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 8949   pointing at different things: 20
+      netid  [netid] ids the host issued that the client never heard of: 203
+      netid  [netid] MISMATCH 8   HOST-ONLY 209   CLIENT-ONLY 90
+      hp     [hp] damaged buildings - host 83, client 82
+      hp     [hp] DIFFERENT 0   HOST-ONLY 1   PEER-ONLY 0
+      store  [store] container/item groups - host 550, client 504
+      store  [store] COUNT 0   MASS 2   HOST-ONLY 49   PEER-ONLY 3
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   6
+      xstate client only 3
+      xstate buildings: host 5617, client 5610, client-only 0, host-only 7, mid-construction 6
+      xstate mid-construction  HighWattageWire at cell 45686 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWire at cell 46219 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 45686 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 46219 - the other peer has the same building at a different stage
+      xstate mid-construction  Wire at cell 53893 - the other peer has the same building at a different stage
+      xstate mid-construction  WireUnderConstruction at cell 53893 - the other peer has the same building at a different stage
+      xstate damaged buildings: host 83, client 82, disagreeing 1
+      state  [state] facts dumped - host 2536, client 2533
+      state  [state] flag      shared  1306   DIFFERENT    4   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   949   DIFFERENT    2   HOST-ONLY    6   PEER-ONLY    3
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   58   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 10:38:54] run 4/6  label=soak04 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-13 10:38:54]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:45:05]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.7 | 2 prefabs only got an identity when a packet needed one: CrabBaby x1, PuftEgg x1
+      host  errors=0  row=4|role=host|frameMs=77.0|worstMs=232|stutters=778|hitches=0|rttMs=-1|registry=9151|lookupFails=83|lookupFailsPerRow=16|failsResolvedLater=0|unresolvedIds=83|expectedMisses=0|retiredIds=164|removedByCell=0|removalsUnmatched=0|framesThisRow=780|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=507|ephemeral=183|refusedAsked=959|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=1895|resyncs=8212|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1436|cost[BuildingDamageSyncer=2081ms/780,PacketSender.SendToAllClients=1403ms/102807,AnimSyncCoordinator=837ms/780,KAnimControllerBase_Patches.SendAnimPacketToClients=180ms/12247,KAnimControllerBase_Play_Patch.Prefix=158ms/5968,ConduitFlowSyncer=92ms/780,WorldStateSyncer=46ms/780,KAnimControllerBase_Queue_Patch.Prefix=44ms/6908]|gap[SwampLilyFlower:1announced PuftEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced Pacu:1announced MushBar:1announced Lettuce:1announced]
+      FAIL client  NetId | Every critter has an identity | 80.3 | 1 of 80 creatures have no NetId: CrabBaby x1. The host cannot report their position or actions, so they will not move on a client.
+      FAIL client  NetId | No registry lookup failures | 0.5 | 88 packets arrived carrying NetId 0 - a sender is not filling the id in. Asked by: StandardWorker_WorkingState_Packet.TryApply x88 ;; 1 NetIds could not be  ...
+      client  errors=0  row=4|role=client|frameMs=17.4|worstMs=367|stutters=25|hitches=1|rttMs=66|registry=9000|lookupFails=2227|lookupFailsPerRow=222|failsResolvedLater=826|unresolvedIds=2460|expectedMisses=129|retiredIds=143|removedByCell=0|removalsUnmatched=129|framesThisRow=3449|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5405|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=456/30|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=3|localOnly=507|ephemeral=220|refusedAsked=0|storeSync=602|skipConduit=0|storeInPlace=13037|storeRebuild=1831|storeKept=4460|storeEntities=64|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=436|mintsRefused=3655|adoptRefused=18|scaffoldsCleared=0|scaffoldsSpared=1|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=213|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=2|heldNotSent=21|instAdopted=26|byCell=26|staleIndex=3|minionsRefused=0|renamesRefused=0|idMoves=101|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=7|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1426|cost[ClientDamageWatcher=2685ms/3449,BuildingDamageSyncer=152ms/3449,NetworkIdentityRegistry.TryGet=85ms/74874,CursorManager=71ms/3449,PacketSender.SendToHost=69ms/645,KAnimControllerBase_Play_Patch.Prefix=8ms/3278,MissingEntityResolver=5ms/3449,WorldStateSyncer=4ms/3449]|gap[SwampLilyFlower:1unnamed/1drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:2unnamed/2drawn/0announced LadderUnderConstruction:1unnamed/1drawn/0announced LadderComplete:1unnamed/1drawn/0announced EggShell:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 8999   pointing at different things: 3
+      netid  [netid] ids the host issued that the client never heard of: 152
+      netid  [netid] MISMATCH 8   HOST-ONLY 142   CLIENT-ONLY 5
+      hp     [hp] damaged buildings - host 76, client 76
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 539, client 497
+      store  [store] COUNT 0   MASS 1   HOST-ONLY 46   PEER-ONLY 4
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   4
+      xstate client only 1
+      xstate buildings: host 5617, client 5613, client-only 0, host-only 4, mid-construction 2
+      xstate mid-construction  HighWattageWire at cell 44150 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 44150 - the other peer has the same building at a different stage
+      xstate damaged buildings: host 76, client 76, disagreeing 0
+      state  [state] facts dumped - host 2534, client 2531
+      state  [state] flag      shared  1306   DIFFERENT    3   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   949   DIFFERENT    2   HOST-ONLY    4   PEER-ONLY    1
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   49   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 10:45:06] run 5/6  label=soak05 dig=6 settle=120s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-13 10:45:06]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 10:51:12]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.9 | 1 prefabs only got an identity when a packet needed one: PuftAlphaEgg x1
+      host  errors=0  row=4|role=host|frameMs=76.5|worstMs=245|stutters=781|hitches=0|rttMs=-1|registry=9158|lookupFails=53|lookupFailsPerRow=13|failsResolvedLater=0|unresolvedIds=53|expectedMisses=0|retiredIds=121|removedByCell=0|removalsUnmatched=0|framesThisRow=785|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=507|ephemeral=177|refusedAsked=832|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=1900|resyncs=8239|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1426|cost[BuildingDamageSyncer=2066ms/785,PacketSender.SendToAllClients=1176ms/79996,AnimSyncCoordinator=858ms/785,KAnimControllerBase_Patches.SendAnimPacketToClients=142ms/9348,KAnimControllerBase_Play_Patch.Prefix=124ms/4604,ConduitFlowSyncer=94ms/785,WorldStateSyncer=38ms/785,KAnimControllerBase_Queue_Patch.Prefix=36ms/5320]|gap[SwampLilyFlower:1announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced Pacu:1announced MushBar:1announced Lettuce:1announced]
+      FAIL client  NetId | No registry lookup failures | 1.1 | 66 packets arrived carrying NetId 0 - a sender is not filling the id in. Asked by: StandardWorker_WorkingState_Packet.TryApply x66 ;; 1 NetIds could not be  ...
+      client  errors=0  row=4|role=client|frameMs=20.4|worstMs=6250|stutters=29|hitches=6|rttMs=-1|registry=9071|lookupFails=0|lookupFailsPerRow=-1499|failsResolvedLater=3102|unresolvedIds=162|expectedMisses=91|retiredIds=19|removedByCell=0|removalsUnmatched=91|framesThisRow=2939|collisions=0|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5406|statusSubs=0|choreSubs=0|plants=796|dupes=22|deathsApplied=0|previews=381/23|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=1|localOnly=1391|ephemeral=327|refusedAsked=0|storeSync=1200|skipConduit=0|storeInPlace=12354|storeRebuild=1585|storeKept=3699|storeEntities=77|resyncs=0|multiStore=44|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=366|mintsRefused=3069|adoptRefused=5|scaffoldsCleared=0|scaffoldsSpared=3|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=3|productsBlocked=2|heldNotSent=37|instAdopted=21|byCell=21|staleIndex=1|minionsRefused=1|renamesRefused=0|idMoves=148|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=24|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=2012|cost[ClientDamageWatcher=2430ms/2939,BuildingDamageSyncer=148ms/2939,NetworkIdentityRegistry.TryGet=70ms/58026,PacketSender.SendToHost=62ms/606,CursorManager=61ms/2939,KAnimControllerBase_Play_Patch.Prefix=19ms/21729,CreatureSpawnPatch.Postfix=17ms/10898,BuildingSpawnPatch.Postfix=16ms/5615]|gap[TileUnderConstruction:1unnamed/1drawn/0announced SwampLilyFlower:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:1unnamed/1drawn/0announced HighWattageWireComplete:1unnamed/1drawn/0announced HatchHardBaby:1unnamed/1drawn/0announced EggShell:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 9004   pointing at different things: 4
+      netid  [netid] ids the host issued that the client never heard of: 154
+      netid  [netid] MISMATCH 6   HOST-ONLY 145   CLIENT-ONLY 7
+      hp     [hp] damaged buildings - host 81, client 81
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 532, client 498
+      store  [store] COUNT 0   MASS 14   HOST-ONLY 37   PEER-ONLY 3
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   4
+      xstate client only 3
+      xstate buildings: host 5615, client 5611, client-only 0, host-only 4, mid-construction 6
+      xstate mid-construction  HighWattageWire at cell 45221 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWire at cell 48758 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 45221 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 48758 - the other peer has the same building at a different stage
+      xstate mid-construction  InsulatedLiquidConduit at cell 49315 - the other peer has the same building at a different stage
+      xstate mid-construction  InsulatedLiquidConduitUnderConstruction at cell 49315 - the other peer has the same building at a different stage
+      xstate damaged buildings: host 81, client 81, disagreeing 0
+      state  [state] facts dumped - host 2534, client 2533
+      state  [state] flag      shared  1306   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   949   DIFFERENT    2   HOST-ONLY    4   PEER-ONLY    3
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   46   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 10:51:13] run 6/6  label=soak06 dig=3 settle=180s build=3 peerBuild=3 deconstruct=3 reconnect=True
+[08-13 10:51:13]   colony reset from '꾸밈 없는 우주 오두막'
+[08-13 11:00:01]   exit=1
+      FAIL host  NetId | No identity was minted just to send a packet | 0.9 | 1 prefabs only got an identity when a packet needed one: PuftAlphaEgg x1
+      host  errors=0  row=7|role=host|frameMs=80.9|worstMs=1667|stutters=744|hitches=3|rttMs=-1|registry=9152|lookupFails=427|lookupFailsPerRow=228|failsResolvedLater=0|unresolvedIds=93|expectedMisses=2|retiredIds=252|removedByCell=0|removalsUnmatched=2|framesThisRow=745|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=513|ephemeral=183|refusedAsked=859|storeSync=604|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=3400|resyncs=14803|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=0|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=214|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=4|prioFixed=3|prioDefaulted=0|removalsApplied=0|gcMB=1480|cost[BuildingDamageSyncer=2078ms/745,AnimSyncCoordinator=669ms/745,PacketSender.SendToAllClients=669ms/52563,ConduitFlowSyncer=98ms/745,KAnimControllerBase_Patches.SendAnimPacketToClients=76ms/5258,KAnimControllerBase_Play_Patch.Prefix=64ms/2484,WorldStateSyncer=28ms/745,PlantGrowthSyncer=27ms/745]|gap[SwampLilyFlower:1announced RotPile:3announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PrickleFruit:1announced PlantFiber:6announced PacuBaby:1announced Pacu:1announced]
+      client  errors=0  row=6|role=client|frameMs=17.4|worstMs=317|stutters=20|hitches=1|rttMs=50|registry=9006|lookupFails=115896|lookupFailsPerRow=115896|failsResolvedLater=850|unresolvedIds=4947|expectedMisses=200|retiredIds=4|removedByCell=0|removalsUnmatched=200|framesThisRow=3459|collisions=1|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=509|hpTracked=5400|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=15/0|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=533|ephemeral=227|refusedAsked=0|storeSync=604|skipConduit=0|storeInPlace=17048|storeRebuild=2585|storeKept=6688|storeEntities=79|resyncs=0|multiStore=22|reattached=9053|reattachSweeps=1|flagWatched=0|flagRepaired=0|previewsNoId=645|mintsRefused=8128|adoptRefused=14|scaffoldsCleared=0|scaffoldsSpared=3|siteOtherLayer=0|ghostSites=0|ghostWorst=0|sites=217|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=3|heldNotSent=302|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=167|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=6|prioFixed=3|prioDefaulted=0|removalsApplied=0|gcMB=1454|cost[ClientDamageWatcher=2600ms/3459,NetworkIdentityRegistry.TryGet=443ms/116085,BuildingDamageSyncer=159ms/3459,PacketSender.SendToHost=80ms/943,CursorManager=58ms/3459,MissingEntityResolver=24ms/3459,NetworkIdentity.RegisterIdentity=12ms/12182,KAnimControllerBase_Play_Patch.Prefix=7ms/1720]|gap[RotPile:3unnamed/3drawn/0announced <link="TOXICSAND">오염된 흙</link>:2unnamed/3drawn/0announced <link="OXYROCK">산소석</link>:1unnamed/1drawn/0announced <link="CLAY">점토</link>:2unnamed/2drawn/0announced]
+      netid  [netid] ids on both peers: 8948   pointing at different things: 2
+      netid  [netid] ids the host issued that the client never heard of: 204
+      netid  [netid] MISMATCH 6   HOST-ONLY 193   CLIENT-ONLY 60
+      hp     [hp] damaged buildings - host 67, client 66
+      hp     [hp] DIFFERENT 1   HOST-ONLY 1   PEER-ONLY 0
+      store  [store] container/item groups - host 547, client 505
+      store  [store] COUNT 0   MASS 2   HOST-ONLY 47   PEER-ONLY 5
+      gate   diff_logs      exit 0  clean
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   6
+      xstate client only 3
+      xstate buildings: host 5617, client 5611, client-only 0, host-only 6, mid-construction 6
+      xstate mid-construction  HighWattageWire at cell 46198 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWire at cell 53622 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 46198 - the other peer has the same building at a different stage
+      xstate mid-construction  HighWattageWireUnderConstruction at cell 53622 - the other peer has the same building at a different stage
+      xstate mid-construction  InsulatedLiquidConduit at cell 48803 - the other peer has the same building at a different stage
+      xstate mid-construction  InsulatedLiquidConduitUnderConstruction at cell 48803 - the other peer has the same building at a different stage
+      xstate damaged buildings: host 67, client 66, disagreeing 1
+      state  [state] facts dumped - host 2536, client 2533
+      state  [state] flag      shared  1306   DIFFERENT    3   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    1   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   949   DIFFERENT    2   HOST-ONLY    6   PEER-ONLY    3
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   56   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-13 11:00:04] soak finished

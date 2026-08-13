@@ -131,6 +131,25 @@ writer.Write(Priority.priority_value);          // 그리고 그 미설정값을
 특히 "거부/차단"류 수정은 실패를 없애는 게 아니라 **더 이른 단계로 옮기는** 경우가 많다.
 HEALTH 행을 통째로 diff 하고, 새로 0이 아니게 된 항목을 먼저 본다.
 
+### 이미 측정되고 있는 것을 안 읽고 새로 만들었다
+
+`analyze-session.ps1` 이 실행마다 `state_compare.py` 를 돌려 **`mid-construction ... the other
+peer has the same building at a different stage`** 를 출력하고 있었다. 그게 정확히
+"호스트는 타일 설치됨, 클라는 건설 예정" 이다. 그런데 **`soak-summary` 가 그 verdict 를 한 번도
+싣지 않아서**(요약 grep 이 `RESULT FAIL` 과 나중에 만든 비교기만 봤다) 하루를 가설·쓸기·계측으로 썼다.
+
+게다가 `verdict.txt` 는 `netid_compare exit 1 PEERS DISAGREE ON IDS`,
+`state_compare exit 1 PEERS DISAGREE ABOUT WORLD STATE` 를 계속 적고 있었다.
+
+**중간에 한 번 더 틀렸다:** PATH 의 `python` 이 Windows Store 스텁(길이 0, "Python was not found")
+이라서 "파이썬이 없으니 전부 거짓 빨간불"이라고 결론했다. `analyze-session` 은 **길이 0 검사로 스텁을
+걸러내고** 실제 인터프리터를 찾는다. 도구가 안 돈다고 단정하기 전에 **그 도구가 실제로 어떻게
+호출되는지** 봐야 했다.
+
+**방지책:** 새 계측을 만들기 전에 **기존 산출물을 전부 훑는다** — `verdict.txt`, `*.json`,
+analyze 출력. 그리고 **모든 게이트 결과는 요약 한 곳에 모인다**(`gate`/`xstate` 행). 요약에 안
+올라가는 판정은 없는 것과 같다.
+
 ### 낡은 측정값에 수정을 겨눔
 
 "클라에만 있는 기체·액체 44~60개" 를 근거로 설계·구현·배포·검증까지 한 라운드를 다 돌렸다.

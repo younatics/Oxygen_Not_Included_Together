@@ -47,6 +47,20 @@ $ErrorActionPreference = 'Continue'
 $root = $PSScriptRoot
 $peerCmd = Join-Path $root 'peer-cmd.ps1'
 
+# The same resolution analyze-session uses, and for the same reason: the python on
+# PATH here is the Windows Store stub, a zero-length shim that prints "Python was not
+# found" and returns a failure code. Testing with it produced the conclusion that
+# python was missing and the gates were fake - they were not, analyze-session had been
+# skipping the stub all along and running the real interpreter.
+$Python = $null
+$pyCmd = Get-Command python -ErrorAction SilentlyContinue
+if ($pyCmd -and (Get-Item $pyCmd.Source).Length -gt 0) { $Python = $pyCmd.Source }
+if (-not $Python) {
+    $cand = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter python.exe -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notlike '*\venv\*' } | Select-Object -First 1
+    if ($cand) { $Python = $cand.FullName }
+}
+
 # Varied on purpose: see the note above about one run proving one path.
 # Held equal on purpose for the moment.
 #
@@ -216,6 +230,45 @@ for ($i = 1; $i -le $Runs; $i++) {
         foreach ($line in $store) {
             if ("$line" -match 'container/item groups|COUNT \d|cannot say anything') {
                 Add-Content -Path $Summary -Value ("      store  " + ("$line").Trim()) -Encoding UTF8
+            }
+        }
+
+        # The verdict analyze-session already wrote, surfaced here.
+        #
+        # It has been reporting "PEERS DISAGREE ON IDS" and "PEERS DISAGREE ABOUT WORLD
+        # STATE" on every run of this project, and this summary never showed it: the
+        # grep above only picks up RESULT FAIL lines and the comparers written later.
+        # A whole day went into chasing the tile that reads "scheduled" on one peer and
+        # built on the other, while state_compare was naming it every run as
+        # "mid-construction ... the other peer has the same building at a different
+        # stage". Reading what is already measured comes before measuring more.
+        $verdict = Join-Path $runDir 'verdict.txt'
+        if (Test-Path $verdict) {
+            foreach ($line in (Get-Content $verdict)) {
+                if ("$line" -match 'diff_logs|netid_compare|state_compare|selfcheck') {
+                    Add-Content -Path $Summary -Value ("      gate   " + ("$line").Trim()) -Encoding UTF8
+                }
+            }
+        }
+
+        # The detail behind those verdicts. analyze-session printed it to a console
+        # nobody kept, so the numbers existed for months and were never read - re-run
+        # here against the collected logs so the summary carries them.
+        $sc = Join-Path $root 'state_compare.py'
+        if ((Test-Path $sc) -and $Python) {
+            foreach ($line in (& $Python $sc $hostLog $clientLog 2>&1)) {
+                if ("$line" -match 'differ\s+\d|host only\s+\d|client only\s+\d|mid-construction\s+\w|buildings: host') {
+                    Add-Content -Path $Summary -Value ("      xstate " + ("$line").Trim()) -Encoding UTF8
+                }
+            }
+        }
+
+        # Everything else: research, recipe queues, player-set flags, duplicant vitals.
+        # One line per category, so a silent category cannot hide behind a noisy one.
+        $state = & (Join-Path $root 'compare-state.ps1') -HostLog $hostLog -ClientLog $clientLog -Examples 4 2>&1
+        foreach ($line in $state) {
+            if ("$line" -match 'shared\s+\d|facts dumped|cannot answer|not covered yet') {
+                Add-Content -Path $Summary -Value ("      state  " + ("$line").Trim()) -Encoding UTF8
             }
         }
     }

@@ -344,6 +344,13 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                case "state":
+                {
+                    int rows = DumpGameState();
+                    DebugConsole.Log($"{Tag} OK state :: dumped {rows} row(s)");
+                    break;
+                }
+
                 case "packets":
                     PacketTracker.DumpCounts();
                     DebugConsole.Log($"{Tag} OK packets");
@@ -1102,6 +1109,206 @@ namespace ONI_Together.DebugTools
 			}
 
 			return count;
+		}
+
+		/// <summary>
+		/// One dump for every kind of game state worth comparing across peers.
+		///
+		/// Written because the alternative was becoming absurd. Damage got a dump and a
+		/// comparer, container contents got a dump and a comparer, the id tables got a
+		/// dump and a comparer - three of each, about a hundred lines apiece, and the
+		/// list of things nobody was comparing was still long: research, recipe queues,
+		/// the flags a player sets by clicking, duplicant vitals. Each new category meant
+		/// another pair of files, so most categories never got one, and the two worst bugs
+		/// of the day were in categories with no comparison at all.
+		///
+		/// So the shape is uniform: category|key|field|value, one row per fact. Adding a
+		/// category is a few lines here and nothing at all on the comparison side, which
+		/// is what makes "check everything" affordable instead of aspirational.
+		///
+		/// The key must identify the same thing on both peers without depending on
+		/// anything under test. Cells for buildings, because buildings do not move, and
+		/// names for duplicants - not NetIds, since whether the two peers agree about ids
+		/// is one of the things being measured, and keying on it would hide exactly the
+		/// case worth seeing.
+		///
+		/// Every accessor here is one this repository already uses or one the api verb was
+		/// asked about. Categories whose accessors are not confirmed are listed as not
+		/// covered at the end rather than guessed at - power grids, plant growth, critter
+		/// age, conduit contents and per-building priorities are all still uncompared, and
+		/// saying so is more useful than a dump that silently reports nothing.
+		/// </summary>
+		private static int DumpGameState()
+		{
+			if (Game.Instance == null) throw new InvalidOperationException("no game loaded");
+
+			var rows = new List<string>();
+
+			DumpResearchState(rows);
+			DumpRecipeQueues(rows);
+			DumpBuildingFlags(rows);
+			DumpDuplicantVitals(rows);
+
+			// GAMESTATE, not STATE. StateDivergenceTests already emits [STATE] rows with a
+			// different schema - NetId first, then the syncer name - and a comparer reading
+			// both saw NetIds where it expected category names. Tags are a namespace and
+			// this one was taken; checking that before reusing it would have cost nothing.
+			rows.Sort(StringComparer.Ordinal);
+			foreach (var row in rows) DebugConsole.Log("[GAMESTATE] " + row);
+
+			DebugConsole.LogWarning(
+				"[GAMESTATE] not covered yet: power grid, plant growth, critter age, conduit " +
+				"contents, per-building priority. Their accessors are unconfirmed - a dump " +
+				"that guesses is worse than one that admits the gap.");
+
+			return rows.Count;
+		}
+
+		/// <summary>
+		/// Which techs are done, what is being researched, and how far in.
+		///
+		/// The client reported research half finished while the host had completed it.
+		/// Nothing compared this, and the function that sends the completed set had no
+		/// caller at all.
+		/// </summary>
+		private static void DumpResearchState(List<string> rows)
+		{
+			if (Research.Instance == null || Db.Get().Techs == null) return;
+
+			foreach (var tech in Db.Get().Techs.resources)
+			{
+				if (tech == null) continue;
+				var instance = Research.Instance.Get(tech);
+				if (instance == null) continue;
+
+				// IsComplete and GetTotalPercentageComplete were both read off the running
+				// game with the api verb rather than assumed.
+				rows.Add($"research|{tech.Id}|complete|{(instance.IsComplete() ? 1 : 0)}");
+
+				// Percentage only while it is unfinished. A finished tech reports whatever
+				// its inventory happens to hold and that is not a fact about agreement.
+				if (!instance.IsComplete())
+				{
+					float pct = instance.GetTotalPercentageComplete();
+					rows.Add($"research|{tech.Id}|percent|{Math.Round(pct, 2)}");
+				}
+			}
+
+			var active = Research.Instance.GetActiveResearch();
+			rows.Add($"research|_active|tech|{active?.tech?.Id ?? "none"}");
+		}
+
+		/// <summary>
+		/// How many of each recipe every fabricator has queued.
+		///
+		/// A player queued iron on the client and the count read zero there while the host
+		/// refined it. Both peers keep their own count, both consume it, and nothing
+		/// reconciles them.
+		/// </summary>
+		private static void DumpRecipeQueues(List<string> rows)
+		{
+			foreach (var fabricator in UnityEngine.Object.FindObjectsByType<ComplexFabricator>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (fabricator.IsNullOrDestroyed() || fabricator.gameObject.IsNullOrDestroyed()) continue;
+
+				int cell = Grid.PosToCell(fabricator.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				string key = $"{fabricator.gameObject.PrefabID()}@{cell}";
+
+				foreach (var recipe in fabricator.GetRecipes())
+				{
+					if (recipe == null) continue;
+					int count = fabricator.GetRecipeQueueCount(recipe);
+
+					// Only what is queued. Every fabricator knows every recipe it could
+					// make, and rows for the ones nobody ordered would bury the ones
+					// somebody did.
+					if (count == 0) continue;
+					rows.Add($"recipe|{key}|{recipe.id}|{count}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// The state a player sets by clicking: enabled, door control, delivery amount.
+		///
+		/// Synced by event patches only, with no way to look again if one is missed. The
+		/// syncer written for this could not be attached - see BuildingFlagsSyncer - so
+		/// this is currently the only thing that would notice a divergence.
+		/// </summary>
+		private static void DumpBuildingFlags(List<string> rows)
+		{
+			foreach (var button in UnityEngine.Object.FindObjectsByType<BuildingEnabledButton>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (button.IsNullOrDestroyed() || button.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(button.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+				rows.Add($"flag|{button.gameObject.PrefabID()}@{cell}|enabled|{(button.IsEnabled ? 1 : 0)}");
+			}
+
+			foreach (var door in UnityEngine.Object.FindObjectsByType<Door>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (door.IsNullOrDestroyed() || door.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(door.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+				rows.Add($"flag|{door.gameObject.PrefabID()}@{cell}|door|{door.CurrentState}");
+			}
+
+			foreach (var delivery in UnityEngine.Object.FindObjectsByType<ManualDeliveryKG>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (delivery.IsNullOrDestroyed() || delivery.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(delivery.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+				string key = $"{delivery.gameObject.PrefabID()}@{cell}";
+				rows.Add($"flag|{key}|capacity|{Math.Round(delivery.capacity, 1)}");
+				rows.Add($"flag|{key}|paused|{(delivery.paused ? 1 : 0)}");
+			}
+		}
+
+		/// <summary>
+		/// Duplicant health, stress and calories.
+		///
+		/// Never compared. A duplicant starving on one peer and fine on the other is the
+		/// kind of divergence that ends a colony, and the only reason to believe it does
+		/// not happen is that nobody has looked.
+		///
+		/// Keyed by name rather than NetId, and rounded: two peers running the same
+		/// simulation will not agree on the third decimal of a calorie.
+		/// </summary>
+		private static void DumpDuplicantVitals(List<string> rows)
+		{
+			var amounts = Db.Get().Amounts;
+			if (amounts == null) return;
+
+			foreach (var minion in UnityEngine.Object.FindObjectsByType<MinionIdentity>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (minion.IsNullOrDestroyed() || minion.gameObject.IsNullOrDestroyed()) continue;
+
+				// The same accessor VitalStatsSyncer uses, with using Klei.AI.
+				var values = minion.gameObject.GetAmounts();
+				if (values == null) continue;
+
+				string key = minion.GetProperName();
+
+				foreach (var pair in new[] {
+					("hp", amounts.HitPoints),
+					("calories", amounts.Calories),
+					("stress", amounts.Stress),
+					("stamina", amounts.Stamina),
+				})
+				{
+					if (pair.Item2 == null) continue;
+					var value = values.Get(pair.Item2);
+					if (value == null) continue;
+					rows.Add($"vital|{key}|{pair.Item1}|{Math.Round(value.value, 1)}");
+				}
+			}
 		}
 
 		/// <summary>Where a duplicant is standing, or the middle of the world.</summary>

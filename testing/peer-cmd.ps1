@@ -92,5 +92,24 @@ while ((Get-Date) -lt $deadline) {
 }
 
 Remove-Item (Join-Path $cmdDir "$id.req.json") -Force -ErrorAction SilentlyContinue
-Write-Host "[peer-cmd] FAIL no reply within ${TimeoutSeconds}s - is peer-agent.ps1 running on PC-B?" -ForegroundColor Red
+# Report what was measured, then what it implies - in that order.
+#
+# This line used to read "is peer-agent.ps1 running on PC-B?" and nothing else. That
+# is a guess, it was quoted back as a finding at least once while the agent was alive
+# and merely busy, and it also happens to be true sometimes. The agent now writes a
+# heartbeat every poll, so the two cases can be told apart instead of guessed at.
+$beat = Join-Path $cmdDir 'agent-heartbeat.json'
+$diagnosis = 'no heartbeat file at all - the agent has never run against this share'
+if (Test-Path $beat) {
+    $age = [int]((Get-Date) - (Get-Item $beat).LastWriteTime).TotalSeconds
+    if ($age -le ($TimeoutSeconds + 30)) {
+        $diagnosis = "the agent wrote its heartbeat ${age}s ago, so it is alive and did not " +
+                     "answer - it is busy, or this verb failed inside it (check its console)"
+    } else {
+        $diagnosis = "its last heartbeat is ${age}s old, so the agent stopped - restart it on PC-B"
+    }
+}
+
+Write-Host "[peer-cmd] FAIL no reply within ${TimeoutSeconds}s" -ForegroundColor Red
+Write-Host "[peer-cmd]      $diagnosis" -ForegroundColor Red
 exit 1

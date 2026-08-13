@@ -434,6 +434,18 @@ Send-Host 'storage'
 Send-Peer 'storage'
 Start-Sleep -Seconds 4
 
+# Everything else worth comparing, in one uniform dump.
+#
+# Research, recipe queues, the flags a player clicks and duplicant vitals had no
+# comparison at all, and two of the three worst bugs found by playing were in
+# exactly those categories. One dump plus one comparer replaces the pattern of
+# writing a new pair of files per category, which is why most categories never got
+# one.
+Step 'asking both peers for the rest of the game state'
+Send-Host 'state'
+Send-Peer 'state'
+Start-Sleep -Seconds 5
+
 # What state each building type carries, and how much of it anything is watching.
 #
 # A single-peer audit, so only the host is asked. This is the generalisation of how

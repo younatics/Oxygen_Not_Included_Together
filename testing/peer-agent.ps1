@@ -208,11 +208,61 @@ Info "mod     : $localMod"
 Info "sha256  : $(Get-ModHash)"
 Info "polling every ${IntervalSeconds}s - Ctrl-C to stop"
 
+# Ask Windows not to sleep while this is polling.
+#
+# The agent has stopped answering twice with no error in its own log, both times after
+# a stretch with ONI closed and nothing else running on that box. An idle Windows
+# machine suspends, and a suspended agent looks exactly like a closed one from here -
+# which is why the heartbeat above exists.
+#
+# Not proof. It is the most common cause of this shape and it costs nothing to remove:
+# ES_CONTINUOUS with ES_SYSTEM_REQUIRED holds only for this process and lapses the
+# moment it exits, so no power setting on that machine is changed and nothing has to be
+# put back. If the agent stops again anyway, the heartbeat will now say whether it was
+# alive at the time, and that narrows it properly.
+try {
+    Add-Type -Namespace Win32 -Name Power -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern uint SetThreadExecutionState(uint esFlags);
+'@ -ErrorAction Stop
+    # ES_CONTINUOUS (0x80000000) | ES_SYSTEM_REQUIRED (0x00000001)
+    [void][Win32.Power]::SetThreadExecutionState(0x80000001)
+    Info 'asked Windows to stay awake while this agent runs'
+} catch {
+    Warn "could not request stay-awake: $($_.Exception.Message) - the box may sleep and the agent will look closed"
+}
+
 $running = $true
 # Ids already dispatched this agent lifetime. Belt to the .taken rename's
 # braces: a request must run at most once even if the file reappears.
 $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+
+# A heartbeat, so a timeout on the host side stops being a guess.
+#
+# peer-cmd prints "is peer-agent.ps1 running on PC-B?" when a request goes
+# unanswered, and that sentence is a guess - the only thing measured is the
+# timeout. It has already been read as fact once and the agent was alive, just
+# busy. It has also been true. Those are different problems with different fixes
+# and the host had no way to tell them apart.
+#
+# Written before the requests are read and again after, so the file's timestamp
+# says "this process was looping N seconds ago". If the share is unreachable the
+# write fails, the outer catch logs it, and the absence of a fresh heartbeat is
+# then itself the measurement.
+$heartbeat = Join-Path $cmdDir 'agent-heartbeat.json'
+function Beat($phase) {
+    try {
+        @{
+            machine = $env:COMPUTERNAME
+            pid     = $PID
+            phase   = $phase
+            utc     = (Get-Date).ToUniversalTime().ToString('o')
+        } | ConvertTo-Json -Compress | Set-Content $heartbeat -Encoding UTF8
+    } catch { }
+}
+
 while ($running) {
+    Beat 'polling'
     try {
         $reqs = Get-ChildItem $cmdDir -Filter '*.req.json' -ErrorAction SilentlyContinue |
                 Sort-Object LastWriteTime
@@ -344,6 +394,7 @@ while ($running) {
     } catch {
         Warn "poll error: $($_.Exception.Message)"
     }
+    Beat 'idle'
     if ($running) { Start-Sleep -Seconds $IntervalSeconds }
 }
 Ok 'agent stopped'
