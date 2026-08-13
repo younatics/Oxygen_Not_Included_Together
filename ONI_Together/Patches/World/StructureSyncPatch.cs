@@ -141,20 +141,55 @@ namespace ONI_Together.Patches.World
     }
     */
 
-    // BuildingFlagsSyncer is deliberately NOT attached. See its file header.
-    //
-    // Attaching it produced 149 to 229 errors a run on the client, from a peer that had
-    // been at zero: "[Storage/RebuildStorageFromData] Key: stor not found". Two
-    // StructureSyncerBase components ended up on the same building - very common, since
-    // most machines have both storage and an enable toggle - and StructureStatePacket is
-    // identified by NetId alone, so the receiver cannot tell which syncer sent it. The
-    // storage syncer was applying flag packets and looking for contents that were never
-    // in them.
-    //
-    // This architecture is one syncer per object. Fixing it means giving the packet a
-    // syncer discriminator, which changes the wire format; until then the flags stay on
-    // the event-only path they were always on. Measured cost against an unrealised
-    // benefit is a revert.
+    /// <summary>
+    /// Attach the player-set-flag syncer wherever such a flag exists.
+    ///
+    /// Held back once already: attaching it took a client from zero errors to 149-229 a
+    /// run, all "[Storage/RebuildStorageFromData] Key: stor not found", because
+    /// StructureStatePacket was identified by NetId alone and the receiver handed every
+    /// packet to every syncer on the building. Most machines have both a storage and an
+    /// enable toggle, so the storage syncer spent the run reading flag packets.
+    ///
+    /// The packet now carries the name of the syncer that produced it and is routed to
+    /// the matching one, so a building may hold several. That was the only thing in the
+    /// way.
+    ///
+    /// What it is for, measured rather than argued: a cross-peer state comparison found
+    /// PressureDoor@43123 Locked on the host and Opened on the client, two more doors the
+    /// same, and a Generator and an IceCooledFan paused on one side and running on the
+    /// other. Those states are synced by event patches with no way to look again, so a
+    /// single missed packet is permanent - and an airlock that is open on one peer and
+    /// shut on the other is not a cosmetic difference.
+    ///
+    /// Triggered by the state rather than by a list of building types: whatever declares
+    /// a BuildingEnabledButton, a Door or a ManualDeliveryKG has something a player sets
+    /// and therefore something that can drift. All three declare their own OnSpawn -
+    /// checked with the api verb, because patching an inherited KMonoBehaviour.OnSpawn
+    /// would attach this to every object in the game.
+    /// </summary>
+    [HarmonyPatch]
+    public static class BuildingFlagsAttachPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(object __instance)
+        {
+            using var _ = Profiler.Scope();
+
+            var component = __instance as KMonoBehaviour;
+            if (component.IsNullOrDestroyed() || component.gameObject.IsNullOrDestroyed()) return;
+
+            component.gameObject.AddOrGet<BuildingFlagsSyncer>();
+        }
+
+        [HarmonyTargetMethods]
+        internal static IEnumerable<MethodBase> TargetMethods()
+        {
+            const string name = nameof(KMonoBehaviour.OnSpawn);
+            yield return AccessTools.Method(typeof(BuildingEnabledButton), name);
+            yield return AccessTools.Method(typeof(Door), name);
+            yield return AccessTools.Method(typeof(ManualDeliveryKG), name);
+        }
+    }
 
     [HarmonyPatch(typeof(FlushToilet), nameof(FlushToilet.OnSpawn))]
     public static class FlushToiletSpawnPatch

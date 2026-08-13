@@ -7,9 +7,6 @@ using UnityEngine;
 namespace ONI_Together.Networking.Components.StructureStateSyncers
 {
 	/// <summary>
-	/// NOT ATTACHED. Written, measured, and held back for one reason - see the end of
-	/// this comment. Kept because the analysis was the expensive part, not the code.
-	///
 	/// Replicates the building state a player sets by clicking: enabled or disabled, a
 	/// door's control state, a manual delivery amount.
 	///
@@ -38,18 +35,21 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
 	/// guessed: Door.CurrentState and QueueStateChange, BuildingEnabledButton.IsEnabled
 	/// (get and set), ManualDeliveryKG.capacity and paused.
 	///
-	/// Why it is not attached: this architecture allows one StructureSyncerBase per
-	/// object. Most machines have both storage and an enable toggle, so attaching this
-	/// put two on the same building - and StructureStatePacket is identified by NetId
-	/// alone, with nothing to say which syncer produced it. The storage syncer began
-	/// applying flag packets and reporting "Key: stor not found", 149 to 229 times a run
-	/// on a client that had been at zero errors. The flags themselves behaved: 700
-	/// buildings watched, 10 to 26 repairs a run, frame time unchanged.
+	/// This was written, measured and then held back for one release. Attaching it put a
+	/// second StructureSyncerBase on buildings that already had a storage one, and the
+	/// receiver handed every packet to every syncer on the object - so the storage syncer
+	/// spent the run reading flag packets and logging "Key: stor not found", 149 to 229
+	/// times on a client that had been at zero errors. The flags themselves behaved
+	/// throughout: 700 buildings watched, 10 to 26 repairs a run, frame time unchanged.
 	///
-	/// What has to happen first: StructureStatePacket needs a syncer discriminator so a
-	/// receiver can route it. That is a wire-format change, so both peers move together.
-	/// Until then the flags stay on the event-only path, which is where they always were -
-	/// the risk documented above is unchanged, not newly introduced.
+	/// StructureStatePacket now carries the name of the syncer that produced it and the
+	/// receiver routes on that, so a building may hold several. That limit was never
+	/// written down; it was found by hitting it.
+	///
+	/// And the need is measured, not assumed. A cross-peer comparison found
+	/// PressureDoor@43123 Locked on the host and Opened on the client, two more doors the
+	/// same, and a Generator and an IceCooledFan paused on one side and running on the
+	/// other - in a single run.
 	/// </summary>
 	public class BuildingFlagsSyncer : StructureSyncerBase
 	{

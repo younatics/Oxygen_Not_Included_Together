@@ -145,6 +145,9 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
                     Value = currentValue,
                     IsActive = currentActive,
                     OptionalValues = optionalValues,
+                    // So the receiver hands it to the matching syncer rather than to
+                    // every syncer on the building - see StructureStatePacket.SyncerType.
+                    SyncerType = GetType().Name,
                 };
 
                 int delivered = 0;
