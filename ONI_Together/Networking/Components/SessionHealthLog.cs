@@ -382,6 +382,10 @@ namespace ONI_Together.Networking.Components
 				// used to be skipped entirely, which is a critter the host cannot
 				// report the position of.
 				$"|critterNoAnim={Patches.Critters.CreatureSpawnPatch.CrittersWithoutAnim}" +
+				// Critters the host announced as it made them, and spawn announcements
+				// this peer already had. The second is duplicates that used to be built.
+				$"|critterSent={Patches.Critters.CreatureSpawnPatch.CrittersAnnounced}" +
+				$"|spawnDup={Packets.World.SpawnPrefabPacket.SpawnsAlreadyHere}" +
 				// Sends dropped because the object had no address, and which packets
 				// they were. The prediction: the client's "arrived carrying NetId 0"
 				// goes to zero and this rises by about as much. If the first happens

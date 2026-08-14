@@ -8,6 +8,12 @@ namespace ONI_Together.Networking.Packets.World;
 
 public class SpawnPrefabPacket : IPacket
 {
+    /// <summary>
+    /// Spawn announcements for something this peer already had. Each one is a duplicate
+    /// object that used to be created, with an id the registry then held twice.
+    /// </summary>
+    public static int SpawnsAlreadyHere { get; private set; }
+
     public int NetId;
     public int Hash;
     public Vector3 Position;
@@ -86,6 +92,23 @@ public class SpawnPrefabPacket : IPacket
         {
             DebugConsole.LogWarning(
                 $"[SpawnPrefab] ignoring spawn of {Hash} at {Position}: no world loaded yet");
+            return;
+        }
+
+        // Already here? Then this is a repeat, not a spawn.
+        //
+        // Nothing checked, so a second announcement of the same object - a resend, or a
+        // host that announces something this peer already built - made a duplicate
+        // carrying an id the registry then had two claimants for. This peer already ends
+        // a run with more creatures than the host, and a spawn handler with no
+        // idempotence is the shape that produces exactly that.
+        //
+        // It also has to hold before creatures can be announced at all, which is the
+        // change this guard was written for.
+        if (NetworkIdentityRegistry.TryGet(NetId, out var already)
+            && already != null && !already.gameObject.IsNullOrDestroyed())
+        {
+            SpawnsAlreadyHere++;
             return;
         }
 

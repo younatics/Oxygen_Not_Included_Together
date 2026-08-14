@@ -1,0 +1,51 @@
+﻿[08-14 09:59:39] soak starting: 1 runs on '싱크검증본'
+[08-14 09:59:39] run 1/1  label=soak01 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=False
+[08-14 09:59:40]   colony reset from '꾸밈 없는 우주 오두막'
+[08-14 10:06:09]   exit=1
+      FAIL host  Build | No cell holds a building and its own construction site | 63.9 | 1 cell(s) hold a finished building and its own unfinished site at the same time: Wire@53893 layer=Wire. On a client this reads a ...
+      FAIL host  NetId | No identity was minted just to send a packet | 0.7 | 2 prefabs only got an identity when a packet needed one: CrabBaby x1, PuftEgg x1
+      host  errors=0  row=5|role=host|frameMs=18.7|worstMs=1498|stutters=42|hitches=3|rttMs=-1|registry=9153|lookupFails=78|lookupFailsPerRow=4|failsResolvedLater=0|unresolvedIds=78|expectedMisses=2|retiredIds=164|removedByCell=0|removalsUnmatched=2|framesThisRow=3212|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=507|ephemeral=186|refusedAsked=1108|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=2976|storeMade=0|storeNoPrefab=0|storeNoCritter=0|storeRefused=0|storeNotLanded=0|made[none]|storeMended=0|resyncs=24570|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|replayed=0|replayNone=2|siteNamed=0|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[none]|critterNoAnim=0|critterSent=5|spawnDup=0|noIdSkipped=9|doorForced=0|doorOk=0|siteOtherLayer=0|ghostSites=1|ghostWorst=1|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|dropsBlocked=0|ordersBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=1|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1518|cost[BuildingDamageSyncer=2205ms/3212,PacketSender.SendToAllClients=968ms/69489,AnimSyncCoordinator=655ms/3212,ConduitFlowSyncer=96ms/3212,KAnimControllerBase_Patches.SendAnimPacketToClients=67ms/5315,KAnimControllerBase_Play_Patch.Prefix=63ms/2610,WorldStateSyncer=53ms/3212,CursorManager=47ms/3212]|gap[SwampLilyFlower:1announced PuftEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced Pacu:1announced MushBar:1announced Lettuce:1announced]
+      FAIL client  Build | No cell holds a building and its own construction site | 60.6 | 1 cell(s) hold a finished building and its own unfinished site at the same time: Wire@53893 layer=Wire. On a client this reads a ...
+      FAIL client  NetId | Every critter has an identity | 70.5 | 1 of 80 creatures have no NetId: CrabBaby x1. The host cannot report their position or actions, so they will not move on a client.
+      FAIL client  NetId | No registry lookup failures | 0.5 | 1 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (2090 misses in total). Asked by: WorkableProgr ...
+      client  errors=0  row=4|role=client|frameMs=17.3|worstMs=217|stutters=24|hitches=0|rttMs=33|registry=9007|lookupFails=2090|lookupFailsPerRow=670|failsResolvedLater=918|unresolvedIds=2367|expectedMisses=117|retiredIds=141|removedByCell=0|removalsUnmatched=117|framesThisRow=3471|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5404|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=299/28|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=2|localOnly=506|ephemeral=207|refusedAsked=0|storeSync=602|skipConduit=0|storeInPlace=12906|storeRebuild=16|storeKept=3645|storeEntities=90|storeMade=17|storeNoPrefab=0|storeNoCritter=0|storeRefused=0|storeNotLanded=0|made[BasicPlantFood:17]|storeMended=2018|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=11|previewsNoId=279|mintsRefused=331|adoptRefused=8|scaffoldsCleared=2|scaffoldsSpared=0|replayed=0|replayNone=0|siteNamed=4|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[Humphrey:165x avg10091 렌:165x avg36 Celeste:165x avg18 Elvis:165x avg18]|critterNoAnim=0|critterSent=0|spawnDup=0|noIdSkipped=0|doorForced=1|doorOk=1268|siteOtherLayer=0|ghostSites=1|ghostWorst=1|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=3|dropsBlocked=28|ordersBlocked=252|heldNotSent=25|instAdopted=26|byCell=26|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=104|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=7|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1393|cost[ClientDamageWatcher=2563ms/3471,NetworkIdentityRegistry.TryGet=543ms/139710,BuildingDamageSyncer=137ms/3471,CursorManager=46ms/3471,PacketSender.SendToHost=39ms/600,KAnimControllerBase_Play_Patch.Prefix=12ms/4451,KAnimControllerBase_Queue_Patch.Prefix=7ms/5193,MissingEntityResolver=6ms/3471]|gap[WireUnderConstruction:1unnamed/1drawn/0announced SwampLilyFlower:1unnamed/1drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:1unnamed/1drawn/0announced HighWattageWireComplete:1unnamed/1drawn/0announced HatchHardBaby:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 9007   pointing at different things: 3
+      netid  [netid] ids the host issued that the client never heard of: 154
+      netid  [netid] MISMATCH 9   HOST-ONLY 145   CLIENT-ONLY 3
+      hp     [hp] damaged buildings - host 81, client 81
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 542, client 504
+      store  [store] COUNT 1   MASS 6   HOST-ONLY 39   PEER-ONLY 1
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 1  PEERS DISAGREE ON IDS
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      0
+      xstate host only   0
+      xstate client only 0
+      xstate buildings: host 5616, client 5614, client-only 0, host-only 2, mid-construction 0
+      xstate damaged buildings: host 81, client 81, disagreeing 0
+      state  [state] facts dumped - host 4314, client 4314
+      state  [state] snapshots taken -0.54s apart in sim time (host 122225.95, client 122225.41)
+      state  [state] flag      shared  1306   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] recipe    shared     9   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BuildingFlagsSyncer shared  1779   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   953   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT   24   NEAR   25   HOST-ONLY    0   PEER-ONLY    0
+      state    --- vital ---
+      state    both hold it, values differ:
+      state    vital|트래발도|stamina  host=47.3 client=46.6
+      state    vital|맥스|stamina  host=27.2 client=26.4
+      state    vital|렌|calories  host=1284396 client=1275728.2
+      state    vital|터너|stamina  host=30.7 client=29.4
+      state  near - drift between two snapshots, not a gate failure:
+      state    vital|트래발도|calories  host=3041733.2 client=3037397.8  (0.143% apart)
+      state    vital|Celeste|calories  host=3369352 client=3365016.5  (0.129% apart)
+      state    vital|데본|calories  host=2989215.8 client=2984880.2  (0.145% apart)
+      state    vital|마리|calories  host=2796323 client=2791987.5  (0.155% apart)
+      state  [state] not covered yet: power grid, plant growth, critter age, conduit contents, per-building priority. Their accessors are unconfirmed - a dump that guesses is worse than one that admits the gap.
+[08-14 10:06:12] soak finished
