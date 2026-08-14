@@ -233,9 +233,27 @@ namespace ONI_Together.DebugTools.UnitTests
                     reader.ReadSingle();             // temperature
                     reader.ReadByte();               // disease index
                     reader.ReadInt32();              // disease count
+                    reader.ReadInt32();              // NetId
 
                     massByElement.TryGetValue(hash, out float running);
                     massByElement[hash] = running + mass;
+                }
+
+                // Everything or nothing. This reader repeats a layout that is written
+                // somewhere else - BuildingUtils.CaptureStorageToData - and when a NetId
+                // was added to each entry there, nothing here changed. Four bytes short
+                // per item, so the first entry read correctly and every one after it was
+                // read from the middle of its neighbour: masses of 1.39e32 and
+                // -6.39e27 in seventeen containers, reported as a storage divergence
+                // every run and chased as one.
+                //
+                // Leftover bytes are the signature of exactly that, and they are free to
+                // check. A summary that says it cannot read the blob is useless in a
+                // helpful way; one that invents numbers from it is not.
+                if (ms.Position != ms.Length)
+                {
+                    return $"layout-mismatch:{ms.Length - ms.Position}B left of {ms.Length} " +
+                           $"after {count} item(s) - this reader and the writer disagree";
                 }
 
                 if (massByElement.Count == 0) return "empty";

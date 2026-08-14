@@ -50,7 +50,27 @@ namespace ONI_Together.Patches.World
 			//
 			// Skipped rather than caught: one skipped tracker update is invisible, and the
 			// next one runs a fraction of a second later with a finished world.
-			if (Game.Instance == null || GameClient.State == ClientState.LoadingWorld)
+			//
+			// Testing for LoadingWorld specifically was not enough, and the log says why
+			// in three consecutive lines: "State changed to: LoadingWorld", then
+			// "Disconnected from server", then "State changed to: Disconnected" - all in
+			// the same millisecond, because the save transfer finishes and the transport
+			// drops while the world loads. The throw came five milliseconds after
+			// "Loaded <save>", by which time the state this guard was watching for had
+			// already been replaced by another one.
+			//
+			// So the condition is stated positively: run when this peer is actually
+			// playing. Every other state is a transition, and during a transition a
+			// skipped tracker update costs nothing while an exception costs the thing
+			// this patch exists to protect - batteries left unregistered in the local
+			// CircuitManager, and every powered building rendering as no power.
+			//
+			// A host is never in a ClientState at all, so it is admitted by the first
+			// test and this cannot change its behaviour.
+			if (Game.Instance == null || Grid.WidthInCells == 0)
+				return false;
+
+			if (MultiplayerSession.IsClient && GameClient.State != ClientState.InGame)
 				return false;
 
 			return true;
