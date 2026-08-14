@@ -1381,7 +1381,24 @@ namespace ONI_Together.DebugTools
 				// first is what a player sets and what this was meant to check; the
 				// second is a real difference about chore state and deserves to be seen
 				// rather than to masquerade as the first.
-				rows.Add($"prio|{key}|active|{(prioritizable.IsPrioritizable() ? 1 : 0)}");
+				// Its own category, because it is not a priority and cannot agree.
+				//
+				// IsPrioritizable answers "is there work here waiting to be claimed", and
+				// a client claims nothing: its ChoreConsumer is off, so no duplicant ever
+				// picks a job up. The host's duplicants do, and a claimed job stops
+				// waiting - so the host reads 0 where the client reads 1, on every job in
+				// progress, forever. 80 rows in a twenty-five minute run, every one a
+				// building being repaired, every one in that direction.
+				//
+				// It was read as a priority disagreement for several rounds and one fix
+				// was aimed at it before the direction was checked. Both peers agree on
+				// the damage - 45 buildings each, none disagreeing - so nothing is
+				// unsynced; the client simply has nobody to do the work.
+				//
+				// Kept and reported rather than dropped, because a player does see it:
+				// the client shows a work marker the host does not. It just belongs under
+				// a name that says what it is.
+				rows.Add($"chore|{key}|waiting|{(prioritizable.IsPrioritizable() ? 1 : 0)}");
 			}
 
 			// Under meta, so it is stated and not compared. The two peers are expected to
