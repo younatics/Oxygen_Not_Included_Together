@@ -65,6 +65,12 @@ namespace ONI_Together.Networking.Packets.World
 			DiseaseCount = reader.ReadInt32();
 		}
 
+		/// <summary>
+		/// Ore ids that were put on an object whose prefab is not the element they were
+		/// issued for. Each one is a host packet that will address the wrong thing.
+		/// </summary>
+		public static int RenamedSomethingElse { get; private set; }
+
 		public void OnDispatched()
 		{
 			using var _ = Profiler.Scope();
@@ -165,6 +171,28 @@ namespace ONI_Together.Networking.Packets.World
 					"SpawnResource returned something else, probably an existing pile.");
 				NetworkIdentity.ReserveNextNetId(0);
 				return;
+			}
+
+			// What is actually being named, when it is not what the packet is about.
+			//
+			// The element check above is meant to stop this id landing on something
+			// else, and it passes - yet a cross-peer comparison finds eight objects on
+			// the client whose PrefabID reads 'Creature', each holding the id the host
+			// gave a BasicPlantFood, a HatchBaby or a CrabBaby, and the client's own log
+			// attributes the naming here: "[IdMove] 'Creature' 0 -> N (named by the host
+			// by WorldDamageSpawnResourcePacket.OnDispatched)".
+			//
+			// So either the element matches on something that is not an ore pile, or the
+			// object being renamed is not the one that was spawned. The name and the cell
+			// say which, and neither has been printed at this line before.
+			string droppedName = dropped.PrefabID().ToString();
+			if (droppedName != element.tag.Name)
+			{
+				RenamedSomethingElse++;
+				DebugConsole.LogWarning(
+					$"[WorldDamageSpawnResource] naming '{droppedName}' at cell " +
+					$"{Grid.PosToCell(dropped)} with NetId {NetId}, which was issued for " +
+					$"'{element.tag.Name}' - the element matched but the object does not");
 			}
 
 			if (identity.NetId != NetId)

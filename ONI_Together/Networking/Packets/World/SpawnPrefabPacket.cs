@@ -25,6 +25,22 @@ public class SpawnPrefabPacket : IPacket
     public byte DiseaseIndex;
     public int DiseaseCount;
 
+    /// <summary>
+    /// Required, and missing until now: the receiver builds a packet with
+    /// Activator.CreateInstance and then deserialises into it, so a type with only
+    /// parameterised constructors cannot be received at all.
+    ///
+    /// Every one of these threw on arrival - "Default constructor not found for type
+    /// SpawnPrefabPacket" - which is why announcing critters from the host had no
+    /// effect: critterSent read 5 to 8 and not one of them was ever applied. Nothing
+    /// sent this packet before that, so the defect was real and invisible.
+    ///
+    /// PacketHandlerRobustnessTests builds every registered packet the same way, which
+    /// is the check that would have caught it; this type reached the registry without
+    /// passing through it.
+    /// </summary>
+    public SpawnPrefabPacket() { }
+
     public SpawnPrefabPacket(int netId, int hash, Vector3 position)
     {
         NetId = netId;

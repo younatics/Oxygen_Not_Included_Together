@@ -472,6 +472,9 @@ namespace ONI_Together.Networking.Components
 				$"|prioCellApplied={Packets.World.PrioritizeStatePacket.AppliedByCell}" +
 				$"|prioCellSame={Packets.World.PrioritizeStatePacket.MatchedByCell}" +
 				$"|prioCellMissing={Packets.World.PrioritizeStatePacket.NoMarkerAtCell}" +
+				// Ore ids landing on something that is not that element. Eight objects a
+				// run end up named 'Creature' on the client holding a host id.
+				$"|oreMisnamed={Packets.World.WorldDamageSpawnResourcePacket.RenamedSomethingElse}" +
 				// Priorities the game would have refused, corrected on arrival, and sends
 				// where the tool menu had nothing to say. Both were silently zero before -
 				// the receiver pushed a zero into its own priority screen and ran the tool.

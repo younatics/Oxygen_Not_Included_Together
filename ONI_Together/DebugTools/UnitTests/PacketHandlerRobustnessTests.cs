@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -120,6 +120,9 @@ namespace ONI_Together.DebugTools.UnitTests
             int exercised = 0;
             var skipped = new List<string>();
 
+            /// Packets that cannot be constructed at all - see the catch below.
+            var broken = new List<string>();
+
             // Held for the whole pass: these packets will log lookup failures by
             // design, and those must not be counted against the session the way a
             // real miss is.
@@ -129,10 +132,31 @@ namespace ONI_Together.DebugTools.UnitTests
                 foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
                 {
                     if (type.IsAbstract || type.IsInterface) continue;
+
+                    // An open generic is a shape, not a packet. ModApiPacket<T> cannot be
+                    // constructed by Activator and is never received as itself - the
+                    // closed types built from it are - so treating it as unreceivable is
+                    // a false alarm, and a test that cries wolf on its first run gets
+                    // switched off.
+                    if (type.ContainsGenericParameters) continue;
+
                     if (!typeof(IPacket).IsAssignableFrom(type)) continue;
+                    // Not a reason to skip. A defect.
+                    //
+                    // The receiver builds every incoming packet with
+                    // Activator.CreateInstance and deserialises into it, so a type with
+                    // no parameterless constructor throws on arrival every time. This
+                    // test looked straight at that fact and filed it under "not
+                    // applicable".
+                    //
+                    // SpawnPrefabPacket sat like that, and nothing sent it, so nothing
+                    // noticed. The moment a sender was added the client logged "Default
+                    // constructor not found" ten times in one run and applied none of
+                    // them - while this line had already excused it.
                     if (type.GetConstructor(Type.EmptyTypes) == null)
                     {
-                        skipped.Add($"{type.Name} (no parameterless constructor)");
+                        broken.Add($"{type.Name} has no parameterless constructor, so every " +
+                                   "one of these throws on arrival");
                         continue;
                     }
                     if (Excluded.TryGetValue(type.Name, out string why))
@@ -145,7 +169,21 @@ namespace ONI_Together.DebugTools.UnitTests
                     try { packet = (IPacket)Activator.CreateInstance(type); }
                     catch (Exception ex)
                     {
-                        skipped.Add($"{type.Name} (could not construct: {ex.GetType().Name})");
+                        // A packet that cannot be constructed cannot be received.
+                        //
+                        // This was counted as skipped, which reads as "not applicable"
+                        // and is the opposite: the receiver builds every incoming packet
+                        // exactly this way and then deserialises into it, so a type that
+                        // fails here throws on arrival every single time.
+                        //
+                        // SpawnPrefabPacket sat like that with only parameterised
+                        // constructors, and nothing sent it, so nothing noticed. The
+                        // moment a sender was added the client logged "Default
+                        // constructor not found" ten times in one run and applied none of
+                        // them - and this test had already looked at that type and moved
+                        // on.
+                        broken.Add($"{type.Name} cannot be constructed ({ex.GetType().Name}) - " +
+                                   "every one of these thrown away on arrival");
                         continue;
                     }
 
@@ -194,6 +232,13 @@ namespace ONI_Together.DebugTools.UnitTests
             DebugConsole.Log(
                 $"[TEST] handler robustness: exercised {exercised}, skipped {skipped.Count} " +
                 $"({string.Join("; ", skipped.Take(6))}{(skipped.Count > 6 ? "; ..." : "")})");
+
+            if (broken.Count > 0)
+            {
+                return UnitTestResult.Fail(
+                    $"{broken.Count} packet type(s) cannot be received at all: " +
+                    string.Join(" | ", broken.Take(5)));
+            }
 
             if (threw.Count == 0 && logged.Count == 0)
             {
