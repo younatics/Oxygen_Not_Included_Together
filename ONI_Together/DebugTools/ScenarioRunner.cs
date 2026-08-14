@@ -1666,10 +1666,27 @@ namespace ONI_Together.DebugTools
 				// allocates - and this project treats those as errors, which is how the
 				// right accessor got named without a guess. VitalStatsPacket's constructor
 				// already walks it this way.
+				// The name the drift table is keyed by, which is not the dump key. The
+				// dump key is prefab and cell because that is what makes the two peers
+				// comparable; the correction was recorded against the animal's own name.
+				string properName = kpid.gameObject.GetProperName();
+
 				foreach (var instance in values.ModifierList)
 				{
 					if (instance?.amount == null) continue;
 					rows.Add($"critter|{key}|{instance.amount.Id}|{Math.Round(instance.value, 1)}");
+
+					// And how fast it moves, measured, exactly as for duplicants.
+					//
+					// Until this build nothing replicated critter amounts at all, so
+					// there were no corrections to measure and every difference was
+					// judged against a percentage chosen for duplicant calories. Now that
+					// the host sends them, each applied correction is one sync period of
+					// that animal's own drift.
+					float rate = Networking.Packets.DuplicantActions.VitalStatsPacket
+						.AverageCorrection(properName, instance.amount.Id);
+					if (rate > 0f)
+						rows.Add($"critterrate|{key}|{instance.amount.Id}|{Math.Round(rate, 1)}");
 				}
 			}
 		}

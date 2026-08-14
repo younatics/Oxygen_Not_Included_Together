@@ -207,6 +207,28 @@ namespace ONI_Together.Patches.Critters
 
 				AnnounceIfHostSpawned(go);
 
+				// Critters' vitals are replicated now, like duplicants'.
+				//
+				// Nothing was sending them. The state comparison put 448 critter amount
+				// rows side by side for the first time and 71 to 78 of them differed
+				// every run - Calories, Fertility, Age, temperature - which looked like
+				// drift and was not: the client had never been told any of these once.
+				// Its animals were simply living a separate life, and a hatch that is
+				// starving on one peer and fed on the other is not a rounding difference.
+				//
+				// The same syncer as duplicants, so there is one implementation to be
+				// right rather than two. It is Unreliable and once a second, and the
+				// packet is idempotent set-last-value, so a dropped one costs a second.
+				// The cost is real and bounded: a colony has tens of critters against
+				// twenty-odd duplicants, and this is the same order of traffic again on a
+				// stream that was already the cheap one.
+				//
+				// This also gives the comparison a yardstick it did not have. Every
+				// applied correction is one sync period of that animal's drift, measured
+				// on the peer that receives it, which is what the duplicant rows are
+				// already judged against.
+				go.AddOrGet<Networking.Synchronization.VitalStatsSyncer>();
+
 				if (AnimSyncEligibility.IsAnimatedCritter(go))
 				{
 					go.AddOrGet<AnimStateSyncer>();

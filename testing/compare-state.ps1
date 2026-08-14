@@ -110,6 +110,12 @@ function Read-State($path) {
     return $table
 }
 
+# Categories whose rows carry a measured rate beside them. A category is in here
+# because the game side emits <name>rate| rows for it, not because someone decided
+# it deserves a looser rule.
+$rateCategories = [System.Collections.Generic.HashSet[string]]::new()
+foreach ($cat in @('vital', 'critter')) { [void]$rateCategories.Add($cat) }
+
 $h = Read-State $HostLog
 $c = Read-State $ClientLog
 
@@ -154,11 +160,11 @@ if ($h.ContainsKey($simKey) -and $c.ContainsKey($simKey)) {
 foreach ($key in $h.Keys) {
     $category = ($key -split '\|')[0]
     # The clock is not a fact about agreement; the peers are meant to differ on it.
-    # meta is the snapshot clock and vitalrate is the yardstick the vital rows are
-    # judged with - both are inputs to the comparison, not facts the peers should agree
-    # about. Only the client emits a rate, so leaving it in would report every one as a
-    # client-only difference.
-    if ($category -eq 'meta' -or $category -eq 'vitalrate') { continue }
+    # meta is the snapshot clock and anything ending in 'rate' is the yardstick its own
+    # category is judged with - both are inputs to the comparison, not facts the peers
+    # should agree about. Only the receiving peer measures a rate, so leaving those in
+    # would report every one as a one-sided difference.
+    if ($category -eq 'meta' -or $category.EndsWith('rate')) { continue }
     $b = Bucket $category
 
     if (-not $c.ContainsKey($key)) {
@@ -187,8 +193,15 @@ foreach ($key in $h.Keys) {
         #
         # This is judging against the physical bound rather than tuning a number until
         # the report looks better. A row outside it is a real disagreement.
-        if ($key -like 'vital|*') {
-            $rateKey = $key -replace '^vital\|', 'vitalrate|'
+        #
+        # Driven by which categories publish a rate, not by a list of category names.
+        # This was written for vital| and critter amounts needed the same treatment a
+        # day later; a rule keyed to one name has to be edited for every category that
+        # ever measures its own drift, and the one that gets forgotten falls back to a
+        # percentage in silence - which is how a threshold ends up judging something it
+        # was never chosen for.
+        if ($rateCategories.Contains($category)) {
+            $rateKey = $key -replace "^$category\|", "${category}rate|"
             $rate = 0.0
             if ($c.ContainsKey($rateKey)) { [double]::TryParse($c[$rateKey], [ref]$rate) | Out-Null }
             elseif ($h.ContainsKey($rateKey)) { [double]::TryParse($h[$rateKey], [ref]$rate) | Out-Null }
@@ -220,7 +233,7 @@ foreach ($key in $c.Keys) {
     # judged with - both are inputs to the comparison, not facts the peers should agree
     # about. Only the client emits a rate, so leaving it in would report every one as a
     # client-only difference.
-    if ($category -eq 'meta' -or $category -eq 'vitalrate') { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate')) { continue }
     $b = Bucket $category
     [void]$b.PeerOnly.Add(("{0} = {1}" -f $key, $c[$key]))
 }

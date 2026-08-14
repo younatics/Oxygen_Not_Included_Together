@@ -19,6 +19,19 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		public int NetId;
 
 		/// <summary>
+		/// The prefab the sender sampled, so the receiver can tell that this id points at
+		/// the same kind of thing on both peers. Zero from a peer that predates it.
+		/// </summary>
+		public int PrefabHash;
+
+		/// <summary>
+		/// Packets whose id resolved to a different prefab here than the sender sampled.
+		/// Non-zero means the two peers disagree about what an id names, which no amount
+		/// of resending fixes.
+		/// </summary>
+		public static int PrefabMismatched { get; private set; }
+
+		/// <summary>
 		/// Times a duplicant vital arrived above or below what this peer allows and was
 		/// trimmed to fit. Non-zero means the peers disagree about a limit, which no
 		/// amount of resending can fix.
@@ -77,6 +90,9 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 			using var _ = Profiler.Scope();
 
 			NetId = netId;
+			PrefabHash = element != null && element.TryGetComponent<KPrefabID>(out var kpid)
+				? kpid.PrefabTag.GetHashCode()
+				: 0;
 			TargetDiseaseIdx = element.DiseaseIdx;
 			TargetDiseaseCount = element.DiseaseCount;
             //	DebugConsole.Log("[VitalStatsPacket] Vital stat packet for " + element.GetProperName());
@@ -92,6 +108,7 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 			using var _ = Profiler.Scope();
 
 			writer.Write(NetId);
+			writer.Write(PrefabHash);
 			writer.Write(TargetDiseaseIdx);
 			writer.Write(TargetDiseaseCount);
 			writer.Write(VitalAmounts.Count);
@@ -108,6 +125,7 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 			using var _ = Profiler.Scope();
 
 			NetId = reader.ReadInt32();
+			PrefabHash = reader.ReadInt32();
 			TargetDiseaseIdx = reader.ReadByte();
 			TargetDiseaseCount = reader.ReadInt32();
 			int amountsCount = reader.ReadInt32();
@@ -156,12 +174,38 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 			// The cause is upstream - the id resolved to the wrong object - and
 			// guarding here does not fix that. It stops one peer's bad address from
 			// becoming an exception storm on the other, and it names what was hit.
-			if (!identity.gameObject.HasTag(GameTags.BaseMinion))
+			// Check what the sender was looking at, not what species it belongs to.
+			//
+			// This used to require GameTags.BaseMinion, which caught the real problem -
+			// an id resolving to a different object here than there - by a proxy that
+			// only worked while duplicants were the only thing sending vitals. Critters
+			// send them now, and the proxy would have refused every one.
+			//
+			// The prefab the sender sampled is a better test than the proxy ever was: it
+			// rejects a duplicant's packet landing on a critter AND a hatch's landing on
+			// a drecko, which the tag check could not have seen. Zero means the sender is
+			// an older build, and then the old rule applies rather than nothing.
+			if (PrefabHash != 0)
+			{
+				int localHash = identity.gameObject.TryGetComponent<KPrefabID>(out var kpid)
+					? kpid.PrefabTag.GetHashCode()
+					: 0;
+				if (localHash != PrefabHash)
+				{
+					PrefabMismatched++;
+					DebugTools.ThrottledLog.Warn(
+						$"[VitalStatsPacket] NetId {NetId} resolved to " +
+						$"'{identity.gameObject.PrefabID()}', which is not what the sender " +
+						"sampled - this id means something different on the two peers");
+					return;
+				}
+			}
+			else if (!identity.gameObject.HasTag(GameTags.BaseMinion))
 			{
 				DebugTools.ThrottledLog.Warn(
 					$"[VitalStatsPacket] NetId {NetId} resolved to " +
-					$"'{identity.gameObject.PrefabID()}', which is not a duplicant - " +
-					"vitals are only sent for duplicants, so this id means something different here");
+					$"'{identity.gameObject.PrefabID()}', which is not a duplicant, and the " +
+					"sender did not say what it sampled");
 				return;
 			}
 
