@@ -1545,10 +1545,64 @@ namespace ONI_Together.Networking.Components
 		/// second one beside it. Returns false if there is nothing here that matches,
 		/// in which case the caller should create the object as before.
 		/// </summary>
+		/// <summary>
+		/// Announcements that found no candidate at the announced cell, but would have
+		/// found one at a neighbouring cell.
+		///
+		/// A measurement, not a behaviour: nothing is adopted on the strength of it. The
+		/// remaining unpaired loose items are matter each peer's own simulation made -
+		/// LiquidSourceManager.CreateChunk and Substance.SpawnResource under
+		/// Game.StepTheSim - and the obvious explanation for adoption missing them is
+		/// that a pile settles one cell apart on the two peers. Obvious explanations in
+		/// this project have been wrong about as often as they have been right, and
+		/// widening the match is the change that already went wrong once: matching too
+		/// loosely renamed a pile that was holding the host's own id and produced eight
+		/// thousand failed lookups from one object.
+		///
+		/// So the question gets a number first. If this reads near zero, the cell is not
+		/// what is missing and widening the search would cost that risk for nothing.
+		/// </summary>
+		public static int AdoptionsMissedByOneCell { get; private set; }
+
+		private static bool WouldMatchNearby(int cell, string prefabName)
+		{
+			if (!Grid.IsValidCell(cell)) return false;
+
+			// The four the game actually has. Grid offers CellAbove, CellBelow, CellLeft
+			// and CellRight and no diagonals - checked against the assembly rather than
+			// assumed, after assuming produced four compile errors in one go.
+			//
+			// The diagonals are reachable as combinations and are deliberately not
+			// walked. A pile that settles is one step away, and every cell added to the
+			// search is another chance to match the wrong pile.
+			foreach (int neighbour in new[]
+			{
+				Grid.CellAbove(cell), Grid.CellBelow(cell),
+				Grid.CellLeft(cell), Grid.CellRight(cell),
+			})
+			{
+				if (!Grid.IsValidCell(neighbour)) continue;
+				if (!_previewsByCell.TryGetValue(neighbour, out var near)) continue;
+
+				foreach (var candidate in near)
+				{
+					if (candidate.IsNullOrDestroyed() || candidate.gameObject.IsNullOrDestroyed()) continue;
+					if (!candidate.IsClientPreview || candidate.NetId != 0) continue;
+					if (candidate.SafePrefabName != prefabName) continue;
+					return true;
+				}
+			}
+			return false;
+		}
+
 		public static bool TryAdoptPreview(int cell, string prefabName, int netId)
 		{
 			if (netId == 0 || string.IsNullOrEmpty(prefabName)) return false;
-			if (!_previewsByCell.TryGetValue(cell, out var list) || list.Count == 0) return false;
+			if (!_previewsByCell.TryGetValue(cell, out var list) || list.Count == 0)
+			{
+				if (WouldMatchNearby(cell, prefabName)) AdoptionsMissedByOneCell++;
+				return false;
+			}
 
 			for (int i = list.Count - 1; i >= 0; i--)
 			{
@@ -1597,6 +1651,10 @@ namespace ONI_Together.Networking.Components
 				PreviewsAdoptedByCell++;
 				return true;
 			}
+
+			// The cell had candidates and none of them fit. Same question as the empty
+			// case: was there one next door?
+			if (WouldMatchNearby(cell, prefabName)) AdoptionsMissedByOneCell++;
 
 			if (list.Count == 0) _previewsByCell.Remove(cell);
 			return false;

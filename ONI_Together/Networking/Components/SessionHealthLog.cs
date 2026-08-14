@@ -496,6 +496,10 @@ namespace ONI_Together.Networking.Components
 				// The receiving half. instNamed against instAdopted says whether an
 				// announcement ended as a name on an object; instDropped must stay 0 -
 				// it is the branch that used to lose one silently.
+				// Would adoption have matched if it looked one cell further? A number
+				// before a change, not after - widening this match is what renamed a pile
+				// holding the host's own id once already.
+				$"|adoptNearMiss={NetworkIdentity.AdoptionsMissedByOneCell}" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
 				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +
 				$"|annSent={NetworkIdentity.AnnounceSent}" +
