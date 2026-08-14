@@ -1392,11 +1392,66 @@ namespace ONI_Together.Networking.Components
 		/// </summary>
 		internal void AnnounceRenameIfHost() => AnnounceSpawnIfHost();
 
+		/// <summary>
+		/// Why an announcement did not go out, by reason.
+		///
+		/// The host named a BasicPlantFood, registered it, and the client's log has no
+		/// mention of that id anywhere - and 104 loose items ended a run in that state
+		/// while 178 announcements did go out. Every gate in this method looks like it
+		/// should have passed for a Pickupable, which is exactly the situation where
+		/// reading the code has been wrong in this project and counting has not.
+		///
+		/// One counter per return, so the next run names the gate instead of leaving it
+		/// to deduction.
+		/// </summary>
+		public static int AnnounceSkippedNoId { get; private set; }
+		public static int AnnounceSkippedNotHost { get; private set; }
+		public static int AnnounceSkippedNotReplicated { get; private set; }
+		public static int AnnounceSent { get; private set; }
+
 		private void AnnounceSpawnIfHost()
 		{
-			if (NetId == 0) return;
-			if (!MultiplayerSession.IsHost || !MultiplayerSession.InSession) return;
-			if (!NeedsReplication()) return;
+			if (NetId == 0) { AnnounceSkippedNoId++; return; }
+			if (!MultiplayerSession.IsHost || !MultiplayerSession.InSession)
+			{
+				// Only counted while this peer is the host in a session. Off-session
+				// registrations are the normal state during load and would swamp the
+				// number with something that is not the question being asked.
+				if (MultiplayerSession.IsHost) AnnounceSkippedNotHost++;
+				return;
+			}
+			if (!NeedsReplication())
+			{
+				AnnounceSkippedNotReplicated++;
+				// Sixty rather than ten. Ten was enough to see that the first ones were
+				// buildings and placers, and that reading turned out to be a sample of
+				// the head rather than a description of the set - the loose items that
+				// are actually missing on the client could have been anywhere in the
+				// remaining thirty-one.
+				if (AnnounceSkippedNotReplicated <= 60)
+				{
+					DebugTools.ThrottledLog.Warn(
+						$"[Announce] not replicating '{SafePrefabName}' (NetId {NetId}) - " +
+						$"building={TryGetComponent<Building>(out _)} " +
+						$"minion={gameObject.HasTag(GameTags.BaseMinion)} " +
+						$"pickupable={TryGetComponent<Pickupable>(out _)} " +
+						$"navigator={TryGetComponent<Navigator>(out _)}");
+				}
+				return;
+			}
+
+			AnnounceSent++;
+
+			// One line per announcement, by name and id.
+			//
+			// Three loose items were traced by hand this run - the host registered each
+			// BasicPlantFood, the client's log has no mention of the id anywhere, and
+			// the totals said 208 announcements went out. Which of those two facts is
+			// about these three objects could not be answered, because nothing recorded
+			// what was announced, only how many. Two hundred lines in a fifty-thousand
+			// line log is a cheap price for being able to grep an id and get an answer
+			// instead of a deduction.
+			DebugConsole.Log($"[Announce] sent {SafePrefabName}#{NetId}");
 
 			Bump(_announcedByPrefab, StripInstanceId(gameObject.name ?? "?"));
 

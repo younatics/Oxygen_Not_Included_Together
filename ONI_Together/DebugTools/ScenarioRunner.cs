@@ -1263,6 +1263,11 @@ namespace ONI_Together.DebugTools
 			// how it read before and cost a round of chasing the wrong thing.
 			int movablesWithoutId = 0;
 
+			// Items inside containers, left out and stated. Their contents are already
+			// compared per container by the storage syncer, which does not care whether
+			// the object is active.
+			int storedItemsSkipped = 0;
+
 			foreach (var prioritizable in UnityEngine.Object.FindObjectsByType<Prioritizable>(
 						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
 			{
@@ -1314,6 +1319,31 @@ namespace ONI_Together.DebugTools
 				// than quietly falling back to a cell key that would half-match. It
 				// genuinely cannot be compared, and saying so in the key stops a missing
 				// identity from reading as a priority disagreement.
+				// An item inside a container is not what this comparison is about.
+				//
+				// Traced one at a time, the loose items the host had and the client did
+				// not turned out to be stored: "Registered stored Water with id X inside
+				// WaterPurifier", "Registered stored Oxygen inside GasVent". Storing
+				// deactivates the object, and this walk excludes inactive ones, so an
+				// item that is in a container on one peer and a moment from it on the
+				// other appears on exactly one side - and it was not a priority
+				// disagreement at all. One of the traced ids had been adopted correctly
+				// by the client and registered under the host's number.
+				//
+				// Container contents already have their own comparison, which reports
+				// COUNT and MASS per container and does not depend on activation state.
+				// Two categories measuring the same objects by different rules is how a
+				// number ends up meaning nothing; this one keeps the loose items.
+				//
+				// Nothing is hidden by leaving them out - they are counted below.
+				bool stored = prioritizable.TryGetComponent<Pickupable>(out var pickup)
+					&& pickup.storage != null;
+				if (stored)
+				{
+					storedItemsSkipped++;
+					continue;
+				}
+
 				string prefabName = prioritizable.gameObject.PrefabID().ToString();
 				string key;
 				if (prioritizable.TryGetComponent<Pickupable>(out _))
@@ -1359,6 +1389,7 @@ namespace ONI_Together.DebugTools
 			// it in a compared category would turn one number into two one-sided rows,
 			// which is the mistake this whole block exists to undo.
 			rows.Add($"meta|_prio|movablesWithoutId|{movablesWithoutId}");
+			rows.Add($"meta|_prio|storedItemsSkipped|{storedItemsSkipped}");
 		}
 
 		/// <summary>

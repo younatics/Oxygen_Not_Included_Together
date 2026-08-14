@@ -482,6 +482,21 @@ namespace ONI_Together.Networking.Components
 				// every run in which this reply was turning eggs into Creature piles,
 				// because the object it built really was made of the element it claimed -
 				// so the split has to be counted where the choice is made.
+				// Host announcements, and each way one can fail to go out. 178 went out
+				// in the run that left 104 loose items unnamed on the client, and every
+				// gate looked like it should have passed for a Pickupable - so the gates
+				// are counted rather than reasoned about.
+				// Merges. mergeKept is the name that would have died with the absorbed
+				// pile; mergeBoth is the one the game's own choice loses and this does
+				// not fight; mergeUnclear must stay 0 or the direction reading is wrong
+				// and the other two numbers mean nothing.
+				$"|mergeKept={Patches.World.PickupablePatches.PickupableAbsorbedPatch.NamesRescued}" +
+				$"|mergeBoth={Patches.World.PickupablePatches.PickupableAbsorbedPatch.BothNamed}" +
+				$"|mergeUnclear={Patches.World.PickupablePatches.PickupableAbsorbedPatch.DirectionUnclear}" +
+				$"|annSent={NetworkIdentity.AnnounceSent}" +
+				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +
+				$"|annNotHost={NetworkIdentity.AnnounceSkippedNotHost}" +
+				$"|annNotRepl={NetworkIdentity.AnnounceSkippedNotReplicated}" +
 				$"|resolvePrefab={Packets.World.EntityResolveRequestPacket.ResolvedByPrefab}" +
 				$"|resolveElement={Packets.World.EntityResolveRequestPacket.ResolvedByElement}" +
 				// Priorities the game would have refused, corrected on arrival, and sends
