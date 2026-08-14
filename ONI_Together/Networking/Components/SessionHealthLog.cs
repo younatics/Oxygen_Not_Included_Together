@@ -521,6 +521,7 @@ namespace ONI_Together.Networking.Components
 				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +
 				$"|annNotHost={NetworkIdentity.AnnounceSkippedNotHost}" +
 				$"|annNotRepl={NetworkIdentity.AnnounceSkippedNotReplicated}" +
+				$"|assignRefused={Packets.World.AssignmentPacket.CellFallbackRefused}" +
 				$"|resolvePrefab={Packets.World.EntityResolveRequestPacket.ResolvedByPrefab}" +
 				$"|resolveElement={Packets.World.EntityResolveRequestPacket.ResolvedByElement}" +
 				// Priorities the game would have refused, corrected on arrival, and sends

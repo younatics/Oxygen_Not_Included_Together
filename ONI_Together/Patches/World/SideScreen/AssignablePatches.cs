@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking;
 using ONI_Together.Networking.Components;
@@ -76,7 +76,14 @@ namespace ONI_Together.Patches.World.SideScreen
 				BuildingNetId = buildingIdentity.NetId,
 				Cell = Grid.PosToCell(__instance.gameObject),
 				AssigneeNetId = assigneeNetId,
-				GroupId = groupId
+				GroupId = groupId,
+				// What is being assigned, so the receiver's cell fallback can tell
+				// whether the object standing at that cell is this one. An assignable is
+				// not always a building - a duplicant is assigned to an atmo suit - and
+				// the fallback renamed a locker with a suit's id for want of this.
+				PrefabHash = __instance.gameObject.TryGetComponent<KPrefabID>(out var kpid)
+					? kpid.PrefabTag.GetHashCode()
+					: 0
 			};
 
             if (MultiplayerSession.IsHost) PacketSender.SendToAllClients(packet);
@@ -104,7 +111,10 @@ namespace ONI_Together.Patches.World.SideScreen
 				BuildingNetId = buildingIdentity.NetId,
 				Cell = Grid.PosToCell(__instance.gameObject),
 				AssigneeNetId = -1,
-				GroupId = ""
+				GroupId = "",
+				PrefabHash = __instance.gameObject.TryGetComponent<KPrefabID>(out var unassignKpid)
+					? unassignKpid.PrefabTag.GetHashCode()
+					: 0
 			};
 
 			if (MultiplayerSession.IsHost) PacketSender.SendToAllClients(packet);

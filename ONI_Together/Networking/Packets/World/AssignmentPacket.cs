@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using System.IO;
@@ -18,6 +18,18 @@ namespace ONI_Together.Networking.Packets.World
 		public int AssigneeNetId;       // NetID of the duplicant being assigned (-1 for unassign)
 		public string GroupId = "";     // For assignment groups like "public"
 
+		/// <summary>
+		/// The prefab the sender was assigning, so the cell fallback can tell whether the
+		/// thing it found is the thing this packet is about. Zero from an older peer.
+		/// </summary>
+		public int PrefabHash;
+
+		/// <summary>
+		/// Cell fallbacks refused because the object at that cell is not what the sender
+		/// was assigning. Each one would have been an id landing on the wrong object.
+		/// </summary>
+		public static int CellFallbackRefused { get; private set; }
+
 		public static bool IsApplying = false;
 
 		public void Serialize(BinaryWriter writer)
@@ -28,6 +40,7 @@ namespace ONI_Together.Networking.Packets.World
 			writer.Write(Cell);
 			writer.Write(AssigneeNetId);
 			writer.Write(GroupId ?? "");
+			writer.Write(PrefabHash);
 		}
 
 		public void Deserialize(BinaryReader reader)
@@ -38,6 +51,7 @@ namespace ONI_Together.Networking.Packets.World
 			Cell = reader.ReadInt32();
 			AssigneeNetId = reader.ReadInt32();
 			GroupId = reader.ReadString();
+			PrefabHash = reader.ReadInt32();
 		}
 
 		public void OnDispatched()
@@ -55,6 +69,40 @@ namespace ONI_Together.Networking.Packets.World
 				if (Grid.IsValidCell(Cell))
 				{
 					GameObject buildingGO = Grid.Objects[Cell, (int)ObjectLayer.Building];
+
+					// Is it the thing this packet is about, or just the thing standing
+					// there?
+					//
+					// The fallback took whatever building occupied the cell and gave it
+					// the packet's id. A twenty-five minute run caught what that costs:
+					// the host's -142907511 is an Atmo_Suit - assignables are not only
+					// buildings, a duplicant is assigned to a suit - and the suit sits
+					// inside a locker at cell 51566. The client could not resolve the id,
+					// found the SuitLockerComplete at that cell and renamed it, so one
+					// number meant a suit on one peer and a locker on the other. It is
+					// the only id the two peers disagreed about in the whole run.
+					//
+					// The same shape as the resolve reply that turned eggs into Creature
+					// piles, and it takes the same answer: carry what the sender was
+					// looking at and refuse when it does not match. Position is a hint
+					// for finding a candidate, never a licence to rename it.
+					if (buildingGO != null && PrefabHash != 0)
+					{
+						int localHash = buildingGO.TryGetComponent<KPrefabID>(out var kpid)
+							? kpid.PrefabTag.GetHashCode()
+							: 0;
+						if (localHash != PrefabHash)
+						{
+							CellFallbackRefused++;
+							DebugTools.ThrottledLog.Warn(
+								$"[AssignmentPacket] refusing to put NetId {BuildingNetId} on " +
+								$"'{buildingGO.PrefabID()}' at cell {Cell} - the sender was " +
+								"assigning something else, so this id means two different " +
+								"things on the two peers");
+							buildingGO = null;
+						}
+					}
+
 					if (buildingGO != null)
 					{
 						// AddOrGet returns the component the building already has, and
