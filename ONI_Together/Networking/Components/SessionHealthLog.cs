@@ -465,6 +465,13 @@ namespace ONI_Together.Networking.Components
 				$"|reassignments={NetworkIdentityRegistry.Reassignments}" +
 				$"|plantIdsAbandoned={PlantGrowthSyncer.AbandonedIds}" +
 				$"|prioritiesDropped={Patches.World.PrioritizablePatch.Unaddressable}" +
+				// Priority changes carried by cell for markers that have no address, and
+				// the ones applied that way on arrival. A dig order set on one peer used
+				// to reach the other as nothing at all.
+				$"|prioByCell={Patches.World.PrioritizablePatch.SentByCell}" +
+				$"|prioCellApplied={Packets.World.PrioritizeStatePacket.AppliedByCell}" +
+				$"|prioCellSame={Packets.World.PrioritizeStatePacket.MatchedByCell}" +
+				$"|prioCellMissing={Packets.World.PrioritizeStatePacket.NoMarkerAtCell}" +
 				// Priorities the game would have refused, corrected on arrival, and sends
 				// where the tool menu had nothing to say. Both were silently zero before -
 				// the receiver pushed a zero into its own priority screen and ran the tool.
