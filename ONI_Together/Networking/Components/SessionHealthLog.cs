@@ -385,6 +385,9 @@ namespace ONI_Together.Networking.Components
 				// Critters the host announced as it made them, and spawn announcements
 				// this peer already had. The second is duplicates that used to be built.
 				$"|critterSent={Patches.Critters.CreatureSpawnPatch.CrittersAnnounced}" +
+				// Prefabs that were addressed late and then converged onto the id both
+				// peers compute. The repair, beside the warning it answers.
+				$"|lazyFixed={NetworkIdentity.LazyAttachmentsRepaired}" +
 				$"|spawnDup={Packets.World.SpawnPrefabPacket.SpawnsAlreadyHere}" +
 				// Sends dropped because the object had no address, and which packets
 				// they were. The prediction: the client's "arrived carrying NetId 0"

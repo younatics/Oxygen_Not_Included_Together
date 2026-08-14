@@ -166,8 +166,18 @@ namespace ONI_Together.Patches.Critters
 				// Read first, because RegisterIdentity fills it in and the answer is the
 				// whole point: an identity that was already there came from the ordinary
 				// path and is already the same on both peers, and moving it is pure churn.
-				bool hadIdentity = go.TryGetComponent<NetworkIdentity>(out var existing)
-					&& !existing.IsNullOrDestroyed() && existing.NetId != 0;
+				// Not "does it have one" - "was it given one before it spawned".
+				//
+				// The first version asked the former and converged only objects that
+				// arrived here with nothing, which excluded exactly the case this is for:
+				// a lazily addressed animal has an identity by the time this runs,
+				// attached four milliseconds earlier by whatever asked. lazyFixed read 0
+				// for two whole runs because of it, on both peers.
+				//
+				// This asks whether the kind is on the lazily-addressed list, which is
+				// the small set whose ids came from an arbitrary moment rather than from
+				// where the animal is.
+				bool addressedEarly = NetworkIdentity.WasAddressedBeforeSpawn(go);
 
 				var critterIdentity = go.AddOrGet<NetworkIdentity>();
 				critterIdentity.RegisterIdentity();
@@ -192,7 +202,7 @@ namespace ONI_Together.Patches.Critters
 				// went from 2 to 18 and the client's failed lookups from 1,724 to 2,465
 				// in the run that did that. The lazily addressed ones are the case, and
 				// they are the ones that had no identity a moment ago.
-				if (!hadIdentity)
+				if (addressedEarly)
 					critterIdentity.ConvergeOnDeterministicId();
 
 				AnnounceIfHostSpawned(go);

@@ -313,6 +313,51 @@ namespace ONI_Together.Networking.Components
 		public static void ClearLazyIdentities() => _lazyIdentities.Clear();
 
 		/// <summary>
+		/// Was this kind of thing addressed before its spawn hook ran?
+		///
+		/// The spawn hooks need this to tell two situations apart that look identical to
+		/// them. An object that already has an identity may have got it the ordinary way,
+		/// in which case both peers agree and moving it is churn - or from the lazy path
+		/// moments earlier, in which case the number came from whenever something first
+		/// asked and the other peer cannot reproduce it.
+		/// </summary>
+		internal static bool WasAddressedBeforeSpawn(GameObject go)
+		{
+			if (go.IsNullOrDestroyed()) return false;
+			string prefab = go.TryGetComponent<KPrefabID>(out var kpid) && kpid != null
+				? kpid.PrefabTag.Name
+				: go.name;
+			return !string.IsNullOrEmpty(prefab) && _lazyIdentities.ContainsKey(prefab);
+		}
+
+		/// <summary>
+		/// Take one prefab back off the lazily-attached list, because its id has since
+		/// been converged onto the value both peers compute.
+		///
+		/// Counted per prefab rather than per object, like the recording it undoes, so
+		/// this removes the kind once the kind has been repaired. If another object of
+		/// the same prefab is still one-sided the next ask puts it straight back.
+		/// </summary>
+		internal static void ForgetLazyAttachment(NetworkIdentity identity)
+		{
+			if (identity.IsNullOrDestroyed() || identity.gameObject.IsNullOrDestroyed()) return;
+
+			string prefab = identity.gameObject.TryGetComponent<KPrefabID>(out var kpid) && kpid != null
+				? kpid.PrefabTag.Name
+				: identity.gameObject.name;
+			if (string.IsNullOrEmpty(prefab)) return;
+
+			if (_lazyIdentities.Remove(prefab)) LazyAttachmentsRepaired++;
+		}
+
+		/// <summary>
+		/// Prefabs taken off the lazily-attached list because convergence gave them the
+		/// id both peers compute. Non-zero beside a zero lazy count means the warning was
+		/// raised and then answered, not that it never happened.
+		/// </summary>
+		public static int LazyAttachmentsRepaired { get; private set; }
+
+		/// <summary>
 		/// A reservation that was claimed but never consumed is the dangerous
 		/// one: the next identity to spawn - in the next session, belonging to
 		/// something else entirely - takes the id that was set aside for an
@@ -1169,7 +1214,38 @@ namespace ONI_Together.Networking.Components
 			}
 
 			int expected = ComputeDeterministicId();
-			if (expected == 0 || expected == NetId) return;
+
+			// Already the number both peers compute? Then whatever gave it that number
+			// is no longer a problem, and saying so is the point.
+			//
+			// The lazy-attach warning is raised when something asks for an id before the
+			// spawn hook has run, and it is raised for good reason - an id minted at an
+			// arbitrary moment is one the other peer cannot reproduce. But it is recorded
+			// once and never revisited, so a PuftEgg that was asked about four
+            // milliseconds early kept being reported as "only got an identity when a
+			// packet needed one" for the rest of the session, when the very next thing
+			// that happened was this method giving it the id its cell implies. Measured
+			// on one object across both logs: the lazy warning at 01:29:53.110 and the
+			// spawn attach at 01:29:53.114, ending on the same id the client computes.
+			//
+			// Clearing it here is not hiding the failure. It is the repair reporting
+			// itself, so the count means "still one-sided" rather than "was one-sided at
+			// some point".
+			if (expected == 0) return;
+
+			// Already the right number - so it is no longer one-sided, and the mark
+			// should go even though nothing moves.
+			//
+			// Both exits have to clear it. Clearing only on the equal case left lazyFixed
+			// at 0 because this method exists to change ids; clearing only after a move
+			// left it at 0 too, because an egg addressed early can land on the
+			// deterministic id by luck and then there is nothing to move. Two runs were
+			// spent finding that out one exit at a time.
+			if (expected == NetId)
+			{
+				ForgetLazyAttachment(this);
+				return;
+			}
 
 			// If somebody else is in that slot, decide by a rule both peers compute
 			// the same way - never by who got there first.
@@ -1213,6 +1289,15 @@ namespace ONI_Together.Networking.Components
 				$"[IdConverge] '{SafePrefabName}' moving from {NetId} to {expected}, " +
 				"the id its kind and final cell imply - both peers compute this, so both agree");
 			OverrideNetId(expected);
+
+			// After the move, not before it.
+			//
+			// The first attempt cleared the lazily-attached mark when the id already
+			// equalled the deterministic one, and lazyFixed read 0 for a whole run:
+			// this method exists to change the id, so at the point it was checked they
+			// are never equal. The object stops being one-sided when the move lands,
+			// which is here.
+			ForgetLazyAttachment(this);
 		}
 
 		private bool TryRehouse()
