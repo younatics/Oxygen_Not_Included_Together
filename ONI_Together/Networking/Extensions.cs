@@ -81,6 +81,21 @@ namespace ONI_Together.Networking
 			// of it unusable.
 			var attached = go.AddComponent<NetworkIdentity>();
 			attached.RegisterIdentity();
+
+			// And onto the id its kind and cell imply, here rather than only at spawn.
+			//
+			// The spawn hooks converge anything that was addressed early, which covers
+			// the ask-then-spawn order. This is the other order, and it is the one that
+			// survived: a CrabBaby already spawned and settled, asked about at 02:40:04,
+			// given whatever id that moment produced - and no spawn hook will run again
+			// to correct it. The host ends the run holding an id the client cannot
+			// compute, and the client holds the same animal with none at all, which is
+			// what "1 of 82 creatures have no NetId" has been for two batches.
+			//
+			// Converging at the point of attachment covers both orders with one call.
+			// It is a no-op on a client, which refuses to converge for the same reason it
+			// refuses to mint, and a no-op when the id already matches.
+			attached.ConvergeOnDeterministicId();
 			return attached;
 		}
 

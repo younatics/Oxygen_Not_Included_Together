@@ -1207,7 +1207,24 @@ namespace ONI_Together.Networking.Components
 			//
 			// The host is the authority. A client's job is to accept the name it is
 			// given, which is also why idMoves on a client should read zero.
-			if (MultiplayerSession.InSession && MultiplayerSession.IsClient)
+			// Unless it has no name to protect.
+			//
+			// The refusal above is right about what it describes: a client taking an
+			// object the host has already addressed and moving it to whatever its own
+			// hash produces. That is the client inventing an id, and three ids meant
+			// different things on the two peers because of it.
+			//
+			// An object holding zero is not that case. Nothing has been given to it, so
+			// there is nothing to overwrite, and refusing here does not protect a host
+			// id - it leaves the object with none at all. That is the last thing keeping
+			// "1 of 82 creatures have no NetId: CrabBaby" alive: the host now converges
+			// its own copy onto the deterministic id, and the client, holding the same
+			// animal, is forbidden from computing the same answer.
+			//
+			// Deterministic means both peers compute it from what the object is and
+			// where it is, so a client arriving at it independently agrees with the host
+			// by construction rather than by being told.
+			if (MultiplayerSession.InSession && MultiplayerSession.IsClient && NetId != 0)
 			{
 				ClientConvergesRefused++;
 				return;
