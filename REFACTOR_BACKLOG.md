@@ -365,3 +365,50 @@ id·같은 우선순위의 전선 22개** 였다 — 우선순위 차이가 아�
 ### 현재 게이트 상태
 
 호스트 실패 테스트 **0건**, 클라 **1건**(`2 NetIds unresolved`), 양쪽 보고 오류 **0건**.
+
+## 2026-08-15 — what a 25-minute session left open
+
+Three run lengths were compared on the same build: six minutes (the length every
+measurement in this project had used until now) and twenty-five minutes.
+
+Length found two defects that six minutes could not, and both are fixed:
+
+- `AssignmentPacket`'s cell fallback renamed whatever building stood at the cell.
+  An atmo suit's id landed on a suit locker, and it was the only id the two peers
+  disagreed about in the whole run. Fixed by carrying the sender's prefab and
+  refusing a mismatch. NOTE: `assignRefused` read 0 in the run after the fix, so
+  that run did not exercise the guard - `netid_compare exit 0` is the only
+  evidence so far, and a repeat is worth having.
+
+- Repair proxies were addressed but not announced. `NeedsReplication` asked for a
+  Pickupable or a Navigator and `RepairableStorageProxy` is neither, so the host
+  sent worker and progress packets to an id the client had never heard of.
+
+What is still open, with what is known about each:
+
+1. **Loose matter each simulation makes for itself.** About 70 objects per peer
+   in 25 minutes, scaling with length. Two approaches are closed off by
+   measurement and should not be retried without new evidence: widening the
+   adoption search (of 215 failures, 133 had no candidate of that prefab anywhere
+   and 68 had one only far away) and suppressing the client's own spawns (12,124
+   client errors - the game's callers dereference what `SpawnResource` returns).
+   What is left needs the copies matched by something other than position.
+
+2. **Four duplicants' stamina, about 1.4 apart on a 0-100 scale.** Only in long
+   runs. All four in the same direction and within 0.1 of the same magnitude,
+   which is a lag rather than noise: 1.4 at a measured 0.133/s is about ten
+   seconds. Every other vital agrees. Not explained by the snapshot gap, which is
+   0.23s.
+
+3. **Three containers of 953.** No refusal counter fired - `storeNoPrefab`,
+   `storeRefused` and `storeNotLanded` all read 0 while 100,331 applications
+   succeeded - so these are either in flight at the instant of the snapshot or a
+   defect a single snapshot cannot distinguish from one. Deciding needs two dumps
+   a few seconds apart, which is the tool this project already wrote for ids and
+   has never had for containers.
+
+4. **The chore-waiting flag, by design.** 64 rows, every one a job the host's
+   duplicants have claimed and the client's cannot, because a client runs no
+   chores. It is reported under its own category now rather than as a priority
+   disagreement. Closing it would mean replicating chore assignment, which is a
+   different project.
