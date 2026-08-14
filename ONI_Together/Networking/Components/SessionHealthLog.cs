@@ -421,6 +421,9 @@ namespace ONI_Together.Networking.Components
 				// ghosts=0 with sites=0 means nothing was under construction, which is
 				// how three earlier zeroes were misread as fixes.
 				$"|ghostSites={GhostSiteScan.GhostSites}" +
+				// Of those, the ones that became contradictory here rather than arriving
+				// that way in the save. This is the number that means something.
+				$"|ghostNew={GhostSiteScan.GhostSitesNew}" +
 				$"|ghostWorst={GhostSiteScan.GhostSitesWorst}" +
 				$"|sites={GhostSiteScan.SitesScanned}" +
 				// Convergences a client declined. Read against idMoves on the same row:

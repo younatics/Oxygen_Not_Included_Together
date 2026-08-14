@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace ONI_Together.Networking.Components
@@ -42,6 +42,19 @@ namespace ONI_Together.Networking.Components
 		/// </summary>
 		private static readonly List<string> _examples = new List<string>();
 
+		/// <summary>
+		/// The ghost cells present when this colony loaded. Null until the first scan.
+		/// </summary>
+		private static HashSet<string> _baseline;
+
+		private static readonly HashSet<string> _newThisSession = new HashSet<string>();
+
+		/// <summary>
+		/// Cells that became a ghost during this session, as opposed to arriving that way
+		/// in the save. This is the number worth failing on.
+		/// </summary>
+		public static int GhostSitesNew { get; private set; }
+
 		public static IReadOnlyList<string> Examples => _examples;
 
 		public static void Reset()
@@ -50,6 +63,7 @@ namespace ONI_Together.Networking.Components
 			GhostSitesWorst = 0;
 			SitesScanned = 0;
 			_examples.Clear();
+			_newThisSession.Clear();
 		}
 
 		/// <summary>
@@ -60,6 +74,7 @@ namespace ONI_Together.Networking.Components
 			int ghosts = 0;
 			int scanned = 0;
 			_examples.Clear();
+			_newThisSession.Clear();
 
 			if (Game.Instance == null)
 			{
@@ -115,14 +130,43 @@ namespace ONI_Together.Networking.Components
 					// above.
 					if (finished.Def == null || finished.Def.PrefabID != prefab) continue;
 
+					// Was this already here when the colony loaded?
+					//
+					// One cell has reported this in every run of this project - Wire@53893
+					// - and it is the same cell every time, on both peers, in a colony
+					// re-cloned from the same save before each run. The scenario never
+					// builds there; where it builds moves with the duplicants and 53893 is
+					// not among those cells in any run.
+					//
+					// So it is in the save file. Both peers load it, both report it, and
+					// it says nothing about replication - which is exactly what a gate
+					// should not be red about, because a permanent red is a gate nobody
+					// reads.
+					//
+					// The first scan of a session takes the baseline. Anything in it is a
+					// pre-existing site and is counted separately; a cell that appears
+					// later is what this check was written to find.
+					string where = $"{prefab}@{cell}";
+					if (_baseline == null) _newThisSession.Add(where);
+					else if (!_baseline.Contains(where)) _newThisSession.Add(where);
+
 					ghosts++;
 					if (_examples.Count < 8)
-						_examples.Add($"{prefab}@{cell} layer={(ObjectLayer)layer}");
+						_examples.Add($"{where} layer={(ObjectLayer)layer}");
 					break;
 				}
 			}
 
+			// Taken on the first scan of a session, which runs before anything this
+			// session has had time to build.
+			if (_baseline == null)
+			{
+				_baseline = new HashSet<string>(_newThisSession);
+				_newThisSession.Clear();
+			}
+
 			GhostSites = ghosts;
+			GhostSitesNew = _newThisSession.Count;
 			SitesScanned = scanned;
 			if (ghosts > GhostSitesWorst) GhostSitesWorst = ghosts;
 			return ghosts;
