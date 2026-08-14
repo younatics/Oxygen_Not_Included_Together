@@ -1733,6 +1733,20 @@ namespace ONI_Together.DebugTools
 					string key = $"{pair.Item1}@{cell}";
 					rows.Add($"conduit|{key}|element|{(int)contents.element}");
 					rows.Add($"conduit|{key}|mass|{Math.Round(contents.mass, 3)}");
+
+					// Whether this cell was ever sent to anybody.
+					//
+					// ConduitFlowSyncer only emits pipe contents for cells a client is
+					// looking at, so an off-screen pipe is never replicated and the
+					// client keeps whatever its own simulation produced. Around 44 cells
+					// disagreed in every run for that reason, and the comparison could
+					// not tell them from a pipe that was sent and did not arrive - which
+					// is the one worth fixing.
+					//
+					// Host-side only; a client sends none of these, so the row is absent
+					// there and the comparison falls back to its ordinary rule.
+					if (Networking.Components.ConduitFlowSyncer.WasEverSent(cell))
+						rows.Add($"conduitsent|{key}|sent|1");
 				}
 			}
 		}

@@ -164,7 +164,35 @@ foreach ($key in $h.Keys) {
     # category is judged with - both are inputs to the comparison, not facts the peers
     # should agree about. Only the receiving peer measures a rate, so leaving those in
     # would report every one as a one-sided difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate')) { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent')) { continue }
+
+    # A pipe cell nobody ever sent is not a replication failure.
+    #
+    # ConduitFlowSyncer emits contents only for cells a client is currently looking at,
+    # so an off-screen pipe is never replicated and the client keeps whatever its own
+    # simulation made. Around 44 cells disagreed in every run for that reason, and the
+    # report could not tell them from a cell that was sent and did not arrive - which is
+    # the one worth fixing.
+    #
+    # Reported under its own name rather than dropped. It is a real difference between
+    # the two worlds and a player who scrolls there sees it corrected within a refresh
+    # interval; what it is not is evidence that the syncer is failing.
+    if ($category -eq 'conduit') {
+        $sentKey = ($key -replace '^conduit\|', 'conduitsent|') -replace '\|[^|]+$', '|sent'
+        if (-not $h.ContainsKey($sentKey)) {
+            $b = Bucket 'conduit-neversent'
+            if (-not $c.ContainsKey($key)) {
+                [void]$b.HostOnly.Add(("{0} = {1}" -f $key, $h[$key]))
+            } elseif ($h[$key] -ne $c[$key]) {
+                $b.Shared++
+                [void]$b.Different.Add(("{0}  host={1} client={2}" -f $key, $h[$key], $c[$key]))
+            } else {
+                $b.Shared++
+            }
+            continue
+        }
+    }
+
     $b = Bucket $category
 
     if (-not $c.ContainsKey($key)) {
@@ -229,11 +257,21 @@ foreach ($key in $h.Keys) {
 foreach ($key in $c.Keys) {
     if ($h.ContainsKey($key)) { continue }
     $category = ($key -split '\|')[0]
-    # meta is the snapshot clock and vitalrate is the yardstick the vital rows are
-    # judged with - both are inputs to the comparison, not facts the peers should agree
-    # about. Only the client emits a rate, so leaving it in would report every one as a
-    # client-only difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate')) { continue }
+    # meta is the snapshot clock, anything ending in 'rate' is the yardstick its own
+    # category is judged with, and anything ending in 'sent' says whether a row was ever
+    # transmitted - all three are inputs to the comparison, not facts the peers should
+    # agree about. Only one peer emits them, so leaving them in would report every one
+    # as a one-sided difference.
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent')) { continue }
+
+    # Same split as the host loop: a pipe cell the host never sent cannot be a
+    # replication failure, and a client-only one is the client's own simulation having
+    # made something there.
+    if ($category -eq 'conduit') {
+        $sentKey = ($key -replace '^conduit\|', 'conduitsent|') -replace '\|[^|]+$', '|sent'
+        if (-not $h.ContainsKey($sentKey)) { $category = 'conduit-neversent' }
+    }
+
     $b = Bucket $category
     [void]$b.PeerOnly.Add(("{0} = {1}" -f $key, $c[$key]))
 }

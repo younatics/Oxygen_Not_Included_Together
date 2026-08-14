@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.World;
 using ONI_Together.Networking.Transport;
 using ONI_Together.Networking.Transport.Steamworks;
@@ -216,6 +216,16 @@ namespace ONI_Together.Networking.Components
 			}
 		}
 
+		/// <summary>
+		/// Cells whose contents this peer has sent at least once this session. Only
+		/// meaningful on the host; a client sends none of these.
+		/// </summary>
+		private static readonly System.Collections.Generic.HashSet<int> _everSent =
+			new System.Collections.Generic.HashSet<int>();
+
+		public static bool WasEverSent(int cell) => _everSent.Contains(cell);
+		public static int CellsEverSent => _everSent.Count;
+
 		private static void PrimeShadow(ConduitFlow flow, int objectLayer, int[] shadowEl, float[] shadowMass, float[] shadowTemp)
 		{
 			if (flow == null) return;
@@ -256,6 +266,19 @@ namespace ONI_Together.Networking.Components
 			shadowEl[cell] = el;
 			shadowMass[cell] = c.mass;
 			shadowTemp[cell] = c.temperature;
+
+			// Remember that this cell was actually sent.
+			//
+			// Pipe contents are only sent for cells a client is looking at - the
+			// visibility gate a few lines up in Tick - so an off-screen pipe is never
+			// replicated at all and the client keeps whatever its own simulation made.
+			// That is deliberate, and it is also why the state comparison reported around
+			// 44 pipe cells disagreeing in every run: it walks the whole map and had no
+			// way to tell "this was sent and did not arrive" from "this was never sent".
+			//
+			// Those two need opposite responses, so the dump says which. Nothing about
+			// the sending changes here.
+			_everSent.Add(cell);
 
 			packet.Updates.Add(new ConduitCellUpdate
 			{
