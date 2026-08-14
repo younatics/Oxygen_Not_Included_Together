@@ -298,6 +298,10 @@ namespace ONI_Together.Networking.Components
 				// dropped" from "nothing was rebuilt".
 				$"|storeMade={Misc.BuildingUtils.ItemsRecreated}" +
 				$"|storeNoPrefab={Misc.BuildingUtils.ItemsNoPrefab}" +
+				// Live animals a storage packet asked this peer to build. An incubator
+				// holding a hatched critter used to encode it as contents, and the
+				// receiver made one.
+				$"|storeNoCritter={Misc.BuildingUtils.CreaturesRefusedFromStorage}" +
 				// Items the container refused after they were rebuilt for it. Each one
 				// is left loose in the world and the container stays wrong.
 				$"|storeRefused={Misc.BuildingUtils.ItemsRefusedByStorage}" +
@@ -374,6 +378,10 @@ namespace ONI_Together.Networking.Components
 				// means packets are being missed; the same applies with a bigger average
 				// means that duplicant is simply burning faster.
 				$"|drift[{Packets.DuplicantActions.VitalStatsPacket.DriftBreakdown()}]" +
+				// Critters addressed at spawn that have no anim controller yet. These
+				// used to be skipped entirely, which is a critter the host cannot
+				// report the position of.
+				$"|critterNoAnim={Patches.Critters.CreatureSpawnPatch.CrittersWithoutAnim}" +
 				// Sends dropped because the object had no address, and which packets
 				// they were. The prediction: the client's "arrived carrying NetId 0"
 				// goes to zero and this rises by about as much. If the first happens

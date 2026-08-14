@@ -65,7 +65,7 @@ namespace ONI_Together.Misc
                 // Assignable is the line because assignment is exactly the per-instance
                 // state a rebuild cannot reproduce. Such items are left out of the blob
                 // entirely, so the receiver has nothing to act on and cannot delete them.
-                if (go.TryGetComponent<Assignable>(out var assignable) && !assignable.IsNullOrDestroyed())
+                if (IsEntityNotContents(go))
                 {
                     EntitiesLeftAlone++;
                     continue;
@@ -305,6 +305,20 @@ namespace ONI_Together.Misc
                 else
                 {
                     var item = Assets.GetPrefab(tag);
+
+                    // Never a live animal, whatever the blob says.
+                    //
+                    // A container holding a creature - an EggIncubator with a newly
+                    // hatched critter in it - used to encode that critter as an item, and
+                    // this line instantiated it: a client forbidden to hatch anything
+                    // ended a run with four more creatures than the host and one of them
+                    // addressable by nobody. The sender no longer describes them, and this
+                    // refuses to build one if an older peer still does.
+                    if (item.HasTag(GameTags.Creature))
+                    {
+                        CreaturesRefusedFromStorage++;
+                        continue;
+                    }
                     if (item == null)
                     {
                         // Silent until now, and it is the difference between two very
@@ -378,6 +392,39 @@ namespace ONI_Together.Misc
         /// Stored items the receiver could not build because no prefab answered to their
         /// hash. Each one is a container the two peers cannot agree about.
         /// </summary>
+        /// <summary>
+        /// An object a container happens to hold that is not bulk contents.
+        ///
+        /// Two kinds, both learned from what happened when they were treated as goods.
+        /// An assigned object - an atmo suit - carries an owner, a durability and its own
+        /// oxygen, and rebuilding it hands the locker a fresh one whose owner is gone;
+        /// that was a live session ending, because the locker's status item then pointed
+        /// at a deleted object and threw once per frame.
+        ///
+        /// A creature is worse. An EggIncubator holds a newly hatched critter, and this
+        /// encoded it as an item, so the client's rebuild instantiated a live animal:
+        /// "made[BasicPlantFood:23 HatchBaby:2]" on a client that is forbidden to hatch
+        /// anything, next to "client drew 'HatchBaby' with no id". The client ended the
+        /// run with 81 creatures against the host's 77 and one of them addressable by
+        /// nobody, which is what the suite has been reporting as a different animal every
+        /// run - CrabBaby, then HatchBaby, whichever happened to be in an incubator.
+        ///
+        /// Creatures have their own replication with their own identity path. A container
+        /// they are standing in is not a description of them.
+        /// </summary>
+        private static bool IsEntityNotContents(GameObject go)
+        {
+            if (go.IsNullOrDestroyed()) return false;
+            if (go.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed()) return true;
+            return go.HasTag(GameTags.Creature);
+        }
+
+        /// <summary>
+        /// Creatures a storage packet asked this peer to build, and did not get. Each one
+        /// would have been a live animal nobody could address.
+        /// </summary>
+        public static int CreaturesRefusedFromStorage { get; private set; }
+
         public static int ItemsNoPrefab { get; private set; }
 
         /// <summary>
@@ -481,7 +528,7 @@ namespace ONI_Together.Misc
 
                 // Assigned objects are invisible to the sender, so they must be invisible
                 // here too - see the matching skip in EncodeStorageContents.
-                if (go.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed())
+                if (IsEntityNotContents(go))
                 {
                     EntitiesLeftAlone++;
                     continue;
@@ -566,7 +613,7 @@ namespace ONI_Together.Misc
                 if (!go.TryGetComponent<PrimaryElement>(out var pe) || pe.IsNullOrDestroyed()) return false;
 
                 if (pe.Mass <= 0f) continue;
-                if (go.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed()) continue;
+                if (IsEntityNotContents(go)) continue;
                 if (!go.TryGetComponent<KPrefabID>(out var id) || id.IsNullOrDestroyed()) return false;
 
                 int hash = id.PrefabTag.GetHashCode();
@@ -634,6 +681,15 @@ namespace ONI_Together.Misc
             }
 
             var prefab = Assets.GetPrefab(tag);
+
+            // See the matching refusal in the full rebuild: storage packets do not
+            // create creatures.
+            if (prefab != null && prefab.HasTag(GameTags.Creature))
+            {
+                CreaturesRefusedFromStorage++;
+                return false;
+            }
+
             if (prefab == null)
             {
                 ItemsNoPrefab++;
@@ -701,7 +757,7 @@ namespace ONI_Together.Misc
                 // oxygen, and leaves the locker's status item pointing at a destroyed
                 // GameObject - which throws once per frame the moment anybody hovers over
                 // it, and ends the session.
-                if (item.TryGetComponent<Assignable>(out var owned) && !owned.IsNullOrDestroyed())
+                if (IsEntityNotContents(item))
                 {
                     EntitiesLeftAlone++;
                     continue;

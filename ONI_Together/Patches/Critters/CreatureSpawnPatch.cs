@@ -27,6 +27,13 @@ namespace ONI_Together.Patches.Critters
 	[HarmonyPatch(typeof(KPrefabID), nameof(KPrefabID.OnSpawn))]
 	public static class CreatureSpawnPatch
 	{
+		/// <summary>
+		/// Critters given an address at spawn despite having no anim controller yet.
+		/// These used to get nothing, and a critter with no address does not move on
+		/// the other peer.
+		/// </summary>
+		public static int CrittersWithoutAnim { get; private set; }
+
 		public static void Postfix(KPrefabID __instance)
 		{
 			using var _ = Profiler.Scope();
@@ -79,16 +86,46 @@ namespace ONI_Together.Patches.Critters
 					return;
 				}
 
-				if (!AnimSyncEligibility.IsAnimatedCritter(go))
+				// An address for every critter; the anim syncer only for the animated.
+				//
+				// This asked IsAnimatedCritter for both, and that check requires a
+				// KBatchedAnimController - which the anim syncer genuinely needs and an
+				// identity does not. A critter that failed it got nothing at all, and a
+				// critter with no address is one the host cannot say anything about:
+				// not where it is, not what it is doing. The suite reports it every run
+				// as "1 of 80 creatures have no NetId: CrabBaby", with the host's own
+				// log agreeing - "'CrabBaby' had no identity until a packet needed one"
+				// - and the note there saying it should have been attached at spawn on
+				// both peers.
+				//
+				// The test that reports it uses the tag pair alone, which is the honest
+				// definition of a critter. Matching it here means the check and the
+				// thing it checks now agree about what qualifies.
+				if (!go.HasTag(GameTags.Creature) || go.HasTag(GameTags.BaseMinion))
 					return;
 
 				// Adding a component during OnSpawn means Unity will not call the
 				// new component's own OnSpawn, so registration is driven by hand -
 				// the same reason BuildingSpawnPatch calls RegisterIdentity here.
 				go.AddOrGet<EntityPositionHandler>();
-				go.AddOrGet<AnimStateSyncer>();
 				go.AddOrGet<CreatureMultiplayerInitializer>();
 				go.AddOrGet<NetworkIdentity>().RegisterIdentity();
+
+				if (AnimSyncEligibility.IsAnimatedCritter(go))
+				{
+					go.AddOrGet<AnimStateSyncer>();
+				}
+				else
+				{
+					// Counted, because this is the case that used to fall through. If
+					// CrabBaby appears here the missing controller was the reason; if it
+					// does not, the Creature tag is not set this early and the hook has
+					// to move rather than widen.
+					CrittersWithoutAnim++;
+					DebugTools.ThrottledLog.Warn(
+						$"[CreatureSpawn] '{go.PrefabID()}' is a critter with no anim " +
+						"controller at spawn - given an identity, no anim syncer");
+				}
 			}
 			catch (System.Exception ex)
 			{
