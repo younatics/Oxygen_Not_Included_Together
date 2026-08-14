@@ -404,11 +404,29 @@ if ($mined -le 1) {
 # direction - the *earlier* snapshot had the damage. Nothing had diverged; the
 # measurement was taken twice at different times and subtracted.
 Step 'pausing both boxes so the two snapshots describe the same moment'
+#
+# The peer stops first, and both commands go out before either is waited on.
+#
+# Pausing the host first and then waiting for its confirmation left the client
+# running, uncorrected, for the whole of that window - because a paused host runs no
+# Sim1000ms and therefore sends no vitals, while the client's own simulation carries
+# on burning stamina and calories with nothing arriving to correct it.
+#
+# It was measured rather than reasoned about, and the numbers are unambiguous: every
+# one of the 84 duplicant vital rows reported exactly 25.3 seconds since its last
+# correction - the same figure for all of them, which is a shared cause, not drift -
+# while simulation time between the two snapshots differed by 0.33 seconds. One
+# duplicant's stamina read 99.6 on the host and 31.8 on the client, and 25.3 seconds
+# of an awake duplicant's stamina is 67, which is the gap.
+#
+# So the comparison was measuring the length of its own pause sequence. Stopping the
+# client first inverts it: the client freezes while the host is still sending, so the
+# last corrections it applies are the host's own final values.
 $mark = HostLogLines
+Send-Peer 'pause'
 Send-Host 'pause'
 if (Wait-HostLog '\[SCENARIO\] (OK|FAIL) pause' 60 $mark) { Ok 'host paused' }
 else { Write-Host '    WARN host did not confirm pause - state comparison may drift' -ForegroundColor Yellow }
-Send-Peer 'pause'
 Start-Sleep -Seconds 3
 
 # Both peers describe their damaged buildings, while both are paused.

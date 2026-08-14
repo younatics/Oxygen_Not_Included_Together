@@ -149,10 +149,26 @@ function Bucket($category) {
 # judge a calorie difference, and a comparer that silently normalised it would be
 # hiding the case where the gap is zero and the values still disagree.
 $simKey = 'meta|_snapshot|simTime'
+
+# How many seconds of movement a continuously-changing value is allowed.
+#
+# One sync period, because the client's copy of a host-simulated value is at most one
+# packet old, plus however far apart the two snapshots were actually taken. Both terms
+# are physical: neither is a threshold anybody chose, and the second is measured on
+# every run rather than assumed to be zero.
+#
+# It defaults to the sync period alone when the clock is missing, which is the smallest
+# honest answer - a missing measurement must not buy extra slack.
+$syncPeriodSeconds = 1.0
+$allowedSeconds = $syncPeriodSeconds
+
 if ($h.ContainsKey($simKey) -and $c.ContainsKey($simKey)) {
     $gap = [double]$c[$simKey] - [double]$h[$simKey]
+    $allowedSeconds = $syncPeriodSeconds + [Math]::Abs($gap)
     Write-Output ("[state] snapshots taken {0:N2}s apart in sim time (host {1}, client {2})" -f
         $gap, $h[$simKey], $c[$simKey])
+    Write-Output ("[state] a continuously-moving value may differ by {0:N2}s of its own measured rate" -f
+        $allowedSeconds)
 } else {
     Write-Output "[state] snapshot clock missing on at least one peer - continuous values cannot be judged"
 }
@@ -164,7 +180,7 @@ foreach ($key in $h.Keys) {
     # category is judged with - both are inputs to the comparison, not facts the peers
     # should agree about. Only the receiving peer measures a rate, so leaving those in
     # would report every one as a one-sided difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent')) { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or $category.EndsWith('age')) { continue }
 
     # A pipe cell nobody ever sent is not a replication failure.
     #
@@ -234,9 +250,14 @@ foreach ($key in $h.Keys) {
             if ($c.ContainsKey($rateKey)) { [double]::TryParse($c[$rateKey], [ref]$rate) | Out-Null }
             elseif ($h.ContainsKey($rateKey)) { [double]::TryParse($h[$rateKey], [ref]$rate) | Out-Null }
 
-            if ($rate -gt 0 -and $delta -le ($rate * 2)) {
-                [void]$b.Near.Add(("{0}  host={1} client={2}  ({3:N1} apart, one sync period is {4:N1})" -f
-                    $key, $hv, $cv, $delta, $rate))
+            # rate is per second, so the bound is seconds - and the seconds that matter
+            # are the ones between the two snapshots plus the sync period the correction
+            # can lag by. The gap is measured and printed at the top of this report;
+            # using it here rather than a constant is the same principle as using a
+            # measured rate rather than a chosen percentage.
+            if ($rate -gt 0 -and $delta -le ($rate * $allowedSeconds)) {
+                [void]$b.Near.Add(("{0}  host={1} client={2}  ({3:N2} apart; moves {4:N3}/s, {5:N1}s of slack)" -f
+                    $key, $hv, $cv, $delta, $rate, $allowedSeconds))
                 continue
             }
         }
@@ -262,7 +283,7 @@ foreach ($key in $c.Keys) {
     # transmitted - all three are inputs to the comparison, not facts the peers should
     # agree about. Only one peer emits them, so leaving them in would report every one
     # as a one-sided difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent')) { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or $category.EndsWith('age')) { continue }
 
     # Same split as the host loop: a pipe cell the host never sent cannot be a
     # replication failure, and a client-only one is the client's own simulation having

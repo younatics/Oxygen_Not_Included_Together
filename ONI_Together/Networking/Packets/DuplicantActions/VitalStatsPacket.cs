@@ -41,11 +41,130 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		private class Drift { public int Applies; public double Total; public float Worst; }
 		private static readonly Dictionary<string, Drift> _drift = new Dictionary<string, Drift>();
 
-		private static void NoteCorrection(string who, string amount, float delta)
+		/// <summary>
+		/// How fast the value itself moves, per second, as the host reports it.
+		///
+		/// The correction size was the first yardstick and it is the wrong one for
+		/// anything the client simulates identically. Stamina is the case: every
+		/// correction this peer applied was exactly zero, so the measured drift was zero
+		/// and no bound was emitted at all - while the dump had every duplicant's stamina
+		/// nearly a unit apart. Nothing was wrong with the replication. The two peers
+		/// take their snapshots about 0.7 seconds apart in simulation time, and stamina
+		/// moves in 0.7 seconds.
+		///
+		/// So this measures the thing that actually decides how far apart two snapshots
+		/// can legitimately be: the rate of change, taken from consecutive host values
+		/// and the time between them. It subsumes the correction size - a value the
+		/// client does not simulate drifts by rate times the sync period, which is what
+		/// the correction was - and it also covers the case the correction could not see.
+		/// </summary>
+		private class Motion
 		{
-			if (string.IsNullOrEmpty(who) || string.IsNullOrEmpty(amount)) return;
+			public float LastValue;
+			public float LastTime;
+			public bool Seen;
 
-			string key = who + "|" + amount;
+			/// <summary>
+			/// The last few observed per-second rates, so the summary can be a median.
+			///
+			/// The mean was the first attempt and a spawn broke it: a Drecko's calories
+			/// came out at 6,724,716 a second, which is not a rate, it is one
+			/// discontinuity averaged in with three hundred ordinary samples. A bound
+			/// built from that excuses any difference at all, which is worse than the
+			/// percentage it replaced - the percentage was at least honest about being
+			/// arbitrary.
+			///
+			/// A median ignores the jump without anyone having to decide what counts as
+			/// one. Thirty-two samples is half a minute at one packet a second, recent
+			/// enough to track a duplicant who starts eating and long enough that a
+			/// single outlier cannot move the middle.
+			/// </summary>
+			public readonly List<float> Recent = new List<float>();
+		}
+		private static readonly Dictionary<string, Motion> _motion = new Dictionary<string, Motion>();
+
+		private static void NoteMotion(int subject, string amount, float incoming)
+		{
+			if (subject == 0 || string.IsNullOrEmpty(amount)) return;
+
+			string key = subject + "|" + amount;
+			if (!_motion.TryGetValue(key, out var m)) _motion[key] = m = new Motion();
+
+			float now = UnityEngine.Time.unscaledTime;
+			if (m.Seen)
+			{
+				float dt = now - m.LastTime;
+				// A tenth of a second. Below that the division amplifies float noise into
+				// a rate large enough to excuse a real difference, which is the failure
+				// mode this whole line of work exists to avoid.
+				if (dt >= 0.1f)
+				{
+					float delta = incoming - m.LastValue;
+					if (delta < 0) delta = -delta;
+
+					m.Recent.Add(delta / dt);
+					if (m.Recent.Count > MotionSamples) m.Recent.RemoveAt(0);
+				}
+			}
+
+			m.LastValue = incoming;
+			m.LastTime = now;
+			m.Seen = true;
+		}
+
+		/// <summary>
+		/// The measured per-second rate of change for one subject's one amount, or 0 if
+		/// this peer has not seen it move. Zero is a real answer: a value that does not
+		/// move has no excuse for differing.
+		/// </summary>
+		private const int MotionSamples = 32;
+
+		/// <summary>
+		/// Seconds since this subject's amount was last set by an arriving packet, or -1
+		/// if it never was.
+		///
+		/// One duplicant's stamina reads 99.6 on the host and 31.2 on the client - forty
+		/// times any bound her own motion can justify - while the guard refuses nothing,
+		/// the clamp counter is zero, and a rate was measured for her, so packets did
+		/// arrive at some point. What none of that says is whether they are still
+		/// arriving. A value that stopped being corrected and a value that is corrected
+		/// and then overwritten look identical in a snapshot and need opposite fixes.
+		/// </summary>
+		public static float SecondsSinceApplied(int subject, string amount)
+		{
+			if (!_motion.TryGetValue(subject + "|" + amount, out var m) || !m.Seen) return -1f;
+			return UnityEngine.Time.unscaledTime - m.LastTime;
+		}
+
+		public static float RateOfChange(int subject, string amount)
+		{
+			if (!_motion.TryGetValue(subject + "|" + amount, out var m) || m.Recent.Count == 0) return 0f;
+
+			// Sorted on a copy. Sorting the live list would reorder it, and the oldest
+			// sample is dropped from the front - it has to stay in arrival order.
+			var sorted = new List<float>(m.Recent);
+			sorted.Sort();
+			return sorted[sorted.Count / 2];
+		}
+
+		/// <summary>
+		/// Keyed by NetId, not by name, and this was wrong until a critter proved it.
+		///
+		/// Duplicants have unique proper names, so name-keying worked for as long as they
+		/// were the only subjects. Critters do not: every Drecko in the colony answers to
+		/// the same species string, so their samples all landed in one entry and
+		/// consecutive readings came from different animals. The measured rate came out
+		/// at 6,737,860 calories a second - and it survived a median, because it was not
+		/// an outlier, it was most of the samples.
+		///
+		/// A bound built from that excuses any difference at all, which is worse than the
+		/// arbitrary percentage it replaced.
+		/// </summary>
+		private static void NoteCorrection(int subject, string amount, float delta)
+		{
+			if (subject == 0 || string.IsNullOrEmpty(amount)) return;
+
+			string key = subject + "|" + amount;
 			if (!_drift.TryGetValue(key, out var d)) _drift[key] = d = new Drift();
 
 			d.Applies++;
@@ -65,10 +184,46 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		/// not measured it. That is one sync period of drift, which is the bound a
 		/// snapshot comparison can reasonably ask for.
 		/// </summary>
-		public static float AverageCorrection(string who, string amount)
+		public static float AverageCorrection(int subject, string amount)
 		{
-			if (!_drift.TryGetValue(who + "|" + amount, out var d) || d.Applies == 0) return 0f;
+			if (!_drift.TryGetValue(subject + "|" + amount, out var d) || d.Applies == 0) return 0f;
 			return (float)(d.Total / d.Applies);
+		}
+
+		/// <summary>
+		/// Applies and average size per amount, across everybody.
+		///
+		/// Thirty differing vital rows carried no rate at all - every duplicant's
+		/// stamina and nine of their stress values - and a missing rate has two causes
+		/// that need opposite fixes. Either the amount is never corrected, in which case
+		/// the host is not sending it and the difference is real; or it is corrected
+		/// every second with a delta that rounds to nothing, in which case the value is
+		/// equal at each apply and drifts between them, and the correction size is the
+		/// wrong yardstick for it.
+		///
+		/// The applies count separates those, and nothing recorded it.
+		/// </summary>
+		public static string DriftByAmount()
+		{
+			if (_drift.Count == 0) return "none";
+
+			var byAmount = new Dictionary<string, (int applies, double total)>();
+			foreach (var kv in _drift)
+			{
+				int bar = kv.Key.IndexOf('|');
+				if (bar < 0) continue;
+				string amount = kv.Key.Substring(bar + 1);
+				byAmount.TryGetValue(amount, out var acc);
+				byAmount[amount] = (acc.applies + kv.Value.Applies, acc.total + kv.Value.Total);
+			}
+
+			var parts = new List<string>();
+			foreach (var kv in byAmount.OrderByDescending(kv => kv.Value.applies).Take(8))
+			{
+				double avg = kv.Value.applies == 0 ? 0 : kv.Value.total / kv.Value.applies;
+				parts.Add($"{kv.Key}:{kv.Value.applies}x avg{avg:0.###}");
+			}
+			return string.Join(" ", parts);
 		}
 
 		public static string DriftBreakdown()
@@ -260,7 +415,10 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 				{
 					var before = amounts.Get(kvp.Key);
 					if (before != null)
-						NoteCorrection(identity.GetProperName(), kvp.Key, kvp.Value - before.value);
+						NoteCorrection(NetId, kvp.Key, kvp.Value - before.value);
+
+					// Independent of whether the correction was zero.
+					NoteMotion(NetId, kvp.Key, kvp.Value);
 				}
 
 				// Read back rather than take a return value: Amounts.SetValue on the

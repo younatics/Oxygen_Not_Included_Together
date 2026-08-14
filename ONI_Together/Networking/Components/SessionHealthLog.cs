@@ -499,6 +499,10 @@ namespace ONI_Together.Networking.Components
 				// Would adoption have matched if it looked one cell further? A number
 				// before a change, not after - widening this match is what renamed a pile
 				// holding the host's own id once already.
+				// Which amounts are actually corrected, and how hard. An amount with no
+				// applies is not being sent; one with applies and a near-zero average is
+				// equal at every apply and drifting between them.
+				$"|byAmount[{Packets.DuplicantActions.VitalStatsPacket.DriftByAmount()}]" +
 				$"|adoptNearMiss={NetworkIdentity.AdoptionsMissedByOneCell}" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
 				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +

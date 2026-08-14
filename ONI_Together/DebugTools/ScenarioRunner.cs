@@ -1524,6 +1524,13 @@ namespace ONI_Together.DebugTools
 
 				string key = minion.GetProperName();
 
+				// The motion table is keyed by NetId, because a species name is not
+				// unique and a proper name only happens to be. Zero means this peer has
+				// no address for the duplicant, and then there is no rate to look up.
+				int subjectId = minion.gameObject.TryGetNetIdentity(out var minionIdentity)
+					? minionIdentity.NetId
+					: 0;
+
 				foreach (var pair in new[] {
 					("hp", amounts.HitPoints),
 					("calories", amounts.Calories),
@@ -1549,10 +1556,26 @@ namespace ONI_Together.DebugTools
 					//
 					// Only the client has this. The host applies no corrections, so it
 					// emits nothing and the comparison falls back to its ordinary rule.
+					// The rate the value moves, not the size of the correction.
+					//
+					// Correction size was the first answer and it cannot see the case
+					// that was left over: every stamina correction this peer applied was
+					// exactly zero, so the bound came out zero and 21 rows were judged
+					// against a percentage - while the peers' snapshots are taken about
+					// 0.7 seconds apart and stamina moves in 0.7 seconds. Rate of change
+					// covers both, because a value the client does not simulate drifts by
+					// rate times the sync period, which is what the correction was.
 					float rate = Networking.Packets.DuplicantActions.VitalStatsPacket
-						.AverageCorrection(key, pair.Item2.Id);
+						.RateOfChange(subjectId, pair.Item2.Id);
 					if (rate > 0f)
-						rows.Add($"vitalrate|{key}|{pair.Item1}|{Math.Round(rate, 1)}");
+						rows.Add($"vitalrate|{key}|{pair.Item1}|{Math.Round(rate, 3)}");
+
+					// How stale the last correction is. A value nobody has corrected for
+					// a minute is not drifting, it is unattended.
+					float age = Networking.Packets.DuplicantActions.VitalStatsPacket
+						.SecondsSinceApplied(subjectId, pair.Item2.Id);
+					if (age >= 0f)
+						rows.Add($"vitalage|{key}|{pair.Item1}|{Math.Round(age, 1)}");
 				}
 			}
 		}
@@ -1669,7 +1692,11 @@ namespace ONI_Together.DebugTools
 				// The name the drift table is keyed by, which is not the dump key. The
 				// dump key is prefab and cell because that is what makes the two peers
 				// comparable; the correction was recorded against the animal's own name.
-				string properName = kpid.gameObject.GetProperName();
+				// Not the proper name. Every Drecko shares one, which is what made the
+				// first version of this measure a rate of 6.7 million a second.
+				int subjectId = kpid.gameObject.TryGetNetIdentity(out var critterIdentity)
+					? critterIdentity.NetId
+					: 0;
 
 				foreach (var instance in values.ModifierList)
 				{
@@ -1684,9 +1711,9 @@ namespace ONI_Together.DebugTools
 					// the host sends them, each applied correction is one sync period of
 					// that animal's own drift.
 					float rate = Networking.Packets.DuplicantActions.VitalStatsPacket
-						.AverageCorrection(properName, instance.amount.Id);
+						.RateOfChange(subjectId, instance.amount.Id);
 					if (rate > 0f)
-						rows.Add($"critterrate|{key}|{instance.amount.Id}|{Math.Round(rate, 1)}");
+						rows.Add($"critterrate|{key}|{instance.amount.Id}|{Math.Round(rate, 3)}");
 				}
 			}
 		}
