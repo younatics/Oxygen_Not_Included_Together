@@ -1258,6 +1258,11 @@ namespace ONI_Together.DebugTools
 		/// </summary>
 		private static void DumpPriorities(List<string> rows)
 		{
+			// Loose items this peer has no identity for. Reported as its own number
+			// rather than left to be inferred from a pile of one-sided rows, which is
+			// how it read before and cost a round of chasing the wrong thing.
+			int movablesWithoutId = 0;
+
 			foreach (var prioritizable in UnityEngine.Object.FindObjectsByType<Prioritizable>(
 						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
 			{
@@ -1287,21 +1292,48 @@ namespace ONI_Together.DebugTools
 				// That is the honest result rather than a hidden one: an object neither
 				// peer can name is genuinely not comparable, and netid_compare is the
 				// tool that owns that failure.
+				// The form of the key is decided by what the object IS, never by what
+				// this peer happens to know about it.
+				//
+				// The first attempt keyed anything holding a NetId by that id and
+				// everything else by cell, and it made the report seven times worse:
+				// 1,368 host-only and 1,506 peer-only rows against 159 and 255 before.
+				// The split says why - 1,362 of the host-only rows were id-keyed, 1,485
+				// of the peer-only rows were cell-keyed, and 1,050 of them were the same
+				// DigPlacers. The host held ids for those and the client did not, so the
+				// two peers filed the same objects under two different kinds of name and
+				// nothing paired with anything.
+				//
+				// Pickupable decides it instead, which is a property of the prefab and so
+				// reads the same on both peers whatever their registries look like. A
+				// loose item is the only thing here that actually travels, and it is
+				// keyed by the identity that travels with it; buildings, dig markers and
+				// placers are anchored to a cell on both peers and keyed by that.
+				//
+				// A pickupable this peer holds no id for is written as noid@cell rather
+				// than quietly falling back to a cell key that would half-match. It
+				// genuinely cannot be compared, and saying so in the key stops a missing
+				// identity from reading as a priority disagreement.
+				string prefabName = prioritizable.gameObject.PrefabID().ToString();
 				string key;
-				if (prioritizable.TryGetComponent<Building>(out _))
+				if (prioritizable.TryGetComponent<Pickupable>(out _))
 				{
-					key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
-				}
-				// The receiver is GameObject - Extensions.cs:139. Getting this wrong is the
-			// same mistake three compiles in this project already paid for.
-			else if (prioritizable.gameObject.TryGetNetIdentity(out var movableIdentity)
-						 && movableIdentity.NetId != 0)
-				{
-					key = $"{prioritizable.gameObject.PrefabID()}#{movableIdentity.NetId}";
+					// The receiver is GameObject - Extensions.cs:139. Getting this wrong
+					// is the same mistake three compiles in this project already paid for.
+					if (prioritizable.gameObject.TryGetNetIdentity(out var movableIdentity)
+						&& movableIdentity.NetId != 0)
+					{
+						key = $"{prefabName}#{movableIdentity.NetId}";
+					}
+					else
+					{
+						movablesWithoutId++;
+						key = $"{prefabName}#noid@{cell}";
+					}
 				}
 				else
 				{
-					key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
+					key = $"{prefabName}@{cell}";
 				}
 				rows.Add($"prio|{key}|class|{(int)priority.priority_class}");
 				rows.Add($"prio|{key}|value|{priority.priority_value}");
@@ -1321,6 +1353,12 @@ namespace ONI_Together.DebugTools
 				// rather than to masquerade as the first.
 				rows.Add($"prio|{key}|active|{(prioritizable.IsPrioritizable() ? 1 : 0)}");
 			}
+
+			// Under meta, so it is stated and not compared. The two peers are expected to
+			// differ here - that is the finding, not a failure of agreement - and putting
+			// it in a compared category would turn one number into two one-sided rows,
+			// which is the mistake this whole block exists to undo.
+			rows.Add($"meta|_prio|movablesWithoutId|{movablesWithoutId}");
 		}
 
 		/// <summary>
