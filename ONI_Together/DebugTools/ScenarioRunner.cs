@@ -1184,6 +1184,10 @@ namespace ONI_Together.DebugTools
 			DumpRecipeQueues(rows);
 			DumpBuildingFlags(rows);
 			DumpDuplicantVitals(rows);
+			DumpStoredPower(rows);
+			DumpPlantGrowth(rows);
+			DumpCritterAmounts(rows);
+			DumpConduitContents(rows);
 
 			// GAMESTATE, not STATE. StateDivergenceTests already emits [STATE] rows with a
 			// different schema - NetId first, then the syncer name - and a comparer reading
@@ -1192,11 +1196,20 @@ namespace ONI_Together.DebugTools
 			rows.Sort(StringComparer.Ordinal);
 			foreach (var row in rows) DebugConsole.Log("[GAMESTATE] " + row);
 
+			// The four that were uncovered are covered now, and the accessors are not
+			// guesses - every one was copied from the syncer that already replicates that
+			// subsystem, which is the rule this list was waiting on.
+			//
+			// What is still uncovered is named rather than left implied: the power
+			// circuits themselves. Batteries and generators hold the stored joules and
+			// those are dumped; how the circuits are wired together is read through
+			// CircuitManager, which nothing in this repository uses, so there is no
+			// confirmed accessor to copy and a dump that guesses is worse than one that
+			// admits the gap.
 			DebugConsole.LogWarning(
-				"[GAMESTATE] not covered yet: power grid, plant growth, critter age, conduit " +
-				"contents. Their accessors are unconfirmed - a dump that guesses is worse " +
-				"than one that admits the gap. Per-building priority left this list and is " +
-				"now compared.");
+				"[GAMESTATE] not covered yet: power circuit topology (no confirmed " +
+				"accessor in this repository). Stored power, plant growth, critter " +
+				"amounts and conduit contents left this list and are now compared.");
 
 			return rows.Count;
 		}
@@ -1254,7 +1267,42 @@ namespace ONI_Together.DebugTools
 				if (!Grid.IsValidCell(cell)) continue;
 
 				var priority = prioritizable.GetMasterPriority();
-				string key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
+
+				// Cell is the right key for a building and the wrong one for everything
+				// else, and using it for both invented 414 disagreements out of nothing.
+				//
+				// 159 host-only and 255 peer-only priority rows, and every single name in
+				// them was an element - Cuprite, DirtyWater, ChlorineGas, Sand. Those are
+				// debris and gas piles marked for sweeping, and they fall, roll and get
+				// carried. A pile one cell further along on one peer produces a host-only
+				// row at the old cell and a peer-only row at the new one: two reported
+				// differences from one object that both peers agree about.
+				//
+				// So the key follows what the object is. A building cannot move and cell
+				// is its most reliable name - deliberately not its NetId, since ids are
+				// what other comparisons are testing and must not be a dependency here.
+				// Anything else is keyed by the identity that travels with it.
+				//
+				// A movable with no id is left keyed by cell and will read as one-sided.
+				// That is the honest result rather than a hidden one: an object neither
+				// peer can name is genuinely not comparable, and netid_compare is the
+				// tool that owns that failure.
+				string key;
+				if (prioritizable.TryGetComponent<Building>(out _))
+				{
+					key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
+				}
+				// The receiver is GameObject - Extensions.cs:139. Getting this wrong is the
+			// same mistake three compiles in this project already paid for.
+			else if (prioritizable.gameObject.TryGetNetIdentity(out var movableIdentity)
+						 && movableIdentity.NetId != 0)
+				{
+					key = $"{prioritizable.gameObject.PrefabID()}#{movableIdentity.NetId}";
+				}
+				else
+				{
+					key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
+				}
 				rows.Add($"prio|{key}|class|{(int)priority.priority_class}");
 				rows.Add($"prio|{key}|value|{priority.priority_value}");
 
@@ -1436,6 +1484,169 @@ namespace ONI_Together.DebugTools
 						.AverageCorrection(key, pair.Item2.Id);
 					if (rate > 0f)
 						rows.Add($"vitalrate|{key}|{pair.Item1}|{Math.Round(rate, 1)}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// The joules sitting in every battery and generator.
+		///
+		/// This was on the uncovered list as "power grid", and the part of a power grid
+		/// that is replicated is exactly this: BatteryStateSyncer and
+		/// EnergyGeneratorSyncer both sample JoulesAvailable and both write it back on
+		/// the other peer. So there is a syncer keeping these equal and nothing has ever
+		/// checked whether it succeeds - the same gap that hid a half-finished research
+		/// tree and a zeroed recipe queue, and power is more visible than either. A
+		/// battery bank that reads full on one peer and empty on the other is a colony
+		/// where one player sees the lights about to go out.
+		///
+		/// Keyed by cell, like every other building row, because buildings do not move
+		/// and a NetId means different things on the two peers when it is wrong - which
+		/// is the thing being measured elsewhere and must not be a dependency here.
+		/// </summary>
+		private static void DumpStoredPower(List<string> rows)
+		{
+			foreach (var battery in UnityEngine.Object.FindObjectsByType<Battery>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (battery.IsNullOrDestroyed() || battery.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(battery.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				string key = $"{battery.gameObject.PrefabID()}@{cell}";
+				rows.Add($"power|{key}|joules|{Math.Round(battery.JoulesAvailable, 1)}");
+			}
+
+			foreach (var generator in UnityEngine.Object.FindObjectsByType<Generator>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (generator.IsNullOrDestroyed() || generator.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(generator.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				string key = $"{generator.gameObject.PrefabID()}@{cell}";
+				rows.Add($"power|{key}|genJoules|{Math.Round(generator.JoulesAvailable, 1)}");
+			}
+		}
+
+		/// <summary>
+		/// How grown every plant is, and whether it is wilting.
+		///
+		/// PlantGrowthSyncer sends PercentGrown and the wilt flag for every plant on a
+		/// timer, and this is the first thing that checks the two peers agree afterwards.
+		/// Growth is slow and continuous, so a peer whose plants are quietly behind looks
+		/// identical to one that is fine until a harvest happens on one side and not the
+		/// other.
+		///
+		/// The accessors are the syncer's own - growing.PercentGrown() and
+		/// WiltCondition.IsWilting() - copied rather than guessed at, which is the rule
+		/// three failed compiles in this project paid for.
+		/// </summary>
+		private static void DumpPlantGrowth(List<string> rows)
+		{
+			foreach (var growing in UnityEngine.Object.FindObjectsByType<Growing>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (growing.IsNullOrDestroyed() || growing.gameObject.IsNullOrDestroyed()) continue;
+				int cell = Grid.PosToCell(growing.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				string key = $"{growing.gameObject.PrefabID()}@{cell}";
+
+				// A percentage, so a flat tolerance judges it correctly and the relative
+				// one would not - 0.5% of 0.02 is nothing.
+				rows.Add($"plant|{key}|grown|{Math.Round(growing.PercentGrown() * 100f, 1)}");
+
+				if (growing.TryGetComponent<WiltCondition>(out var wilt) && wilt != null)
+					rows.Add($"plant|{key}|wilting|{wilt.IsWilting()}");
+			}
+		}
+
+		/// <summary>
+		/// Every amount a critter has, whatever they turn out to be.
+		///
+		/// This was on the list as "critter age", and naming one amount would have been
+		/// the guess this dump exists to avoid: the ids differ by species and only some
+		/// have Incubation. Reading whatever the object actually carries costs nothing
+		/// extra and cannot name a field that is not there.
+		///
+		/// Critters are also where the id trouble lives - a stored item's id landing on a
+		/// Creature, a CrabBaby the client never named - so the row is keyed by prefab
+		/// and cell rather than by NetId, and it says nothing about ids. The comparison
+		/// that owns ids is netid_compare; this one is about whether the two peers agree
+		/// on how old and how fed the animals are.
+		/// </summary>
+		private static void DumpCritterAmounts(List<string> rows)
+		{
+			foreach (var kpid in UnityEngine.Object.FindObjectsByType<KPrefabID>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (kpid.IsNullOrDestroyed() || kpid.gameObject.IsNullOrDestroyed()) continue;
+				if (!kpid.gameObject.HasTag(GameTags.Creature)) continue;
+				if (kpid.gameObject.HasTag(GameTags.BaseMinion)) continue;
+
+				int cell = Grid.PosToCell(kpid.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				var values = kpid.gameObject.GetAmounts();
+				if (values == null) continue;
+
+				string key = $"{kpid.gameObject.PrefabID()}@{cell}";
+				// ModifierList, not the collection itself. Iterating Amounts directly is
+				// marked obsolete by the game with a reason - the abstract enumerator
+				// allocates - and this project treats those as errors, which is how the
+				// right accessor got named without a guess. VitalStatsPacket's constructor
+				// already walks it this way.
+				foreach (var instance in values.ModifierList)
+				{
+					if (instance?.amount == null) continue;
+					rows.Add($"critter|{key}|{instance.amount.Id}|{Math.Round(instance.value, 1)}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// What is inside every pipe.
+		///
+		/// ConduitFlowSyncer sends element, mass and temperature per cell on a change
+		/// threshold and re-sends everything periodically to cover dropped packets - and
+		/// it sends them Unreliable, which is the one transport mode where a lost packet
+		/// is never noticed by anything. Nothing has ever compared the result. A pipe
+		/// carrying water on one peer and nothing on the other is the kind of divergence
+		/// a player reports as "my aquatuner stopped" with no way to explain it.
+		///
+		/// Element and mass only. Temperature moves every tick from heat exchange the
+		/// syncer does not claim to replicate continuously, so comparing it would report
+		/// a difference on every full pipe in the colony and bury the two that matter -
+		/// the same mistake the flat vital tolerance made, and worth avoiding by choosing
+		/// the axis rather than by widening a threshold afterwards.
+		///
+		/// Empty cells are skipped. There are tens of thousands of conduit cells in a
+		/// built colony and an empty one agreeing with an empty one is not a fact worth
+		/// the log line.
+		/// </summary>
+		private static void DumpConduitContents(List<string> rows)
+		{
+			if (Game.Instance == null) return;
+
+			foreach (var pair in new[] {
+				("gas", Game.Instance.gasConduitFlow, (int)ObjectLayer.GasConduit),
+				("liquid", Game.Instance.liquidConduitFlow, (int)ObjectLayer.LiquidConduit),
+			})
+			{
+				var flow = pair.Item2;
+				if (flow == null) continue;
+
+				for (int cell = 0; cell < Grid.CellCount; cell++)
+				{
+					if (Grid.Objects[cell, pair.Item3] == null) continue;
+
+					var contents = flow.GetContents(cell);
+					if (contents.mass <= 0f) continue;
+
+					string key = $"{pair.Item1}@{cell}";
+					rows.Add($"conduit|{key}|element|{(int)contents.element}");
+					rows.Add($"conduit|{key}|mass|{Math.Round(contents.mass, 3)}");
 				}
 			}
 		}
