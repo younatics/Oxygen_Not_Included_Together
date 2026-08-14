@@ -93,6 +93,43 @@ namespace ONI_Together.DebugTools.UnitTests
             foreach (var e in entries.OrderBy(e => e.Kind).ThenBy(e => e.Prefab).ThenBy(e => e.Cell))
                 DebugConsole.Log($"[NETID] {e.Kind}|{e.Prefab}|{e.Cell}|{e.NetId}");
 
+            // And what each one would compute for itself, for the ones that are not
+            // holding that value.
+            //
+            // The dump above says which object holds which id on each peer, which is
+            // enough to find ids meaning different things and not enough to say why.
+            // This is the comparison that ended the critter thread in one run after six
+            // rounds of guessing - a peer whose base hash matches the other's is
+            // agreeing and being overridden, and one whose base hash differs disagrees
+            // about the object or its cell. Those need opposite fixes.
+            //
+            // Only objects whose id is not what they would compute. An id that already
+            // equals its own computation explains nothing and there are nine thousand of
+            // them; the ones that differ are the whole population of interest and there
+            // are few enough to read.
+            int offBase = 0;
+            foreach (var identity in NetworkIdentityRegistry.AllIdentities)
+            {
+                if (identity == null || identity.gameObject.IsNullOrDestroyed()) continue;
+
+                var go = identity.gameObject;
+                int cell = Grid.PosToCell(go);
+                if (!Grid.IsValidCell(cell)) continue;
+
+                int computed = Networking.NetIdHelper.GetDeterministicIdFor(go, quiet: true);
+                if (computed == identity.NetId) continue;
+
+                offBase++;
+                if (offBase <= 40)
+                {
+                    DebugConsole.Log(
+                        $"[IDOFF] {identity.NetId}|{go.PrefabID()}|{cell}|{computed}|" +
+                        Networking.NetIdHelper.LastIdInputs);
+                }
+            }
+
+            DebugConsole.Log($"[IDOFF] total {offBase} identities are not on the id they would compute");
+
             return UnitTestResult.Pass($"dumped {entries.Count} identities");
         }
 
