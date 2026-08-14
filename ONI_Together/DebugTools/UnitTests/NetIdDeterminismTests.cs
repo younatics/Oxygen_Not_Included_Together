@@ -82,6 +82,58 @@ namespace ONI_Together.DebugTools.UnitTests
             return list;
         }
 
+        /// <summary>
+        /// Objects whose PrefabID names no prefab at all.
+        ///
+        /// Three rows in the last run had the host holding PuftEgg, BasicPlantBar and
+        /// BasicPlantFood while the client held something called "Creature" at the same
+        /// cell carrying the same NetId. The ids agree, so this is not an addressing
+        /// failure - it is one peer reading a different name off the same object. And
+        /// "Creature" is not a prefab in this game; it is GameTags.Creature, so a
+        /// KPrefabID is reporting a generic tag as its identity.
+        ///
+        /// Which matters beyond a cosmetic dump, because that string is an input to the
+        /// deterministic id: NetIdHelper hashes the prefab name, so an object whose name
+        /// reads differently on the two peers computes a different id on each, and the
+        /// only reason these three still line up is that they were named by the host
+        /// rather than computed. The next one to be computed locally will not.
+        ///
+        /// Assets.GetPrefab is the test, not a list of known-bad names: any PrefabID
+        /// that resolves to no prefab is the same defect whatever it is called. Unity's
+        /// object name is printed beside it because an instantiated prefab keeps it -
+        /// "PuftEgg(Clone)" against a PrefabID of "Creature" says the tag was overwritten
+        /// on a real egg, and a name of "Creature" says something built it that way.
+        /// The two have different causes and nothing so far distinguishes them.
+        /// </summary>
+        private static void DumpNamesThatAreNotPrefabs()
+        {
+            int reported = 0;
+
+            foreach (var identity in NetworkIdentityRegistry.AllIdentities)
+            {
+                if (identity == null || identity.gameObject == null) continue;
+                if (reported >= 20) break;
+
+                var go = identity.gameObject;
+                string prefabId = go.PrefabID().ToString();
+                if (string.IsNullOrEmpty(prefabId)) continue;
+                if (Assets.GetPrefab(new Tag(prefabId)) != null) continue;
+
+                reported++;
+                string tags = "none";
+                if (go.TryGetComponent<KPrefabID>(out var kpid) && kpid.Tags != null)
+                    tags = string.Join(",", kpid.Tags.Take(8).Select(t => t.ToString()));
+
+                DebugConsole.LogWarning(
+                    $"[NETID-ALIAS] netId={identity.NetId} cell={Grid.PosToCell(go)} " +
+                    $"prefabId='{prefabId}' unityName='{go.name}' tags=[{tags}] - " +
+                    "this PrefabID names no prefab, and it is an input to the id hash");
+            }
+
+            if (reported > 0)
+                DebugConsole.LogWarning($"[NETID-ALIAS] {reported} object(s) carry a PrefabID that is not a prefab");
+        }
+
         [UnitTest(name: "Dump the NetId table for cross-peer comparison", category: "NetId")]
         public static UnitTestResult DumpNetIdTable()
         {
@@ -92,6 +144,8 @@ namespace ONI_Together.DebugTools.UnitTests
             // Sorted so two dumps line up without the comparer having to sort.
             foreach (var e in entries.OrderBy(e => e.Kind).ThenBy(e => e.Prefab).ThenBy(e => e.Cell))
                 DebugConsole.Log($"[NETID] {e.Kind}|{e.Prefab}|{e.Cell}|{e.NetId}");
+
+            DumpNamesThatAreNotPrefabs();
 
             // And what each one would compute for itself, for the ones that are not
             // holding that value.

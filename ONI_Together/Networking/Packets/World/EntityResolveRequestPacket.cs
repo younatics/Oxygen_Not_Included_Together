@@ -58,6 +58,16 @@ namespace ONI_Together.Networking.Packets.World
         /// whether the object was a building that should have replicated or a seed
         /// that never could.
         /// </summary>
+        /// <summary>
+        /// How this peer answered "what is object N" - by the prefab it is, or by the
+        /// element it is made of. Both, so the split is visible rather than inferred:
+        /// before this counter existed every answer went out as an element and nothing
+        /// said so. Genuine ore and gas piles are the element case and should stay the
+        /// larger of the two in a digging colony.
+        /// </summary>
+        public static int ResolvedByPrefab { get; private set; }
+        public static int ResolvedByElement { get; private set; }
+
         private void ReplyHeld(UnityEngine.GameObject go)
         {
             ThrottledLog.Info(
@@ -141,11 +151,65 @@ namespace ONI_Together.Networking.Packets.World
                 return;
             }
 
+            // An element is what an ore pile is. It is not what most items are.
+            //
+            // The three gates above ask "is it a Pickupable with a PrimaryElement whose
+            // element has a substance", and a PuftEgg passes all three: it can be picked
+            // up, and its PrimaryElement is the Creature element, which has a substance.
+            // So the reply described an egg as an element drop, the client called
+            // SpawnResource on the Creature element, and got a generic pile whose
+            // PrefabID is literally "Creature" - carrying the id the host had issued to
+            // the egg. The client's own egg was evicted to the next id along.
+            //
+            // That is the whole of the Creature thread, and it was never a storage or a
+            // critter-spawn defect. It was this reply throwing away what the object is
+            // and rebuilding it from what it is made of. Three objects in the last run:
+            // the host held PuftEgg, BasicPlantBar and BasicPlantFood, the client held
+            // "Creature" at each of those ids, and the host held no object by that name
+            // at all.
+            //
+            // Nothing downstream could have caught it. WorldDamageSpawnResourcePacket
+            // already refuses to name an object whose PrefabID does not match the element
+            // it was asked for - and here they match, because a Creature pile really is
+            // made of Creature. Its counter read 0 in every run while this was happening.
+            //
+            // So an object is only described as an element drop when it genuinely is one:
+            // when the name it will spawn under is the name it has now. Everything else
+            // is answered with its prefab, which is what SpawnPrefabPacket exists for and
+            // now works - it was unreceivable until it was given a parameterless
+            // constructor, which is why this path was not available before.
+            string prefabName = go.PrefabID().Name;
+            if (prefabName != elementDef.tag.Name)
+            {
+                ResolvedByPrefab++;
+
+                // The three-argument constructor deliberately, which leaves
+                // HasElementData false.
+                //
+                // Passing mass and temperature would look like the more complete answer
+                // and would reintroduce the defect exactly: SpawnPrefabPacket reads
+                // HasElementData and, when it is set, spawns through
+                // ElementLoader.GetElement(Hash).substance.SpawnResource - the element
+                // path, the one that produced the Creature pile. The prefab path is only
+                // taken when there is no element data.
+                //
+                // What that costs is this item's mass and temperature at spawn; it gets
+                // the prefab's defaults instead. That is the right trade here - a
+                // PuftEgg under its own name with a default temperature is an object the
+                // two peers can both address and correct, and a Creature pile is not.
+                PacketSender.SendToPlayer(RequesterId, new SpawnPrefabPacket(
+                    NetId,
+                    go.PrefabID().GetHashCode(),
+                    go.transform.position), PacketSendMode.Reliable);
+                return;
+            }
+
             // Reuses the drop packet rather than inventing a second spawn path.
             // That one is the busiest in the mod and has already been taught the
             // things this needs to know: reserve the id before the object exists,
             // refuse to spawn without a world, and consume a pickup that arrived
             // while the item did not exist yet.
+            ResolvedByElement++;
             PacketSender.SendToPlayer(RequesterId, new WorldDamageSpawnResourcePacket(
                 NetId,
                 go.transform.position,

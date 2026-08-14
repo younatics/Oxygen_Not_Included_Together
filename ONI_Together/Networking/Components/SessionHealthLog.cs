@@ -478,6 +478,12 @@ namespace ONI_Together.Networking.Components
 				// Ore ids landing on something that is not that element. Eight objects a
 				// run end up named 'Creature' on the client holding a host id.
 				$"|oreMisnamed={Packets.World.WorldDamageSpawnResourcePacket.RenamedSomethingElse}" +
+				// How the host answered "what is object N". oreMisnamed sat at 0 through
+				// every run in which this reply was turning eggs into Creature piles,
+				// because the object it built really was made of the element it claimed -
+				// so the split has to be counted where the choice is made.
+				$"|resolvePrefab={Packets.World.EntityResolveRequestPacket.ResolvedByPrefab}" +
+				$"|resolveElement={Packets.World.EntityResolveRequestPacket.ResolvedByElement}" +
 				// Priorities the game would have refused, corrected on arrival, and sends
 				// where the tool menu had nothing to say. Both were silently zero before -
 				// the receiver pushed a zero into its own priority screen and ran the tool.
