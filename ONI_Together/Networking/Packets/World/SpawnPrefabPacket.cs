@@ -133,7 +133,9 @@ public class SpawnPrefabPacket : IPacket
         {
             var element = ElementLoader.GetElement(new Tag(Hash));
             if (element == null) return;
-            go = element.substance.SpawnResource(Position, Mass, Temperature, DiseaseIndex, DiseaseCount);
+            // Host-authored: this is the host's object, rebuilt here on request.
+            using (Patches.World.Substance_SpawnResource_Patch.HostAuthored())
+                go = element.substance.SpawnResource(Position, Mass, Temperature, DiseaseIndex, DiseaseCount);
         }
         else
         {

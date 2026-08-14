@@ -1564,6 +1564,59 @@ namespace ONI_Together.Networking.Components
 		/// </summary>
 		public static int AdoptionsMissedByOneCell { get; private set; }
 
+		/// <summary>
+		/// How far the nearest unnamed preview of the right kind was, when adoption
+		/// failed. Buckets rather than a total, because the question is what radius
+		/// would work and a mean cannot answer it.
+		///
+		/// The one-cell check answered 0 every run, which was read as "position is not
+		/// the problem" - and it is not evidence for that at all: it searched the
+		/// by-cell index, and if the client's copy is indexed at a cell more than one
+		/// step away the search sees nothing whether the object is two cells off or
+        /// on the other side of the map.
+		/// </summary>
+		public static int AdoptMissNone { get; private set; }
+		public static int AdoptMissWithin2 { get; private set; }
+		public static int AdoptMissWithin8 { get; private set; }
+		public static int AdoptMissFar { get; private set; }
+
+		/// <summary>
+		/// The nearest unnamed preview of this prefab, in grid steps, or -1 if there is
+		/// none anywhere. Walks every indexed preview - a few hundred at most, and only
+		/// on the failure path.
+		/// </summary>
+		private static void RecordNearestUnnamed(int cell, string prefabName)
+		{
+			if (!Grid.IsValidCell(cell)) return;
+
+			int best = int.MaxValue;
+			Grid.CellToXY(cell, out int x0, out int y0);
+
+			foreach (var kvp in _previewsByCell)
+			{
+				foreach (var candidate in kvp.Value)
+				{
+					if (candidate.IsNullOrDestroyed() || candidate.gameObject.IsNullOrDestroyed()) continue;
+					if (!candidate.IsClientPreview || candidate.NetId != 0) continue;
+					if (candidate.SafePrefabName != prefabName) continue;
+
+					int here = Grid.PosToCell(candidate.gameObject);
+					if (!Grid.IsValidCell(here)) continue;
+
+					Grid.CellToXY(here, out int x1, out int y1);
+					int dx = x1 > x0 ? x1 - x0 : x0 - x1;
+					int dy = y1 > y0 ? y1 - y0 : y0 - y1;
+					int steps = dx > dy ? dx : dy;
+					if (steps < best) best = steps;
+				}
+			}
+
+			if (best == int.MaxValue) AdoptMissNone++;
+			else if (best <= 2) AdoptMissWithin2++;
+			else if (best <= 8) AdoptMissWithin8++;
+			else AdoptMissFar++;
+		}
+
 		private static bool WouldMatchNearby(int cell, string prefabName)
 		{
 			if (!Grid.IsValidCell(cell)) return false;
@@ -1601,6 +1654,7 @@ namespace ONI_Together.Networking.Components
 			if (!_previewsByCell.TryGetValue(cell, out var list) || list.Count == 0)
 			{
 				if (WouldMatchNearby(cell, prefabName)) AdoptionsMissedByOneCell++;
+				RecordNearestUnnamed(cell, prefabName);
 				return false;
 			}
 
@@ -1655,6 +1709,7 @@ namespace ONI_Together.Networking.Components
 			// The cell had candidates and none of them fit. Same question as the empty
 			// case: was there one next door?
 			if (WouldMatchNearby(cell, prefabName)) AdoptionsMissedByOneCell++;
+			RecordNearestUnnamed(cell, prefabName);
 
 			if (list.Count == 0) _previewsByCell.Remove(cell);
 			return false;

@@ -112,7 +112,11 @@ namespace ONI_Together.Networking.Packets.World
 			// what makes the comparison on the other side possible at all.
 			NetworkIdentity.ReserveNextNetId(NetId, element.tag.Name);
 
-			GameObject dropped = element.substance.SpawnResource(Position, dropMass, Temperature, DiseaseIndex, DiseaseCount);
+			// Marked as host-authored so the counter that watches for a client making
+			// matter of its own does not count the matter the host just asked for.
+			GameObject dropped;
+			using (Patches.World.Substance_SpawnResource_Patch.HostAuthored())
+				dropped = element.substance.SpawnResource(Position, dropMass, Temperature, DiseaseIndex, DiseaseCount);
 
 			// Released here, on every path, whatever SpawnResource did.
 			//

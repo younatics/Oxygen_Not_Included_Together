@@ -503,7 +503,18 @@ namespace ONI_Together.Networking.Components
 				// applies is not being sent; one with applies and a near-zero average is
 				// equal at every apply and drifting between them.
 				$"|byAmount[{Packets.DuplicantActions.VitalStatsPacket.DriftByAmount()}]" +
+				// Matter a client made for itself against matter it made because a packet
+				// asked. The first is the residue the two peers cannot pair; its size
+				// decides whether suppressing it is proportionate or reckless.
+				$"|selfSpawn={Patches.World.Substance_SpawnResource_Patch.ClientSpawnedLocally}" +
+				$"|askedSpawn={Patches.World.Substance_SpawnResource_Patch.ClientSpawnedForPacket}" +
 				$"|adoptNearMiss={NetworkIdentity.AdoptionsMissedByOneCell}" +
+				// How far the nearest unnamed candidate was when adoption failed. Says
+				// which radius would work, or that distance is not the problem at all.
+				$"|adoptMiss[none={NetworkIdentity.AdoptMissNone}" +
+				$" le2={NetworkIdentity.AdoptMissWithin2}" +
+				$" le8={NetworkIdentity.AdoptMissWithin8}" +
+				$" far={NetworkIdentity.AdoptMissFar}]" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
 				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +
 				$"|annSent={NetworkIdentity.AnnounceSent}" +
