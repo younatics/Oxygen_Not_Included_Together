@@ -1179,6 +1179,7 @@ namespace ONI_Together.DebugTools
 			var rows = new List<string>();
 
 			DumpSnapshotClock(rows);
+			DumpPriorities(rows);
 			DumpResearchState(rows);
 			DumpRecipeQueues(rows);
 			DumpBuildingFlags(rows);
@@ -1193,8 +1194,9 @@ namespace ONI_Together.DebugTools
 
 			DebugConsole.LogWarning(
 				"[GAMESTATE] not covered yet: power grid, plant growth, critter age, conduit " +
-				"contents, per-building priority. Their accessors are unconfirmed - a dump " +
-				"that guesses is worse than one that admits the gap.");
+				"contents. Their accessors are unconfirmed - a dump that guesses is worse " +
+				"than one that admits the gap. Per-building priority left this list and is " +
+				"now compared.");
 
 			return rows.Count;
 		}
@@ -1219,6 +1221,58 @@ namespace ONI_Together.DebugTools
 			// The accessor already used in BuildPacket and BuildCompletePacket.
 			if (GameClock.Instance == null) return;
 			rows.Add($"meta|_snapshot|simTime|{Math.Round(GameClock.Instance.GetTime(), 2)}");
+		}
+
+		/// <summary>
+		/// The priority a player set on every building that has one.
+		///
+		/// This was in the dump's own "not covered yet" list, and that phrasing has
+		/// already misled once: it means no comparison exists, not that priorities are
+		/// unsynced. They are synced - there are packets for it and a documented repair
+		/// for a priority-zero bug - but nothing has ever checked whether the two peers
+		/// end a session agreeing, so "priorities never break" was not a claim anyone
+		/// could make from measurement.
+		///
+		/// Priority is what decides the order duplicants do work, so a building set to 9
+		/// on one peer and 5 on the other is not cosmetic: the colony does different
+		/// things in a different order. It is also read directly off the building by the
+		/// player, which makes a disagreement visible rather than subtle.
+		///
+		/// Keyed by cell, like the other building rows, because buildings do not move.
+		/// GetMasterPriority is the accessor WorldStateSyncer already uses; the class and
+		/// the value are recorded separately because both are set from the priority
+		/// screen and either can drift on its own.
+		/// </summary>
+		private static void DumpPriorities(List<string> rows)
+		{
+			foreach (var prioritizable in UnityEngine.Object.FindObjectsByType<Prioritizable>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (prioritizable.IsNullOrDestroyed() || prioritizable.gameObject.IsNullOrDestroyed()) continue;
+
+				int cell = Grid.PosToCell(prioritizable.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				var priority = prioritizable.GetMasterPriority();
+				string key = $"{prioritizable.gameObject.PrefabID()}@{cell}";
+				rows.Add($"prio|{key}|class|{(int)priority.priority_class}");
+				rows.Add($"prio|{key}|value|{priority.priority_value}");
+
+				// Whether there is outstanding work, as its own fact.
+				//
+				// Filtering the dump by IsPrioritizable compared two different
+				// populations and read as a priority disagreement: 44 client-only rows,
+				// 22 wires, every one of them present on both peers at the same cell with
+				// the same id and the same default priority. What differs is that the
+				// client still thinks there is work to do on them, because its duplicants
+				// have no chores and nothing ever finishes one.
+				//
+				// So the priority and the having-work-to-do are recorded separately. The
+				// first is what a player sets and what this was meant to check; the
+				// second is a real difference about chore state and deserves to be seen
+				// rather than to masquerade as the first.
+				rows.Add($"prio|{key}|active|{(prioritizable.IsPrioritizable() ? 1 : 0)}");
+			}
 		}
 
 		/// <summary>
