@@ -302,6 +302,10 @@ namespace ONI_Together.Networking.Components
 				// holding a hatched critter used to encode it as contents, and the
 				// receiver made one.
 				$"|storeNoCritter={Misc.BuildingUtils.CreaturesRefusedFromStorage}" +
+				// Rebuilt items given the sender's address. Zero on a host by design;
+				// on a client it is what stops the two peers naming the same food
+				// differently.
+				$"|storeNamed={Misc.BuildingUtils.ItemsNamedBySender}" +
 				// Items the container refused after they were rebuilt for it. Each one
 				// is left loose in the world and the container stays wrong.
 				$"|storeRefused={Misc.BuildingUtils.ItemsRefusedByStorage}" +

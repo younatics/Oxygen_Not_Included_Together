@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using ONI_Together.DebugTools;
+using ONI_Together.Networking;
 using UnityEngine;
 using static LogicGateVisualizer;
 
@@ -104,6 +105,12 @@ namespace ONI_Together.Misc
                 {
                     order.Add(hash);
                     acc = new StoredItem { Hash = hash, DiseaseIdx = pe.DiseaseIdx };
+
+                    // The first object of this prefab lends its address to the record.
+                    // The receiver rebuilds one object per prefab, so one id is what it
+                    // needs and what it can use.
+                    if (go.TryGetNetIdentity(out var storedIdentity) && !storedIdentity.IsNullOrDestroyed())
+                        acc.NetId = storedIdentity.NetId;
                 }
 
                 // Mass-weighted temperature, so merging two piles does not invent heat.
@@ -131,6 +138,7 @@ namespace ONI_Together.Misc
                 writer.Write(item.Temperature);
                 writer.Write(item.DiseaseIdx);
                 writer.Write(item.DiseaseCount);
+                writer.Write(item.NetId);
             }
 
             optionalValues[keyPrefix + "stor"] = ms.ToArray();
@@ -152,6 +160,20 @@ namespace ONI_Together.Misc
         private struct StoredItem
         {
             public int Hash;
+
+            /// <summary>
+            /// The address the sender's own object for this prefab holds, or zero.
+            ///
+            /// One record still covers every object of a prefab in the container - going
+            /// back to per-object records is the pathology this format exists to avoid,
+            /// and it cost a client 14,655 spurious registrations. This is one extra
+            /// field on that record, so the receiver can name what it rebuilds instead
+            /// of computing an address the other peer cannot reproduce.
+            ///
+            /// It is the last measured id divergence: BasicPlantBar and BasicPlantFood,
+            /// 2 of 9,009 shared objects, both food recreated inside a MicrobeMusher.
+            /// </summary>
+            public int NetId;
             public float Mass;
             public float Temperature;
             public byte DiseaseIdx;
@@ -178,6 +200,7 @@ namespace ONI_Together.Misc
                     Temperature = reader.ReadSingle(),
                     DiseaseIdx = reader.ReadByte(),
                     DiseaseCount = reader.ReadInt32(),
+                    NetId = reader.ReadInt32(),
                 });
             }
 
@@ -350,6 +373,11 @@ namespace ONI_Together.Misc
                     scrapObject.SetActive(true);
                     storage.Store(scrapObject, true, true);
 
+                    // Named by the sender here too, not only on the reconcile path.
+                    // Both create items, and an item named on one path and computed on
+                    // the other is the divergence with extra steps.
+                    NameFromSender(scrapObject, _incoming[i].NetId);
+
                     // Which items, not just how many.
                     //
                     // storeMade says 44 to 68 items are rebuilt a run and says nothing
@@ -423,6 +451,32 @@ namespace ONI_Together.Misc
         /// Creatures a storage packet asked this peer to build, and did not get. Each one
         /// would have been a live animal nobody could address.
         /// </summary>
+        /// <summary>
+        /// Give a rebuilt item the address the sender's own copy holds.
+        ///
+        /// Only on a client. Addresses come from the host, and a host adopting a
+        /// client's number is the same divergence from the other end - the rule the
+        /// build-order naming already follows.
+        ///
+        /// Without it each peer names its own copy and the two disagree by
+        /// construction, which is the whole of the remaining id divergence: 2 of 9,009
+        /// shared objects, both food rebuilt inside a fabricator.
+        /// </summary>
+        private static void NameFromSender(GameObject made, int netId)
+        {
+            if (netId == 0) return;
+            if (MultiplayerSession.IsHost) return;
+            if (!made.TryGetComponent<Networking.Components.NetworkIdentity>(out var identity)
+                || identity.IsNullOrDestroyed()) return;
+            if (identity.NetId == netId) return;
+
+            identity.OverrideNetId(netId);
+            ItemsNamedBySender++;
+        }
+
+        /// <summary>Rebuilt items given the sender's address instead of a local one.</summary>
+        public static int ItemsNamedBySender { get; private set; }
+
         public static int CreaturesRefusedFromStorage { get; private set; }
 
         public static int ItemsNoPrefab { get; private set; }
@@ -712,6 +766,8 @@ namespace ONI_Together.Misc
                 ItemsRefusedByStorage++;
                 return false;
             }
+
+            NameFromSender(made, item.NetId);
 
             string madeName = made.PrefabID().ToString();
             _madeByPrefab.TryGetValue(madeName, out int madeCount);
