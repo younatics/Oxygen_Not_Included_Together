@@ -1751,7 +1751,33 @@ namespace ONI_Together.Networking.Components
 			// of.
 			if (gameObject.HasTag(GameTags.BaseMinion)) return false;
 
-			return TryGetComponent<Pickupable>(out _) || TryGetComponent<Navigator>(out _);
+			if (TryGetComponent<Pickupable>(out _) || TryGetComponent<Navigator>(out _))
+				return true;
+
+			// Anything the host sends packets about, it also has to announce.
+			//
+			// RepairableStorageProxy is the object a duplicant actually works on to
+			// repair a building. The host creates one, gives it an id, sends
+			// StandardWorker_WorkingState_Packet and WorkableProgressPacket addressed to
+			// that id - and did not announce it, because it is not a Pickupable and has
+			// no Navigator. The client's log is the whole story in three lines: "NetId
+			// 1064133649 not found, asked by StandardWorker_WorkingState_Packet",
+			// "Could not resolve workable 1064133649 for worker", "not found, asked by
+			// WorkableProgressPacket".
+			//
+			// The visible cost is 22 wires that the client still believes need work
+			// while the host has them repaired - the last differing rows in the priority
+			// comparison, every one of them the active flag and every one of them a
+			// Wire. The client's repair chore has nothing to tell it the job is done.
+			//
+			// The rule this restores is simple and was already implied: the set of
+			// objects a peer addresses and the set it announces have to be the same set.
+			// A Workable is precisely what those two packets address.
+			//
+			// The client normally has its own copy already - Repairable.CreateStorageProxy
+			// runs there too - so the announcement is usually satisfied by adoption
+			// rather than by building a second one.
+			return TryGetComponent<Workable>(out _);
 		}
 
 		/// <summary>

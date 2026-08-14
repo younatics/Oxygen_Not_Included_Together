@@ -40,7 +40,18 @@ param(
     [string]$Share = 'C:\ONI_MP_Share',
     # Game types to dump the members of, comma separated. Empty for normal runs.
     [string]$AskApi = '',
-    [string]$Summary = 'C:\GITHUB\Oxygen_Not_Included_Together\testing\soak-summary.txt'
+    [string]$Summary = 'C:\GITHUB\Oxygen_Not_Included_Together\testing\soak-summary.txt',
+    # One settle length for every run, instead of the 150/120/180 rotation.
+    #
+    # Every measurement this project has taken describes about six minutes of colony.
+    # That is long enough to catch anything that breaks on an event - a dig, a build, a
+    # reconnect - and structurally blind to anything that accumulates: a table that
+    # grows, an id space that fills, a divergence that only shows after an hour. Both of
+    # the worst reports from real play were about long sessions.
+    #
+    # A parameter rather than an edit, so a long run is something anyone can ask for and
+    # the summary records what was asked.
+    [int]$SettleSeconds = 0
 )
 
 $ErrorActionPreference = 'Continue'
@@ -130,7 +141,7 @@ Note "soak starting: $Runs runs on '$Save'"
 for ($i = 1; $i -le $Runs; $i++) {
     $label = 'soak{0:D2}' -f $i
     $dig    = $digSizes[($i - 1) % $digSizes.Count]
-    $settle = $settles[($i - 1) % $settles.Count]
+    $settle = if ($SettleSeconds -gt 0) { $SettleSeconds } else { $settles[($i - 1) % $settles.Count] }
     $hostBuild = $hostBuilds[($i - 1) % $hostBuilds.Count]
     $peerBuild = $peerBuilds[($i - 1) % $peerBuilds.Count]
     $tearDown  = $deconstructs[($i - 1) % $deconstructs.Count]
