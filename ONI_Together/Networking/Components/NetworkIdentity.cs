@@ -1377,6 +1377,21 @@ namespace ONI_Together.Networking.Components
 		/// a client draws unnamed, is one of them. Announcing here instead
 		/// catches every creation path, because they all end up needing an id.
 		/// </summary>
+		/// <summary>
+		/// Re-announce an object whose id has just moved.
+		///
+		/// OverrideNetId re-files the registry and tells nobody, which is correct for the
+		/// case it was written for - a host applying an id it was given. It is wrong
+		/// straight after a convergence, because the clients were told the old number
+		/// when this object was registered a moment earlier.
+		///
+		/// Deliberately not called from ConvergeOnDeterministicId itself. The note there
+		/// records why: announcing from every convergence produced between 3,227 and
+		/// 7,016 of them in one run and turned a bulk-rehouse check from passing to 163
+		/// collisions. This is the one caller that has just created the discrepancy.
+		/// </summary>
+		internal void AnnounceRenameIfHost() => AnnounceSpawnIfHost();
+
 		private void AnnounceSpawnIfHost()
 		{
 			if (NetId == 0) return;

@@ -95,7 +95,25 @@ namespace ONI_Together.Networking
 			// Converging at the point of attachment covers both orders with one call.
 			// It is a no-op on a client, which refuses to converge for the same reason it
 			// refuses to mint, and a no-op when the id already matches.
+			// Converge, then say so - because registering has already announced the old
+			// number.
+			//
+			// RegisterIdentity announces to the clients as part of registering, so
+			// converging after it leaves the peers holding different values by
+			// construction: the client was told A, the host moved to B, and
+			// OverrideNetId re-files the registry without telling anybody. That is a
+			// mismatch this call introduced, not one it found - ids pointing at
+			// different things read 4 to 8 a run in the batch that first had it.
+			//
+			// Announcing only when the id actually moved keeps this away from the
+			// cascade the converge path warns about: that note is about calling converge
+			// from every registration, and this is one object that has just been
+			// addressed late.
+			int before = attached.NetId;
 			attached.ConvergeOnDeterministicId();
+			if (attached.NetId != before)
+				attached.AnnounceRenameIfHost();
+
 			return attached;
 		}
 
