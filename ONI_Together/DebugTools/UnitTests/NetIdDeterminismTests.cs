@@ -134,6 +134,51 @@ namespace ONI_Together.DebugTools.UnitTests
                 DebugConsole.LogWarning($"[NETID-ALIAS] {reported} object(s) carry a PrefabID that is not a prefab");
         }
 
+        /// <summary>
+        /// Loose items the host named and never told anybody about.
+        ///
+        /// Fifteen objects ended a run in that state - Dirt, Sand, Cuprite, a hatch egg -
+        /// and the only evidence was that the host log had no registration line for them,
+        /// which does not mean what it looks like: the registration message goes through
+        /// NetIdHelper.Note and that is silent whenever the caller asks for quiet.
+        ///
+        /// So the object carries the answer now and this prints it. The set matters
+        /// because an unannounced object is one the client can never be told about by any
+        /// path except a lookup failure and a resolve request, which is repair rather
+        /// than replication - and it only fires if a packet happens to be addressed to it.
+        ///
+        /// Host only. A client announces nothing, so every one of its objects would
+        /// qualify and the row would say nothing at all.
+        /// </summary>
+        private static void DumpNeverAnnounced()
+        {
+            if (!MultiplayerSession.IsHost || !MultiplayerSession.InSession) return;
+
+            int reported = 0, total = 0;
+            foreach (var identity in NetworkIdentityRegistry.AllIdentities)
+            {
+                if (identity == null || identity.gameObject == null) continue;
+                if (identity.NetId == 0 || identity.WasAnnounced) continue;
+
+                var go = identity.gameObject;
+
+                // Only what replication is supposed to carry. Buildings and duplicants
+                // travel by other paths on purpose, and listing them here would bury the
+                // handful this is looking for under thousands that are fine.
+                if (!go.TryGetComponent<Pickupable>(out var pickup)) continue;
+                if (pickup.storage != null) continue;
+
+                total++;
+                if (reported++ >= 25) continue;
+
+                DebugConsole.Log(
+                    $"[NETID-UNANNOUNCED] {go.PrefabID()}|{Grid.PosToCell(go)}|{identity.NetId}");
+            }
+
+            if (total > 0)
+                DebugConsole.Log($"[NETID-UNANNOUNCED] total {total} loose item(s) never announced");
+        }
+
         [UnitTest(name: "Dump the NetId table for cross-peer comparison", category: "NetId")]
         public static UnitTestResult DumpNetIdTable()
         {
@@ -146,6 +191,7 @@ namespace ONI_Together.DebugTools.UnitTests
                 DebugConsole.Log($"[NETID] {e.Kind}|{e.Prefab}|{e.Cell}|{e.NetId}");
 
             DumpNamesThatAreNotPrefabs();
+            DumpNeverAnnounced();
 
             // And what each one would compute for itself, for the ones that are not
             // holding that value.

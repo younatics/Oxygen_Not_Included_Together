@@ -146,13 +146,27 @@ namespace ONI_Together.Networking.Packets
 		/// </summary>
 		public static int RefusedMinions => _refusedMinions;
 
+		/// <summary>
+		/// Announcements that ended with this peer holding the host's number, and
+		/// announcements whose number was thrown away because no identity could be
+		/// attached. The second was the silent hole: it read 0 forever by not existing,
+		/// while the branch it describes was dropping names on every loose item the
+		/// client's own simulation had also made.
+		/// </summary>
+		public static int NamedOnArrival => _namedOnArrival;
+		public static int NamesDropped => _namesDropped;
+
 		private static int _adoptedInstead;
 		private static int _refusedMinions;
+		private static int _namedOnArrival;
+		private static int _namesDropped;
 
 		public static void ResetForNewSession()
 		{
 			_adoptedInstead = 0;
 			_refusedMinions = 0;
+			_namedOnArrival = 0;
+			_namesDropped = 0;
 		}
 
 		private void Instantiate(InstantiationEntry e)
@@ -241,9 +255,52 @@ namespace ONI_Together.Networking.Packets
 			// Take the host's name for it. Instantiating without this leaves the
 			// client holding an object the host cannot address, which is the
 			// divergence this packet is meant to close rather than widen.
-			if (e.NetId != 0 && obj.TryGetComponent<Components.NetworkIdentity>(out var identity))
-				identity.OverrideNetId(e.NetId);
+			// AddOrGet, not TryGetComponent, and this is the whole defect.
+			//
+			// The object here was made a line ago with Object.Instantiate and has not
+			// been activated yet, so its OnSpawn has not run - and OnSpawn is where this
+			// mod attaches NetworkIdentity. TryGetComponent therefore found nothing on
+			// exactly the objects that most needed naming, and the branch fell through
+			// in silence: no warning, no counter, nothing in the log at all.
+			//
+			// Measured end to end rather than reasoned about. The host announced
+			// BasicPlantFood#-558423651, PlantFiber#915634576 and
+			// BasicPlantFood#-1775399734; the transport counters read sent 221 and
+			// received 221, so every announcement arrived; and the client's log does not
+			// contain those ids anywhere. Every other path through this method logs
+			// something, which left exactly one branch that could swallow an
+			// announcement without a trace - the one looking for a component that was
+			// never going to be there yet.
+			//
+			// It produces both halves of the loose-item gap at once. The host holds a
+			// name for an object the client's registry has never heard of, and the client
+			// holds its own copy with no name, because when the object finally activates,
+			// its OnSpawn asks for an id and a client is not allowed to mint one.
+			//
+			// SpawnPrefabPacket has used AddOrGet all along and does not have this
+			// problem. Copying the pattern that already works instead of inventing a
+			// second one is this repository's own rule, written down after three
+			// compile failures spent guessing at game API.
+			if (e.NetId != 0)
+			{
+				var identity = obj.AddOrGet<Components.NetworkIdentity>();
+				if (identity == null)
+				{
+					_namesDropped++;
+					DebugTools.ThrottledLog.Warn(
+						$"[InstantiationsPacket] could not attach an identity to " +
+						$"'{e.PrefabName}', so NetId {e.NetId} is unclaimed on this peer");
+				}
+				else
+				{
+					identity.OverrideNetId(e.NetId);
+					_namedOnArrival++;
+				}
+			}
 
+			// After the name, so the object's own OnSpawn finds an id already on it and
+			// registers under the host's number instead of asking for one and being
+			// refused.
 			obj.SetActive(true);
 		}
 	}

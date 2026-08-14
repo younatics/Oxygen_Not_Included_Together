@@ -1404,6 +1404,22 @@ namespace ONI_Together.Networking.Components
 		/// One counter per return, so the next run names the gate instead of leaving it
 		/// to deduction.
 		/// </summary>
+		/// <summary>
+		/// Whether this object's existence was ever sent to the clients.
+		///
+		/// On the object rather than in a log, because the log cannot answer it. The
+		/// registration message is routed through NetIdHelper.Note, which is silent when
+		/// the caller asks for quiet - so "no registration line in the host log" was read
+		/// as "this object was named at load time" when it equally means "the call site
+		/// passed quiet: true". Reading absence from a log as a fact is a mistake this
+		/// project has already paid for four times.
+		///
+		/// Deliberately not serialised. It describes this session's traffic, and a
+		/// reloaded save has announced nothing to anybody.
+		/// </summary>
+		[SkipSaveFileSerialization]
+		public bool WasAnnounced { get; private set; }
+
 		public static int AnnounceSkippedNoId { get; private set; }
 		public static int AnnounceSkippedNotHost { get; private set; }
 		public static int AnnounceSkippedNotReplicated { get; private set; }
@@ -1441,6 +1457,7 @@ namespace ONI_Together.Networking.Components
 			}
 
 			AnnounceSent++;
+			WasAnnounced = true;
 
 			// One line per announcement, by name and id.
 			//

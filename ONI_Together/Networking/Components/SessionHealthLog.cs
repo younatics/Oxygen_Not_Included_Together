@@ -493,6 +493,11 @@ namespace ONI_Together.Networking.Components
 				$"|mergeKept={Patches.World.PickupablePatches.PickupableAbsorbedPatch.NamesRescued}" +
 				$"|mergeBoth={Patches.World.PickupablePatches.PickupableAbsorbedPatch.BothNamed}" +
 				$"|mergeUnclear={Patches.World.PickupablePatches.PickupableAbsorbedPatch.DirectionUnclear}" +
+				// The receiving half. instNamed against instAdopted says whether an
+				// announcement ended as a name on an object; instDropped must stay 0 -
+				// it is the branch that used to lose one silently.
+				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
+				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +
 				$"|annSent={NetworkIdentity.AnnounceSent}" +
 				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +
 				$"|annNotHost={NetworkIdentity.AnnounceSkippedNotHost}" +
