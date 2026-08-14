@@ -1,4 +1,4 @@
-using Klei.AI;
+﻿using Klei.AI;
 using ONI_Together.DebugTools;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
@@ -28,10 +28,12 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		private class Drift { public int Applies; public double Total; public float Worst; }
 		private static readonly Dictionary<string, Drift> _drift = new Dictionary<string, Drift>();
 
-		private static void NoteCorrection(string who, float delta)
+		private static void NoteCorrection(string who, string amount, float delta)
 		{
-			if (string.IsNullOrEmpty(who)) return;
-			if (!_drift.TryGetValue(who, out var d)) _drift[who] = d = new Drift();
+			if (string.IsNullOrEmpty(who) || string.IsNullOrEmpty(amount)) return;
+
+			string key = who + "|" + amount;
+			if (!_drift.TryGetValue(key, out var d)) _drift[key] = d = new Drift();
 
 			d.Applies++;
 			float size = delta < 0 ? -delta : delta;
@@ -45,6 +47,17 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		/// multiplied by how fast that duplicant is burning; a peer that is missing
 		/// packets shows fewer applies.
 		/// </summary>
+		/// <summary>
+		/// The average correction for one duplicant's one amount, or 0 if this peer has
+		/// not measured it. That is one sync period of drift, which is the bound a
+		/// snapshot comparison can reasonably ask for.
+		/// </summary>
+		public static float AverageCorrection(string who, string amount)
+		{
+			if (!_drift.TryGetValue(who + "|" + amount, out var d) || d.Applies == 0) return 0f;
+			return (float)(d.Total / d.Applies);
+		}
+
 		public static string DriftBreakdown()
 		{
 			if (_drift.Count == 0) return "none";
@@ -193,10 +206,17 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 				// number of packets and each one moves him ten times further, the lag is
 				// the same 1.5 seconds everyone has and the rate is what differs, which
 				// is not a defect. If his packets are rarer, it is.
-				if (kvp.Key == Db.Get().Amounts.Calories.Id)
+				// Every amount, not only calories.
+				//
+				// The correction size is one sync period of that duplicant's drift,
+				// measured rather than assumed, and it is the only honest yardstick for
+				// judging whether the two peers disagree about a continuously consumed
+				// value. Stamina and stress move at their own rates and were being judged
+				// against a flat percentage chosen for calories.
 				{
 					var before = amounts.Get(kvp.Key);
-					if (before != null) NoteCorrection(identity.GetProperName(), kvp.Value - before.value);
+					if (before != null)
+						NoteCorrection(identity.GetProperName(), kvp.Key, kvp.Value - before.value);
 				}
 
 				// Read back rather than take a return value: Amounts.SetValue on the

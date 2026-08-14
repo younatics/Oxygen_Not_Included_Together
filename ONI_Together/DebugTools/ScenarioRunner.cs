@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1418,6 +1418,24 @@ namespace ONI_Together.DebugTools
 					var value = values.Get(pair.Item2);
 					if (value == null) continue;
 					rows.Add($"vital|{key}|{pair.Item1}|{Math.Round(value.value, 1)}");
+
+					// And how fast this one moves, so the comparison has a bound to judge
+					// against instead of a flat percentage.
+					//
+					// A value both peers consume continuously and correct once a second
+					// cannot be equal at an instant. How unequal it may legitimately be is
+					// one sync period of that duplicant's own drift - which this peer has
+					// been measuring all along, as the size of each correction it applies.
+					// Measured, not chosen: 44 to 85 a second for most duplicants and
+					// 11,329 for one at maximum stress, which is why a single percentage
+					// could never fit them all.
+					//
+					// Only the client has this. The host applies no corrections, so it
+					// emits nothing and the comparison falls back to its ordinary rule.
+					float rate = Networking.Packets.DuplicantActions.VitalStatsPacket
+						.AverageCorrection(key, pair.Item2.Id);
+					if (rate > 0f)
+						rows.Add($"vitalrate|{key}|{pair.Item1}|{Math.Round(rate, 1)}");
 				}
 			}
 		}

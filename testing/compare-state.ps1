@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Compare every category of game state the two peers dumped, in one pass.
 
@@ -154,7 +154,11 @@ if ($h.ContainsKey($simKey) -and $c.ContainsKey($simKey)) {
 foreach ($key in $h.Keys) {
     $category = ($key -split '\|')[0]
     # The clock is not a fact about agreement; the peers are meant to differ on it.
-    if ($category -eq 'meta') { continue }
+    # meta is the snapshot clock and vitalrate is the yardstick the vital rows are
+    # judged with - both are inputs to the comparison, not facts the peers should agree
+    # about. Only the client emits a rate, so leaving it in would report every one as a
+    # client-only difference.
+    if ($category -eq 'meta' -or $category -eq 'vitalrate') { continue }
     $b = Bucket $category
 
     if (-not $c.ContainsKey($key)) {
@@ -172,6 +176,30 @@ foreach ($key in $h.Keys) {
         $delta = [Math]::Abs($hn - $cn)
         if ($delta -le $Tolerance) { continue }
 
+        # A vital is judged against how fast it actually moves, not a percentage.
+        #
+        # Calories run into the millions and stamina from 0 to 100, so one tolerance
+        # cannot fit both, and the duplicant at maximum stress burns two hundred times
+        # faster than the rest. The client measures the size of every correction it
+        # applies - one sync period of that duplicant's own drift - and emits it beside
+        # the value. Two sync periods is the bound here: the peers cannot be closer than
+        # one, and allowing two covers the snapshot not being simultaneous.
+        #
+        # This is judging against the physical bound rather than tuning a number until
+        # the report looks better. A row outside it is a real disagreement.
+        if ($key -like 'vital|*') {
+            $rateKey = $key -replace '^vital\|', 'vitalrate|'
+            $rate = 0.0
+            if ($c.ContainsKey($rateKey)) { [double]::TryParse($c[$rateKey], [ref]$rate) | Out-Null }
+            elseif ($h.ContainsKey($rateKey)) { [double]::TryParse($h[$rateKey], [ref]$rate) | Out-Null }
+
+            if ($rate -gt 0 -and $delta -le ($rate * 2)) {
+                [void]$b.Near.Add(("{0}  host={1} client={2}  ({3:N1} apart, one sync period is {4:N1})" -f
+                    $key, $hv, $cv, $delta, $rate))
+                continue
+            }
+        }
+
         # Large values that moved a little between two snapshots taken moments apart.
         # Named and counted, never dropped - see the header.
         $scale = [Math]::Max([Math]::Abs($hn), [Math]::Abs($cn))
@@ -188,7 +216,11 @@ foreach ($key in $h.Keys) {
 foreach ($key in $c.Keys) {
     if ($h.ContainsKey($key)) { continue }
     $category = ($key -split '\|')[0]
-    if ($category -eq 'meta') { continue }
+    # meta is the snapshot clock and vitalrate is the yardstick the vital rows are
+    # judged with - both are inputs to the comparison, not facts the peers should agree
+    # about. Only the client emits a rate, so leaving it in would report every one as a
+    # client-only difference.
+    if ($category -eq 'meta' -or $category -eq 'vitalrate') { continue }
     $b = Bucket $category
     [void]$b.PeerOnly.Add(("{0} = {1}" -f $key, $c[$key]))
 }
