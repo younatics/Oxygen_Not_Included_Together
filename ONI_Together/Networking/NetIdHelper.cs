@@ -145,6 +145,20 @@ namespace ONI_Together.Networking
 		/// One definition, so that a test asking "would this object move" and the
 		/// code that decides whether to move it cannot answer differently.
 		/// </summary>
+		/// <summary>
+		/// The last workable id computation, as prefab|cell|workableType|baseHash|finalId.
+		/// Diagnostic only - read by the NetId dump so the two peers can be diffed on the
+		/// inputs rather than on the answer.
+		/// </summary>
+		public static string LastIdInputs { get; private set; } = "";
+
+		/// <summary>
+		/// Free-slot walks a client declined, keeping the number both peers computed.
+		/// Non-zero means the collision the walk exists for does happen on clients, and
+		/// is now being reported instead of routed around.
+		/// </summary>
+		public static int ClientWalksSkipped { get; private set; }
+
 		public static int GetDeterministicIdFor(GameObject go, bool quiet = true)
 		{
 			if (go == null) return 0;
@@ -215,6 +229,36 @@ namespace ONI_Together.Networking
 			using var _ = Profiler.Scope();
 
 			LastBaseHash = hash;
+
+			// A client never walks. It takes the number it computed and stops.
+			//
+			// The walk exists so two objects that hash alike on one peer still get
+			// separate ids there, and for a host issuing addresses that is right. On a
+			// client it destroys the only thing that makes the peers agree, because
+			// which slots are occupied is local state and the two peers fill them in
+			// different orders.
+			//
+			// Measured on the animal that has failed this all session, with both peers
+			// printing their inputs side by side for the first time:
+			//
+			//   host    CrabBaby cell 62391  netId 881448091  base 1756521244
+			//   client  CrabBaby cell 62390  netId 0          base  881448091 -> 776236978
+			//
+			// The client's base hash is the host's id exactly. Both peers computed the
+			// same number from the same animal, and then the walk threw it away on the
+			// client because that slot was already taken here - after which the animal
+			// had no address at all. Six rounds went into when the id is computed; this
+			// is the first look at what it is computed from, and the answer was that the
+			// computation already agreed.
+			//
+			// A taken slot on a client is now a collision to report rather than one to
+			// route around: routing around it guarantees the disagreement it is trying
+			// to avoid.
+			if (MultiplayerSession.InSession && MultiplayerSession.IsClient)
+			{
+				ClientWalksSkipped++;
+				return hash;
+			}
 
 			// Not every caller has an identity yet - this runs during registration,
 			// and on that path there is no self to exempt.
@@ -454,6 +498,17 @@ namespace ONI_Together.Networking
 			hash = Mix(hash, StableHash(workable.GetType().Name));
 			hash = Mix(hash, WorkableSalt);
 
+			// Kept so the two peers can be compared on their inputs, not just their
+			// answers.
+			//
+			// Six rounds went into when this is called and none into whether the two
+			// peers compute it from the same things. The base hash is a pure function of
+			// prefab, cell and workable type; the walk below is not, because it probes
+			// this peer's registry. Recording both separates "the peers disagree about
+			// what the object is or where it is" from "they agree and the walk moved
+			// one of them", and those need opposite fixes.
+			LastIdInputs = $"{go.PrefabID()}|{cell}|{workable.GetType().Name}|{hash}";
+
 			// Local uniqueness is not optional, and dropping this probe was a
 			// regression: two iron piles in one cell hashed alike, RegisterExisting
 			// refused the second, and it stayed on screen with no address at all.
@@ -468,6 +523,7 @@ namespace ONI_Together.Networking
 			// object of a prefab collapsed onto one value and the probe ran
 			// constantly.
 			hash = WalkToFreeSlot(go, hash);
+			LastIdInputs += $"|{hash}";
 
 			Note($"Registered workable {go.PrefabID().ToString()} with id: {hash} for workable type {workable.GetType().Name} at cell {cell}");
 			return hash;

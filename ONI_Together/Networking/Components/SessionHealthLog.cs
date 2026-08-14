@@ -388,6 +388,9 @@ namespace ONI_Together.Networking.Components
 				// Prefabs that were addressed late and then converged onto the id both
 				// peers compute. The repair, beside the warning it answers.
 				$"|lazyFixed={NetworkIdentity.LazyAttachmentsRepaired}" +
+				// Free-slot walks a client declined so it keeps the number the host also
+				// computed. Zero on a host by construction.
+				$"|walkSkipped={NetIdHelper.ClientWalksSkipped}" +
 				$"|spawnDup={Packets.World.SpawnPrefabPacket.SpawnsAlreadyHere}" +
 				// Sends dropped because the object had no address, and which packets
 				// they were. The prediction: the client's "arrived carrying NetId 0"

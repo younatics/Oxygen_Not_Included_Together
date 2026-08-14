@@ -197,6 +197,28 @@ namespace ONI_Together.DebugTools.UnitTests
 
                 total++;
                 var identity = go.GetComponent<NetworkIdentity>();
+
+                // Every creature's id inputs, on both peers, so they can be diffed.
+                //
+                // Six rounds have changed when the id is computed and none has compared
+                // what it is computed from. The line is prefab, cell, workable type, the
+                // base hash of those three, and the value after the free-slot walk - so
+                // a peer that disagrees about the object shows a different base hash and
+                // one that agrees but was pushed off shows the same base and a different
+                // final. Those need opposite fixes and have been indistinguishable.
+                //
+                // Emitted for all of them, not only the ones with no id: the animal that
+                // fails is a different one each run, so the comparison has to be able to
+                // look at whichever it turns out to be.
+                int cell = Grid.PosToCell(go);
+                if (Grid.IsValidCell(cell))
+                {
+                    Networking.NetIdHelper.GetDeterministicIdFor(go, quiet: true);
+                    DebugConsole.Log(
+                        $"[IDINPUT] {go.PrefabID()}|{cell}|{(identity == null ? 0 : identity.NetId)}|" +
+                        Networking.NetIdHelper.LastIdInputs);
+                }
+
                 if (identity != null && identity.NetId != 0)
                     continue;
 
