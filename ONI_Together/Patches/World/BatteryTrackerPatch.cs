@@ -70,7 +70,15 @@ namespace ONI_Together.Patches.World
 			if (Game.Instance == null || Grid.WidthInCells == 0)
 				return false;
 
-			if (MultiplayerSession.IsClient && GameClient.State != ClientState.InGame)
+			// IsClientOrReconnecting, not IsClient - and this is the third place today
+			// that distinction has mattered.
+			//
+			// IsClient is false while a client is between sessions, so during a reconnect
+			// this test was skipped entirely and the tracker ran against a half-built
+			// world: the same NullReferenceException this guard was written for, in a
+			// reconnect run, after the guard was supposedly fixed. Stating the condition
+			// positively was right and still read the wrong flag.
+			if (MultiplayerSession.IsClientOrReconnecting && GameClient.State != ClientState.InGame)
 				return false;
 
 			return true;
