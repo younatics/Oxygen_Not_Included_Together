@@ -91,6 +91,13 @@ namespace ONI_Together.Networking.Packets.Animation
 			}
 		}
 
+		/// <summary>
+		/// Dig-start notices refused because the ground had already been dug here.
+		/// Non-zero is normal on a client: the two peers do not reach the end of a dig
+		/// at the same instant. Each one is a client shutdown that did not happen.
+		/// </summary>
+		public static int DiggablesAlreadyGone { get; private set; }
+
 		private bool TryApply(bool logFailure = false)
 		{
 			using var _ = Profiler.Scope();
@@ -141,6 +148,44 @@ namespace ONI_Together.Networking.Packets.Animation
 					DebugConsole.LogWarning("Could not find workable of type " + WorkableType + " on " + workableGO.GetProperName());
 				}
 				return false;
+			}
+
+			// A dig whose ground is already gone kills the client.
+			//
+			// This is host-driven replay: the client's own duplicants start nothing, so
+			// every StartWork here comes from the host saying somebody began a job. A
+			// Diggable stops being valid the moment its cell is dug out, and the two
+			// peers do not reach that moment together - so the notice regularly arrives
+			// for ground that is no longer there.
+			//
+			// Workable.StartWork then calls Diggable.GetConversationTopic, which
+			// dereferences the target element and throws. The try/catch below cannot help:
+			// Klei catches it first, inside StartWork, and logs it at ERROR level - and
+			// this game shuts itself down shortly after an error of that kind. Two live
+			// sessions ended exactly that way, one 3.5 seconds after the exception and
+			// one 0.7, with the same stack both times and a different duplicant each
+			// time. The second log settles the order: OnApplicationQuit is written
+			// before the disconnect, so the game died and took the connection with it,
+			// not the reverse.
+			//
+			// Asking whether the element is still there is the whole check. It costs a
+			// lookup and it is the difference between a skipped animation and a lost
+			// session.
+			if (workable is Diggable diggable)
+			{
+				int digCell = diggable.GetCell();
+				if (!Grid.IsValidCell(digCell) || !Grid.Solid[digCell] || diggable.GetTargetElement() == null)
+				{
+					DiggablesAlreadyGone++;
+					if (logFailure)
+					{
+						DebugConsole.LogWarning(
+							$"[StandardWorker_WorkingState_Packet] skipping dig start for {worker.name} at " +
+							$"cell {digCell} - the ground is already gone here, and starting it would " +
+							"throw inside the game and take the client down with it");
+					}
+					return false;
+				}
 			}
 
 			try

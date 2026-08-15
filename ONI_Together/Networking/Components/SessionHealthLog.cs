@@ -518,6 +518,10 @@ namespace ONI_Together.Networking.Components
 				$" far={NetworkIdentity.AdoptMissFar}]" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
 				$"|instRepeat={Packets.InstantiationsPacket.AlreadyHere}" +
+				// Dig-start notices refused because the ground was already gone. Each one
+				// is a client shutdown that did not happen.
+				$"|digGone={Packets.Animation.StandardWorker_WorkingState_Packet.DiggablesAlreadyGone}" +
+				$"|cfgRename={Packets.World.BuildingConfigPacket.RenamesRefusedByCell}" +
 				// Announcements held back waiting for this peer's own copy, and how they
 				// ended. If instLate stays near zero the wait buys nothing and should go.
 				$"|instHeld={Packets.InstantiationsPacket.DeferredCount}" +

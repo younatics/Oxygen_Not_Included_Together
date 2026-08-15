@@ -258,6 +258,31 @@ namespace ONI_Together.Networking.Packets.Tools.Build
             if (builtItem == null)
             {
                 OrdersThatBuiltNothing++;
+
+                // Why the game refused, not only that it did.
+                //
+                // Live play produced three of these on the host and one on the client,
+                // all WireBridgeHighWattage, and the message could not say more than
+                // "nothing was built" - which is where the last investigation of this
+                // stalled. TryPlace returns null for several different reasons and they
+                // need different fixes, so the two checks it consults are asked directly
+                // and reported.
+                string why;
+                try
+                {
+                    bool validBuild = def.IsValidBuildLocation(null, pos, Orientation);
+                    bool validPlace = def.IsValidPlaceLocation(null, pos, Orientation, out string placeReason);
+                    why = validBuild
+                        ? (validPlace ? "both location checks passed, so TryPlace refused for another reason"
+                                      : $"place location invalid: {placeReason}")
+                        : "build location invalid";
+                }
+                catch (System.Exception ex)
+                {
+                    why = $"could not ask why ({ex.GetType().Name})";
+                }
+
+                ThrottledLog.Warn($"[BuildPacket] {PrefabID} at cell {Cell}: {why}");
                 ThrottledLog.Warn(
                     $"[BuildPacket] {PrefabID} at cell {Cell}: the order was applied and " +
                     "produced no building - this peer is now missing what the other one has");

@@ -1,4 +1,4 @@
-using ONI_Together.Networking.Components;
+﻿using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using ONI_Together.Networking.Packets.World.Handlers;
 using ONI_Together.DebugTools;
@@ -23,6 +23,13 @@ namespace ONI_Together.Networking.Packets.World
 
 	public class BuildingConfigPacket : IPacket
 	{
+		/// <summary>
+		/// Cell-fallback renames refused because the building there already answers to a
+		/// different number. Each one is a pair of objects that would have started
+		/// meaning the same thing on this peer and different things across the session.
+		/// </summary>
+		public static int RenamesRefusedByCell { get; private set; }
+
 		private ulong Sender; // Who triggered this
 		public int NetId;
 		public int Cell; // Deterministic location-based identification
@@ -100,9 +107,33 @@ namespace ONI_Together.Networking.Packets.World
 					// For multi-layered buildings, we might need a more specific search, but usually
 					// we just look for BuildingComplete components.
 					GameObject buildingGO = Grid.Objects[Cell, (int)ObjectLayer.Building];
+
+					// A building that already answers to a different number is not this
+					// one, and position is not a reason to rename it.
+					//
+					// The same fallback in AssignmentPacket did this and the cost showed
+					// up in live play: eight removals refused on a client because the id
+					// the host meant resolved to something else here - five of them a
+					// SuitLocker, the rest a Ladder and Tiles. The refusals are the
+					// safety net doing its job, and what it is catching is a rename that
+					// happened earlier, here or somewhere like here.
+					//
+					// Once one number means two things the two peers cannot agree about
+					// either object again, so this is checked before the rename rather
+					// than repaired afterwards.
 					if (buildingGO != null)
 					{
 						identity = buildingGO.GetComponent<NetworkIdentity>();
+						if (identity != null && identity.NetId != 0 && identity.NetId != NetId)
+						{
+							RenamesRefusedByCell++;
+							DebugConsole.LogWarning(
+								$"[BuildingConfigPacket] not renaming '{buildingGO.PrefabID()}' at cell {Cell} " +
+								$"from NetId {identity.NetId} to {NetId} - it is already addressed as " +
+								"something else, so this packet is about a different object");
+							return;
+						}
+
 						if (identity)
 						{
 							identity.OverrideNetId(NetId); // Override properly from the host
