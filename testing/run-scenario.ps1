@@ -422,6 +422,27 @@ Step 'pausing both boxes so the two snapshots describe the same moment'
 # So the comparison was measuring the length of its own pause sequence. Stopping the
 # client first inverts it: the client freezes while the host is still sending, so the
 # last corrections it applies are the host's own final values.
+# How much each peer's own containers move while the colony runs, before anything is
+# frozen.
+#
+# Three containers of 953 disagree at the end of every long run and the staleness dump
+# ruled out the easy answer - all 1,396 syncers were last corrected at the same instant,
+# so the three are not stale. What differs is where the mass sits rather than how much:
+# one building holds 1.0 and 2.0 kg of a prefab across two containers on the host and 0
+# and 3.0 on the client, the same three kilograms distributed differently.
+#
+# That is a question about each peer's own building logic, and it cannot be asked of a
+# paused colony - sample one twice and it says the same thing twice. Asked here, while
+# both are still running, it needs no cross-peer comparison at all: if one peer's
+# containers move between two samples and the other's do not, that names the side.
+Step 'sampling container churn on both boxes while they are still running'
+Send-Host 'churn'
+Send-Peer 'churn'
+Start-Sleep -Seconds 4
+Send-Host 'churn-diff'
+Send-Peer 'churn-diff'
+Start-Sleep -Seconds 2
+
 $mark = HostLogLines
 Send-Peer 'pause'
 Send-Host 'pause'

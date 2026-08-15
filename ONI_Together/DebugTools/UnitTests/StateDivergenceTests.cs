@@ -281,6 +281,14 @@ namespace ONI_Together.DebugTools.UnitTests
             }
         }
 
+        /// <summary>
+        /// The same summary the divergence dump uses, exposed so the churn command
+        /// describes a container exactly the way the comparison does. Two encoders for
+        /// one thing is how a reader and a writer drift apart, which this file has
+        /// already paid for once.
+        /// </summary>
+        internal static string DescribeStorageForChurn(Misc.Variant v) => Describe(v);
+
         private static string Describe(Misc.Variant v)
         {
             switch (v.Type)

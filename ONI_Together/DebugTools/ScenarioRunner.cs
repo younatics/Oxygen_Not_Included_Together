@@ -329,6 +329,38 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                // Two samples of container contents taken while the colony runs, so a
+                // difference between the peers can be told from a container that is
+                // simply busy.
+                //
+                // Three containers of 953 disagree at the end of every long run, and the
+                // staleness dump ruled out the easy explanation: all 1,396 syncers were
+                // last corrected at the same instant, so the three are not stale. The
+                // masses say the rest - one building holds 1.0 and 2.0 kg of a prefab
+                // across two containers on the host and 0 and 3.0 on the client, the same
+                // three kilograms distributed differently - which points at each peer's
+                // own building logic moving items between corrections.
+                //
+                // A paused colony cannot answer that: sample it twice and it says the
+                // same thing twice, which is why the obvious "dump again" idea was
+                // retired. This samples while the colony is running, and it needs no
+                // cross-peer comparison at all - if a peer's own containers move between
+                // two samples three seconds apart, that peer is redistributing, and the
+                // two peers' churn counts can be read side by side.
+                case "churn":
+                {
+                    int watched = CaptureStorageChurn();
+                    DebugConsole.Log($"{Tag} OK churn :: captured {watched} container(s)");
+                    break;
+                }
+
+                case "churn-diff":
+                {
+                    int moved = ReportStorageChurn(out int watched);
+                    DebugConsole.Log($"{Tag} OK churn-diff :: {moved} of {watched} container(s) changed");
+                    break;
+                }
+
                 case "coverage":
                 {
                     int reported = DumpSyncCoverage();
@@ -1799,6 +1831,73 @@ namespace ONI_Together.DebugTools
 						rows.Add($"conduitsent|{key}|sent|1");
 				}
 			}
+		}
+
+		/// <summary>
+		/// Contents per container at the moment of capture, keyed by NetId and container.
+		/// Held between the two commands, which is why it is static.
+		/// </summary>
+		private static readonly Dictionary<string, string> _churnSnapshot =
+			new Dictionary<string, string>();
+
+		private static int CaptureStorageChurn()
+		{
+			_churnSnapshot.Clear();
+			foreach (var pair in SampleAllContainers())
+				_churnSnapshot[pair.Key] = pair.Value;
+			return _churnSnapshot.Count;
+		}
+
+		private static int ReportStorageChurn(out int watched)
+		{
+			var now = SampleAllContainers();
+			watched = now.Count;
+
+			int moved = 0;
+			foreach (var pair in now)
+			{
+				if (!_churnSnapshot.TryGetValue(pair.Key, out string before)) continue;
+				if (before == pair.Value) continue;
+
+				moved++;
+				if (moved <= 12)
+					DebugConsole.Log($"[CHURN] {pair.Key} :: {before} -> {pair.Value}");
+			}
+			return moved;
+		}
+
+		/// <summary>
+		/// Every replicated container's contents as one string each. The same encoder the
+		/// state dump uses, so a churn reading and a divergence reading describe the same
+		/// thing and cannot disagree about what a container holds.
+		/// </summary>
+		private static Dictionary<string, string> SampleAllContainers()
+		{
+			var result = new Dictionary<string, string>();
+
+			foreach (var syncer in UnityEngine.Object.FindObjectsByType<
+						 Networking.Components.StructureStateSyncers.StorageStateSyncer>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (syncer == null || syncer.gameObject == null) continue;
+
+				var identity = syncer.gameObject.GetExistingNetIdentity();
+				if (identity == null || identity.NetId == 0) continue;
+
+				Dictionary<string, Misc.Variant> optional;
+				try { syncer.SampleStateForDiagnostics(out optional); }
+				catch { continue; }
+				if (optional == null) continue;
+
+				foreach (var kvp in optional)
+				{
+					if (!kvp.Key.EndsWith("stor", StringComparison.Ordinal)) continue;
+					result[$"{identity.NetId}|{kvp.Key}"] =
+						UnitTests.StateDivergenceTests.DescribeStorageForChurn(kvp.Value);
+				}
+			}
+
+			return result;
 		}
 
 		/// <summary>Where a duplicant is standing, or the middle of the world.</summary>

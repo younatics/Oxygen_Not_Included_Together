@@ -412,11 +412,22 @@ What is still open, with what is known about each:
    between two containers of one building. Both peers emit the same container
    keys, so the index mapping is not the problem.
 
-   That leaves the client's own building logic moving items between its
-   containers in the window between corrections. Deciding it needs the contents
-   sampled twice while the colony runs, not while it is paused - a paused colony
-   produces the same numbers twice, which is why the second-dump idea recorded
-   here before does not work.
+   **Settled.** A `churn` command samples every container, waits four seconds of
+   running colony, and samples again - which needs no cross-peer comparison at
+   all, because a peer that redistributes shows it against itself. The host moved
+   106 of 598 containers in four seconds and the client moved 111 of 598: the
+   same rate, on both sides. And the client's log caught the residue's exact
+   shape in the act, one building shifting 2.0 kg from its first container to its
+   second inside that window.
+
+   So three containers of 953 disagreeing at a frozen instant is not a defect. It
+   is the race between how fast containers change and how fast corrections
+   arrive, and at any instant a few are mid-move. The number to watch is the
+   churn rate, which the two peers now report side by side; a divergence would
+   show as those rates differing, not as a handful of rows in a snapshot.
+
+   The idea recorded here earlier - dump twice while paused - does not work and
+   is retired: a paused colony says the same thing both times.
 
 4. **The chore-waiting flag, by design.** 64 rows, every one a job the host's
    duplicants have claimed and the client's cannot, because a client runs no
