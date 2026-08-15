@@ -254,7 +254,9 @@ namespace ONI_Together.Networking
 			// A taken slot on a client is now a collision to report rather than one to
 			// route around: routing around it guarantees the disagreement it is trying
 			// to avoid.
-			if (MultiplayerSession.InSession && MultiplayerSession.IsClient)
+			// Reconnect included, for the same reason the preview marking is: walking to
+			// a free slot invents an address, and the host is the only peer allowed to.
+			if (MultiplayerSession.IsClientOrReconnecting)
 			{
 				ClientWalksSkipped++;
 				return hash;

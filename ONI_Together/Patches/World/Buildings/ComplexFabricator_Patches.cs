@@ -78,7 +78,9 @@ namespace ONI_Together.Patches.World.Buildings
 			{
 				using var _ = Profiler.Scope();
 
-				if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+				// Reconnect included: a client fabricator that keeps working through the
+				// gap makes products the host also makes, and both survive.
+				if (!MultiplayerSession.IsClientOrReconnecting)
 					return true;
 
 				ClientOrdersBlocked++;
@@ -114,7 +116,9 @@ namespace ONI_Together.Patches.World.Buildings
 			{
 				using var _ = Profiler.Scope();
 
-				if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+				// Reconnect included: a client fabricator that keeps working through the
+				// gap makes products the host also makes, and both survive.
+				if (!MultiplayerSession.IsClientOrReconnecting)
 					return true;
 
 				ClientIngredientDropsBlocked++;
@@ -161,7 +165,9 @@ namespace ONI_Together.Patches.World.Buildings
 			{
 				using var _ = Profiler.Scope();
 
-				if (!MultiplayerSession.InSession || !MultiplayerSession.IsClient)
+				// Reconnect included: a client fabricator that keeps working through the
+				// gap makes products the host also makes, and both survive.
+				if (!MultiplayerSession.IsClientOrReconnecting)
 					return true;
 
 				// The one call that must still run: the handler applying the host's

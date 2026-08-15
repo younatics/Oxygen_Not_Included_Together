@@ -39,6 +39,29 @@ namespace ONI_Together.Networking
 
 		public static bool IsHostInSession => IsHost && InSession;
 
+		/// <summary>
+		/// A client, including the gap in the middle of a reconnect.
+		///
+		/// IsClient is false while a client is between sessions, and several guards read
+		/// that as "playing alone, so do the work locally". A reconnect is not playing
+		/// alone. During that window a client hatched its own eggs and ended a run
+		/// holding 81 critters against the host's 77 - the host's babies arrived by
+		/// announcement and the client had already made its own, nine milliseconds apart
+		/// in the log.
+		///
+		/// The same gap reaches further than eggs. The guards that mark a drawn object as
+		/// a preview, that stop a client walking to a free id, and that stop a client
+		/// fabricator making its own products are all keyed the same way, and all three
+		/// leave something permanent behind: an object the host never named, or an id it
+		/// never issued.
+		///
+		/// A cached connection is what tells the two cases apart, and it is already what
+		/// the reconnect path uses to decide whether to rejoin once the world has
+		/// loaded. A peer holding one is coming back; a peer without one is on its own.
+		/// </summary>
+		public static bool IsClientOrReconnecting =>
+			IsClient || (!IsHost && GameClient.HasCachedConnection());
+
 		public static readonly Dictionary<ulong, PlayerCursor> PlayerCursors = new Dictionary<ulong, PlayerCursor>();
 
 		public static readonly Dictionary<ulong, string> KnownPlayerNames = new Dictionary<ulong, string>();

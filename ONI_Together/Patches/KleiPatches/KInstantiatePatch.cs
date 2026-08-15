@@ -34,7 +34,10 @@ public static class KInstantiatePatch
 		// issued is what makes the peers disagree - the client held objects the
 		// host had no name for, and every packet about the real one missed.
 		// The preview adopts the host's id when it arrives.
-		if (MultiplayerSession.IsClient && MultiplayerSession.InSession)
+		// Reconnect included. A client between sessions that is coming back must still
+		// not mint ids for what it draws: an id the host never issued is the exact thing
+		// this marking exists to prevent, and a reconnect is when a client draws most.
+		if (MultiplayerSession.IsClientOrReconnecting)
 		{
 			_nextIsClientPreview = true;
 
