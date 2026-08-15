@@ -339,6 +339,13 @@ namespace ONI_Together.Networking.Components
 				$"|prioApplied={StructureStateSyncers.StructureSyncerBase.PrioritiesApplied}" +
 				$"|artApplied={StructureStateSyncers.StructureSyncerBase.ArtStagesApplied}" +
 				$"|recipeApplied={StructureStateSyncers.StructureSyncerBase.RecipeQueuesApplied}" +
+				// Wires this client had to put back into the electrical network. The cause
+				// of them being left out is still open; this is the invariant being held
+				// while it stays open, and the count is what says whether it is doing
+				// anything. Zero here with the circuit rows also gone means the wires
+				// joined on their own that run, not that this worked.
+				$"|wireFixed={WireNetworkRepair.WiresReconnected}" +
+				$"|wireSweeps={WireNetworkRepair.RepairSweeps}" +
 				// Buildings holding more than one container - fabricators have three.
 				// Only the first was ever replicated, which is why fabricators were the
 				// last containers still disagreeing.
