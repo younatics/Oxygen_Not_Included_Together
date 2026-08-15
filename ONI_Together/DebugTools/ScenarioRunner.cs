@@ -287,6 +287,81 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                // Answer, on this peer, the question the replication filter refuses to
+                // guess at: does building this prefab from its name survive?
+                //
+                // NetworkIdentity.NeedsReplication turns plants down, so a Wheezewort a
+                // duplicant sowed during a session exists on the host and never on the
+                // client - measured, host 19 ColdBreathers against the client's 18, the
+                // missing one exactly the cell that was sown. Announcing it is the obvious
+                // fix and the obvious fix is what killed a client twice: announcing asks
+                // the other peer to instantiate the prefab, and a duplicant cannot survive
+                // that, and neither could a BalloonStand, whose OnSpawn threw and took the
+                // game down 1.4 seconds later.
+                //
+                // That file's rule is one type at a time with the rebuild path checked
+                // first. This is the check. It instantiates and immediately destroys, and
+                // says what happened - so the answer arrives from a scenario run that can
+                // afford to lose a client rather than from a player's session.
+                // Two questions, not one, and the first version of this asked them
+                // together and got an answer that meant neither.
+                //
+                // "spawn-probe ColdBreather" instantiated the prefab and destroyed it
+                // immediately, reported "without throwing", and the game log showed an
+                // ASSERT - "coldbreather is trying to release a handle that was already
+                // released" - followed by an ERROR-level ArgumentOutOfRangeException. The
+                // catch here never fired because Klei reports its own asserts internally;
+                // that part was expected and written down beforehand.
+                //
+                // What was not expected is that the wording points at the teardown, not
+                // the build. Releasing a handle twice is what destroying does. So the
+                // probe conflated "this prefab can be built on a peer that did not grow
+                // it" with "it can be built and then torn down in the same frame", and
+                // only the first question is the one the replication filter needs
+                // answered.
+                //
+                // Pass keep as the second argument to leave it standing. The colony is a
+                // throwaway clone, so a stray plant costs nothing next to an answer that
+                // means two things.
+                case "spawn-probe":
+                {
+                    if (parts.Length < 2) throw new InvalidOperationException("spawn-probe <prefabName> [keep]");
+                    string prefabName = parts[1];
+                    bool keep = parts.Length > 2 && parts[2] == "keep";
+
+                    var prefab = Assets.GetPrefab(prefabName);
+                    if (prefab == null)
+                    {
+                        DebugConsole.Log($"{Tag} OK spawn-probe :: '{prefabName}' no such prefab");
+                        break;
+                    }
+
+                    GameObject built = null;
+                    try
+                    {
+                        built = UnityEngine.Object.Instantiate(prefab);
+                        built.SetActive(true);
+                        DebugConsole.Log(
+                            $"{Tag} OK spawn-probe :: '{prefabName}' instantiated and spawned " +
+                            $"without throwing (keep={keep})");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Caught here says the throw was reachable. It does not say the
+                        // game survives it - Klei logs its own asserts at ERROR from
+                        // inside, and an ERROR closes the process whatever this does with
+                        // the exception. The run's error gate is the other half of the
+                        // answer.
+                        DebugConsole.Log(
+                            $"{Tag} OK spawn-probe :: '{prefabName}' threw {ex.GetType().Name}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        if (built != null && !keep) UnityEngine.Object.Destroy(built);
+                    }
+                    break;
+                }
+
                 case "fabricate":
                 {
                     int count = parts.Length > 1 ? int.Parse(parts[1]) : 2;
