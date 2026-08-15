@@ -323,6 +323,22 @@ namespace ONI_Together.Networking.Components
 				// because anything changed. Zero on a client. The only thing that can
 				// repair a container both peers have stopped touching.
 				$"|resyncs={StructureStateSyncers.StructureSyncerBase.ResyncsForced}" +
+				// The same clock for automation, which did not have one. A logic signal
+				// sits unchanged for hours, so "nothing changed" is the normal state of a
+				// working circuit and a delta-only path can never correct a peer holding
+				// the opposite bit. Zero here beside a non-zero resyncs means this went in
+				// and is not running.
+				$"|logicResyncs={LogicStateSyncer.LogicResyncs}" +
+				// What the periodic state had to correct that event interception missed.
+				// Only a client can be non-zero here, and each one is a field that was
+				// wrong on this peer until a keyframe arrived - a priority a player set, a
+				// finished artwork, a fabricator order. Zero across a session where the
+				// events all landed is the good case; the number existing at all is what
+				// tells the two apart, which is the whole reason the fields moved onto the
+				// periodic path.
+				$"|prioApplied={StructureStateSyncers.StructureSyncerBase.PrioritiesApplied}" +
+				$"|artApplied={StructureStateSyncers.StructureSyncerBase.ArtStagesApplied}" +
+				$"|recipeApplied={StructureStateSyncers.StructureSyncerBase.RecipeQueuesApplied}" +
 				// Buildings holding more than one container - fabricators have three.
 				// Only the first was ever replicated, which is why fabricators were the
 				// last containers still disagreeing.

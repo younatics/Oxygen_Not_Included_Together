@@ -30,12 +30,40 @@ namespace ONI_Together.Networking.Components
         // Viewport scratch buffer
         private readonly HashSet<ulong> _viewportScratch = new();
 
+        /// <summary>
+        /// How often a logic building states itself even though nothing changed.
+        ///
+        /// This was delta-only, and the half of the StructureSyncerBase fix that arrived
+        /// here was the wrong half. The comment further down explains why the record is
+        /// only updated when the packet was really delivered - that came across. The
+        /// keyframe did not, and it was the part that repairs a peer already wrong.
+        ///
+        /// The failure it leaves open is the one measured on storage: two peers disagree
+        /// once, the host's value never changes again so it never speaks again, and the
+        /// client keeps the wrong value for the rest of the session. Logic is a worse
+        /// place for it than storage. A signal is a single bit that stays put for hours,
+        /// so "nothing changed" is the normal state of a working circuit, and a client
+        /// holding the opposite bit sees doors that will not open and pumps that will not
+        /// run with nothing at all to indicate why.
+        ///
+        /// Same interval and same phase spread as the structure syncer, for the same
+        /// reason: a keyframe is one small packet, and the alternative is a divergence
+        /// nobody is looking at.
+        /// </summary>
+        private const float RESYNC_INTERVAL = 15f;
+
+        /// <summary>Logic sends that happened only because the keyframe came due.</summary>
+        public static int LogicResyncs { get; private set; }
+
         private class BuildingEntry
         {
             public GameObject go;
             public Variant lastValue;
             public bool lastActive;
             public Dictionary<string, Variant> lastOptional;
+
+            /// <summary>When this building next owes a keyframe whatever it thinks changed.</summary>
+            public float nextResync;
         }
 
         public override void OnSpawn()
@@ -94,9 +122,12 @@ namespace ONI_Together.Networking.Components
                 if (!SampleBuilding(entry.go, out var value, out var active, out var optional))
                     continue;
 
+                bool dueForResync = Time.unscaledTime >= entry.nextResync;
+
                 bool changed = LogicStatePacket.VariantValueChanged(value, entry.lastValue)
                     || active != entry.lastActive
-                    || LogicStatePacket.OptionalValuesChanged(optional, entry.lastOptional);
+                    || LogicStatePacket.OptionalValuesChanged(optional, entry.lastOptional)
+                    || dueForResync;
 
                 if (!changed)
                     continue;
@@ -114,7 +145,14 @@ namespace ONI_Together.Networking.Components
 
                 int delivered = 0;
 
-                if (WorldStateSyncer.Instance != null)
+                // A keyframe ignores the viewport, which is the whole point of it.
+                //
+                // Culling deltas is right - nobody needs a signal change for a circuit
+                // they cannot see - but it also means the divergences that survive are
+                // exactly the ones nobody looked at. Sending the keyframe only to
+                // watchers would leave the repair waiting on the same condition that
+                // caused the damage.
+                if (!dueForResync && WorldStateSyncer.Instance != null)
                 {
                     WorldStateSyncer.Instance.GetClientsViewingCell(cell, _viewportScratch, 2);
                     foreach (var playerId in _viewportScratch)
@@ -140,6 +178,16 @@ namespace ONI_Together.Networking.Components
                     entry.lastValue = value;
                     entry.lastActive = active;
                     entry.lastOptional = optional;
+
+                    // The keyframe clock advances on delivery, for the same reason the
+                    // record above does. One that came due while nobody was looking has
+                    // repaired nothing, and rescheduling it would mean another fifteen
+                    // seconds of a wrong signal after the client scrolls over.
+                    if (dueForResync)
+                    {
+                        entry.nextResync = Time.unscaledTime + RESYNC_INTERVAL;
+                        LogicResyncs++;
+                    }
                 }
             }
 
@@ -297,6 +345,12 @@ namespace ONI_Together.Networking.Components
                 lastValue = default,
                 lastActive = false,
                 lastOptional = null,
+
+                // Spread by id rather than at random, so a colony's worth of automation
+                // does not come due on one frame. Deterministic, and the same shape the
+                // structure syncer uses.
+                nextResync = Time.unscaledTime + INIT_DELAY
+                             + ((System.Math.Abs(netId) % 1024) / 1024f) * RESYNC_INTERVAL,
             };
         }
 

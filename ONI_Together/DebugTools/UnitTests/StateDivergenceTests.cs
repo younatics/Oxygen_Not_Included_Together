@@ -54,6 +54,26 @@ namespace ONI_Together.DebugTools.UnitTests
                 // How long ago a packet last set this syncer's state. Emitted as its own
                 // category so it qualifies the rows above without being compared - the
                 // host applies nothing and would read -1 for everything.
+                // The shared fields, from the object rather than from the packet.
+                //
+                // These are sampled centrally now, so they ride on every structure's
+                // state - and the comparison has to see them or the change cannot be
+                // judged. Read off the component here rather than trusting the syncer's
+                // own copy: the point is whether the two peers' buildings agree, not
+                // whether their last packets did.
+                var go = syncer.gameObject;
+                if (go.TryGetComponent<Prioritizable>(out var prio))
+                {
+                    var p = prio.GetMasterPriority();
+                    rows.Add($"[STATE] {identity.NetId}|{syncer.GetType().Name}|_prio|" +
+                             $"{(int)p.priority_class}:{p.priority_value}");
+                }
+                if (go.TryGetComponent<Artable>(out var artable))
+                {
+                    rows.Add($"[STATE] {identity.NetId}|{syncer.GetType().Name}|_art|" +
+                             $"{artable.CurrentStage ?? "none"}");
+                }
+
                 float age = syncer.SecondsSinceApplied;
                 if (age >= 0f)
                 {
