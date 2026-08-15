@@ -23,6 +23,13 @@ namespace ONI_Together.Networking.Packets.Handshake
 		public int ProtocolVersion;
 		public int PacketRegistryFingerprint;
 		public string ModVersion = string.Empty;
+
+		/// <summary>
+		/// The sender's build identity. Carried so a mismatch can be named in one line
+		/// instead of found by comparing file hashes by hand, which is how the last one
+		/// was found and it cost an afternoon.
+		/// </summary>
+		public string BuildId = string.Empty;
 		public bool ProtocolAccepted = true;
 		public string ProtocolFailureReason = string.Empty;
 
@@ -56,6 +63,7 @@ namespace ONI_Together.Networking.Packets.Handshake
 			writer.Write(ProtocolVersion);
 			writer.Write(PacketRegistryFingerprint);
 			writer.Write(ModVersion ?? string.Empty);
+			writer.Write(BuildId ?? string.Empty);
 			writer.Write(ProtocolAccepted);
 			writer.Write(ProtocolFailureReason ?? string.Empty);
 		}
@@ -90,6 +98,7 @@ namespace ONI_Together.Networking.Packets.Handshake
 			ProtocolVersion = reader.ReadInt32();
 			PacketRegistryFingerprint = reader.ReadInt32();
 			ModVersion = reader.ReadString();
+			BuildId = reader.ReadString();
 			ProtocolAccepted = reader.ReadBoolean();
 			ProtocolFailureReason = reader.ReadString();
 			HasProtocolMetadata = true;
@@ -176,6 +185,7 @@ namespace ONI_Together.Networking.Packets.Handshake
 			ProtocolVersion = ProtocolCompatibility.CurrentProtocolVersion;
 			PacketRegistryFingerprint = ProtocolCompatibility.PacketFingerprint;
 			ModVersion = ProtocolCompatibility.ModVersion;
+			BuildId = ProtocolCompatibility.BuildId;
 			HasProtocolMetadata = true;
 		}
 
@@ -195,10 +205,26 @@ namespace ONI_Together.Networking.Packets.Handshake
 				return false;
 			}
 
-			if (!ProtocolCompatibility.Matches(ProtocolVersion, PacketRegistryFingerprint))
+			if (!ProtocolCompatibility.Matches(ProtocolVersion, PacketRegistryFingerprint, ModVersion))
 			{
 				reason = ProtocolCompatibility.BuildMismatchReason(ProtocolVersion, PacketRegistryFingerprint, ModVersion, true);
 				return false;
+			}
+
+			// Accepted, but say so if the two builds are not the same one.
+			//
+			// Same reasoning as on the client: two people who each compiled the same
+			// release differ here legitimately, so this is a warning and not a refusal.
+			// A pair that disagrees about the world should be read as a build difference
+			// before anyone goes looking for a replication defect - which is the mistake
+			// this line exists to prevent, and it has already cost an afternoon once.
+			if (!string.IsNullOrEmpty(BuildId) && BuildId != ProtocolCompatibility.BuildId)
+			{
+				DebugConsole.LogWarning(
+					$"[Protocol] client {ClientId} reports mod version {ModVersion}, the same " +
+					$"as this host, but a different build - host {ProtocolCompatibility.BuildId}, " +
+					$"client {BuildId}. The session will run and any disagreement about the " +
+					"world should be read as a build difference first.");
 			}
 
 			reason = string.Empty;

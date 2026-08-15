@@ -413,6 +413,37 @@ namespace ONI_Together.Networking
 				return false;
 			}
 
+			// The host's mod version, which this side never looked at either.
+			//
+			// The two peers can differ by weeks of code and share a packet registry, and
+			// then they disagree about the world in ways that look exactly like the sync
+			// defects this mod exists to fix. The host already refuses such a client;
+			// without this, a client would still join a host it cannot agree with.
+			if (!string.IsNullOrEmpty(packet.ModVersion)
+				&& packet.ModVersion != ProtocolCompatibility.ModVersion)
+			{
+				message = string.Format(STRINGS.UI.PROTOCOL.MOD_VERSION_MISMATCH,
+					ProtocolCompatibility.ModVersion, packet.ModVersion);
+				return false;
+			}
+
+			// Same version, different build - said out loud rather than refused.
+			//
+			// Two people who each compiled the same release get different build ids, and
+			// refusing that would stop anyone testing a local build against a friend on
+			// the Workshop. What it must not do is stay silent: a mismatched pair
+			// produces symptoms indistinguishable from a replication bug, and the last
+			// one took an afternoon to find by comparing file hashes by hand.
+			if (!string.IsNullOrEmpty(packet.BuildId)
+				&& packet.BuildId != ProtocolCompatibility.BuildId)
+			{
+				DebugConsole.LogWarning(
+					$"[Protocol] both peers report mod version {ProtocolCompatibility.ModVersion} " +
+					$"but different builds - this peer {ProtocolCompatibility.BuildId}, host " +
+					$"{packet.BuildId}. The session will run and any disagreement about the " +
+					"world should be read as a build difference first.");
+			}
+
 			return true;
 		}
 		static void BackToMainMenu()

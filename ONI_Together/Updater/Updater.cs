@@ -168,12 +168,35 @@ namespace ONI_Together.ModUpdater
             return version;
         }
 
+        /// <summary>
+        /// Says that this install is behind the Workshop, in the log.
+        ///
+        /// It used to do nothing at all. The body was a dialog call commented out - it
+        /// names STRINGS.UI.MP_SCREEN.UPDATER entries that do not exist, so it could not
+        /// have compiled - beside a URL variable pointing at Workshop item 2018291283,
+        /// which is a different mod entirely, assigned and never read. The compiler said
+        /// as much on every build: "mod_updater_workshop_url assigned but never used".
+        ///
+        /// So the whole update check ran, decided this install was out of date, and told
+        /// nobody. That is worse than not checking, because the counters and the log both
+        /// suggest the question is handled.
+        ///
+        /// A dialog is deliberately not being rebuilt here. Steam updates a subscribed
+        /// mod on its own, so the case a player actually hits is not "you should update"
+        /// but "you and your friend are on different builds" - and that is now answered
+        /// where it matters, in the connection handshake, which refuses a mod version
+        /// mismatch and names both builds when the versions match and the binaries do
+        /// not.
+        /// </summary>
         public static void OnUpdateAvailable()
         {
             using var _ = Profiler.Scope();
 
-            string mod_updater_workshop_url = "https://steamcommunity.com/sharedfiles/filedetails/?id=2018291283";
-           // DialogUtil.CreateConfirmDialogFrontend(STRINGS.UI.MP_SCREEN.UPDATER.MOD_UPDATE_TITLE, string.Format(STRINGS.UI.MP_SCREEN.UPDATER.MOD_UPDATE_TEXT, WORKSHOP_VERSION, CURRENT_VERSION, mod_updater_workshop_url));
+            DebugConsole.LogWarning(
+                $"[Updater] this install is behind the Workshop - local {CURRENT_VERSION}, " +
+                $"Workshop {WORKSHOP_VERSION}. Steam updates a subscribed mod by itself; if " +
+                "this persists the mod is probably installed from somewhere else. Joining a " +
+                "peer on the newer version will be refused at the handshake.");
         }
     }
 }
