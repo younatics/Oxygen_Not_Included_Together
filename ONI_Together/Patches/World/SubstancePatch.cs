@@ -85,12 +85,49 @@ namespace ONI_Together.Patches.World
 			else ClientSpawnedLocally++;
 		}
 
+		/// <summary>
+		/// Client matter the host did not ask for, removed after the fact.
+		///
+		/// The host owns loose matter, and the client makes its own anyway - that is the
+		/// last category the two peers disagree about. Refusing the spawn outright was
+		/// tried and produced 12,124 client errors, because the game's own callers
+		/// dereference what SpawnResource hands back. Letting it be created and removing
+		/// it a moment later gives every caller a real object and is the pattern
+		/// SpawnPrefabPacket already uses when a pickup arrived before its item.
+		///
+		/// The mass is not lost in the case that matters: the host's simulation makes the
+		/// same matter and announces it, and the client builds it from that with the
+		/// host's name on it. Where the two sims put matter in different places - about
+		/// seven of sixteen unpaired objects had no host counterpart within eight cells -
+		/// the client's copy is exactly what should not be there, since the host is
+		/// authoritative about what the colony contains.
+		/// </summary>
+		public static int ClientMatterRemoved { get; private set; }
+
 		public static void Postfix(GameObject __result)
 		{
 			using var _ = Profiler.Scope();
 
 			if (__result == null)
 				return;
+
+			// Tried, measured, taken out - the fourth approach to this residue and the
+			// third to fail on its own numbers.
+			//
+			// Destroying the client's copy after creation does work where returning null
+			// did not: 355 removals in a run with zero errors, because every caller still
+			// received a real object. What it did not do is change anything. The unpaired
+			// count stayed at 104, unmoved, which says the objects the comparison cannot
+			// pair are not the ones this path creates - the client's liquid and ore
+			// chunks reach the world through GameUtil.KInstantiate as well, and those are
+			// untouched here.
+			//
+			// So it deletes 355 objects from the client's world every run and buys
+			// nothing measurable. Measured cost against unmeasured benefit is this
+			// project's own rule for reverting.
+			//
+			// The counter stays: selfSpawn against selfRemoved is what a future attempt
+			// should be judged by, and the safety of the pattern is now established.
 
 			NetworkIdentity identity = __result.AddOrGet<NetworkIdentity>();
 			identity.RegisterIdentity();

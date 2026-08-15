@@ -507,6 +507,7 @@ namespace ONI_Together.Networking.Components
 				// asked. The first is the residue the two peers cannot pair; its size
 				// decides whether suppressing it is proportionate or reckless.
 				$"|selfSpawn={Patches.World.Substance_SpawnResource_Patch.ClientSpawnedLocally}" +
+				$"|selfRemoved={Patches.World.Substance_SpawnResource_Patch.ClientMatterRemoved}" +
 				$"|askedSpawn={Patches.World.Substance_SpawnResource_Patch.ClientSpawnedForPacket}" +
 				$"|adoptNearMiss={NetworkIdentity.AdoptionsMissedByOneCell}" +
 				// How far the nearest unnamed candidate was when adoption failed. Says
