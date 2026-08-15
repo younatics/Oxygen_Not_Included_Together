@@ -190,6 +190,17 @@ $joined = Wait-PeerStatus 'insession=True.*game=True' 300
 if (-not $joined) { Die 'peer never reached an in-session state - check the save transfer' }
 Ok $joined.Substring($joined.IndexOf('[SCENARIO]'))
 
+# The power grid as both peers see it the moment the client joins, before this run
+# touches anything.
+#
+# A divergence found in the final dump cannot say whether the client built its network
+# wrong on load or drifted while replicating the wires this run places. Those need
+# different fixes. Asked here and again at the end, the pair answers it.
+Step 'sampling the power grid before anything is built'
+Send-Host 'circuits'
+Send-Peer 'circuits'
+Start-Sleep -Seconds 2
+
 Step "digging $DigCells cells"
 $mark = HostLogLines
 Send-Host "dig $DigCells"
@@ -481,6 +492,16 @@ Start-Sleep -Seconds 4
 # writing a new pair of files per category, which is why most categories never got
 # one.
 Step 'asking both peers for the rest of the game state'
+# Ask the peer to rebuild its power grid, then dump again.
+#
+# The circuit comparison shows the client's grid fragmented where the host's is joined,
+# with one circuit holding seven generators on the host and none on the client. That is
+# either a connection the client never made or a rebuild that never ran, and the two need
+# different fixes. Rebuilding separates them: if the second dump agrees, nothing is
+# missing and only the trigger is.
+Send-Peer 'circuit-rebuild'
+Start-Sleep -Seconds 2
+
 Send-Host 'state'
 Send-Peer 'state'
 Start-Sleep -Seconds 5

@@ -347,6 +347,54 @@ namespace ONI_Together.DebugTools
                 // cross-peer comparison at all - if a peer's own containers move between
                 // two samples three seconds apart, that peer is redistributing, and the
                 // two peers' churn counts can be read side by side.
+                // Force a power-grid rebuild, to find out whether the client's circuits
+                // are wrong or merely stale.
+                //
+                // The circuit comparison reports the client's grid fragmented where the
+                // host's is joined - one circuit holds 7 generators and 60 consumers on
+                // the host and 0 generators and 46 consumers on the client, which is a
+                // colony where one player's buildings have no power for no visible
+                // reason. Whether that is a missing connection or a rebuild that never
+                // ran are different defects with different fixes, and asking
+                // CircuitManager to rebuild separates them: if the grids agree
+                // afterwards, nothing is missing and the trigger is.
+                // The power grid alone, so it can be asked early - before this scenario
+                // digs or builds anything.
+                //
+                // The full state dump only runs at the end, by which time the run has
+                // placed and finished wires, so a divergence found there cannot say
+                // whether the client built its network wrong on load or drifted while
+                // replicating new wire. Those are different defects. Asked twice, the
+                // pair answers it.
+                case "circuits":
+                {
+                    var rows = new List<string>();
+                    DumpPowerCircuits(rows);
+                    rows.Sort(StringComparer.Ordinal);
+                    foreach (var row in rows) DebugConsole.Log("[GAMESTATE] " + row);
+                    DebugConsole.Log($"{Tag} OK circuits :: dumped {rows.Count} row(s)");
+                    break;
+                }
+
+                case "circuit-rebuild":
+                {
+                    if (Game.Instance == null || Game.Instance.circuitManager == null)
+                        throw new InvalidOperationException("no circuit manager (not in a game?)");
+
+                    // The wire network first, then the circuits.
+                    //
+                    // CircuitManager.Rebuild alone changed nothing - 307 differing rows
+                    // before, 269 after - and the reason is that it is not what decides
+                    // which cells share a circuit. Membership comes from the electrical
+                    // utility network, which walks the wires; CircuitManager only groups
+                    // devices onto whatever that produced. Rebuilding the second while
+                    // the first is stale asks the wrong question.
+                    Game.Instance.electricalConduitSystem.ForceRebuildNetworks();
+                    Game.Instance.circuitManager.Rebuild();
+                    DebugConsole.Log($"{Tag} OK circuit-rebuild");
+                    break;
+                }
+
                 case "churn":
                 {
                     int watched = CaptureStorageChurn();
@@ -1220,6 +1268,7 @@ namespace ONI_Together.DebugTools
 			DumpPlantGrowth(rows);
 			DumpCritterAmounts(rows);
 			DumpConduitContents(rows);
+			DumpPowerCircuits(rows);
 
 			// GAMESTATE, not STATE. StateDivergenceTests already emits [STATE] rows with a
 			// different schema - NetId first, then the syncer name - and a comparer reading
@@ -1238,10 +1287,16 @@ namespace ONI_Together.DebugTools
 			// CircuitManager, which nothing in this repository uses, so there is no
 			// confirmed accessor to copy and a dump that guesses is worse than one that
 			// admits the gap.
-			DebugConsole.LogWarning(
-				"[GAMESTATE] not covered yet: power circuit topology (no confirmed " +
-				"accessor in this repository). Stored power, plant growth, critter " +
-				"amounts and conduit contents left this list and are now compared.");
+			// The list is empty. Power circuit topology was the last entry, held back
+			// because nothing here reached the power grid - only logicCircuitManager,
+			// which is the automation network. CircuitManager.GetCircuitID answers it,
+			// and the compiler confirmed the accessor rather than a guess doing so.
+			//
+			// Kept as a line rather than deleted: a reader needs to know the list was
+			// emptied deliberately, not that somebody dropped the warning.
+			DebugConsole.Log(
+				"[GAMESTATE] every category this dump knows about is now compared, " +
+				"including power circuit topology.");
 
 			return rows.Count;
 		}
@@ -1914,6 +1969,77 @@ namespace ONI_Together.DebugTools
 			}
 
 			return result;
+		}
+
+		/// <summary>
+		/// Which cells share a power circuit, and what is on each one.
+		///
+		/// This was the last entry on the dump's own "not covered yet" list, held back
+		/// because no accessor in this repository reached the power grid - only
+		/// Game.Instance.logicCircuitManager, which is the automation network and a
+		/// different thing entirely.
+		///
+		/// Stored joules already compare clean, and that is not the same question. A
+		/// battery bank agreeing about its charge says nothing about whether the two
+		/// peers agree that it is wired to the generator - and a wire that is cut on one
+		/// peer and whole on the other is a colony where one player watches the lights go
+		/// out for no reason they can see.
+		///
+		/// The circuit id is deliberately not compared. It is handed out by
+		/// CircuitManager.Rebuild in whatever order the network was walked, so two peers
+		/// with identical wiring can hold different numbers for the same circuit - the
+		/// same trap as keying a critter by its cell, and it would report every circuit
+		/// as divergent forever.
+		///
+		/// What is compared is the partition: for each powered cell, the lowest cell
+		/// number that shares its circuit. Both peers derive that from the wiring alone,
+		/// so it is identical exactly when the wiring is, and it names the cell where a
+		/// difference starts rather than a number nobody can look up.
+		/// </summary>
+		private static void DumpPowerCircuits(List<string> rows)
+		{
+			if (Game.Instance == null) return;
+
+			var manager = Game.Instance.circuitManager;
+			if (manager == null) return;
+
+			// Cell -> circuit, for every cell carrying power infrastructure.
+			var cellsByCircuit = new Dictionary<ushort, List<int>>();
+			int wireLayer = (int)ObjectLayer.Wire;
+
+			for (int cell = 0; cell < Grid.CellCount; cell++)
+			{
+				if (!Grid.IsValidCell(cell)) continue;
+				if (Grid.Objects[cell, wireLayer] == null) continue;
+
+				ushort circuit = manager.GetCircuitID(cell);
+				if (circuit == ushort.MaxValue) continue;
+
+				if (!cellsByCircuit.TryGetValue(circuit, out var list))
+					cellsByCircuit[circuit] = list = new List<int>();
+				list.Add(cell);
+			}
+
+			foreach (var pair in cellsByCircuit)
+			{
+				var cells = pair.Value;
+				if (cells.Count == 0) continue;
+
+				int anchor = cells[0];
+				for (int i = 1; i < cells.Count; i++)
+					if (cells[i] < anchor) anchor = cells[i];
+
+				// Membership, one row per powered cell. This is the comparison that
+				// actually answers "is the wiring the same".
+				foreach (int cell in cells)
+					rows.Add($"circuit|{cell}|group|{anchor}");
+
+				// And what is attached, which a partition alone does not say - a circuit
+				// can match cell for cell while one peer has lost the generator on it.
+				rows.Add($"circuit|c{anchor}|generators|{manager.GetGeneratorsOnCircuit(pair.Key)?.Count ?? -1}");
+				rows.Add($"circuit|c{anchor}|batteries|{manager.GetBatteriesOnCircuit(pair.Key)?.Count ?? -1}");
+				rows.Add($"circuit|c{anchor}|consumers|{manager.GetConsumersOnCircuit(pair.Key)?.Count ?? -1}");
+			}
 		}
 
 		/// <summary>Where a duplicant is standing, or the middle of the world.</summary>
