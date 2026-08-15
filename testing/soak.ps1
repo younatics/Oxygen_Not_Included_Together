@@ -51,7 +51,16 @@ param(
     #
     # A parameter rather than an edit, so a long run is something anyone can ask for and
     # the summary records what was asked.
-    [int]$SettleSeconds = 0
+    [int]$SettleSeconds = 0,
+    # Make every run a reconnect run instead of one in three.
+    #
+    # The reconnect path is where the last defects have been hiding - a client hatching
+    # its own eggs through the gap, a tracker guard reading a flag that is false while
+    # the session is down - and one run in three is too slow a rate to tell a fix from
+    # variance. Running the scenario directly in a loop is not a substitute: soak
+    # restarts ONI between runs, and without that the logs accumulate and every count
+    # taken from them is the sum of every run so far.
+    [switch]$AlwaysReconnect
 )
 
 $ErrorActionPreference = 'Continue'
@@ -146,7 +155,7 @@ for ($i = 1; $i -le $Runs; $i++) {
     $peerBuild = $peerBuilds[($i - 1) % $peerBuilds.Count]
     $tearDown  = $deconstructs[($i - 1) % $deconstructs.Count]
 
-    $reconnect = $reconnects[($i - 1) % $reconnects.Count]
+    $reconnect = if ($AlwaysReconnect) { $true } else { $reconnects[($i - 1) % $reconnects.Count] }
     Note "run $i/$Runs  label=$label dig=$dig settle=${settle}s build=$hostBuild peerBuild=$peerBuild deconstruct=$tearDown reconnect=$reconnect"
 
     # A fresh copy of the colony for every run.
