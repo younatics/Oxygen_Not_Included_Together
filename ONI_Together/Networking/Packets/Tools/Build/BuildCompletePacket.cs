@@ -15,6 +15,17 @@ namespace ONI_Together.Networking.Packets.Tools.Build
         private const int MaxMaterialTagCount = 64;
 
         /// <summary>
+        /// A wire-connection repair was tried here and removed, and the reason is worth
+        /// keeping: it never fired. A counter on the same branch read 0 for a whole run,
+        /// so this path does not build the wires that end up disconnected on a client.
+        ///
+        /// The completions themselves are fine - the packet counters read sent 4 and
+        /// received 4, all four log "Finalized", and the finished wires hold the same
+        /// connection state on both peers. The cells that stay disconnected on the
+        /// client are neighbours that no packet touches, so the repair belongs wherever
+        /// a neighbour is meant to re-evaluate its connections, not here.
+        /// </summary>
+        /// <summary>
         /// Scaffolds this peer had to clear itself after a building finished.
         ///
         /// Every one of these was a client showing a tile as still scheduled while

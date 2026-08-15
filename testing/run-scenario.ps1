@@ -499,8 +499,22 @@ Step 'asking both peers for the rest of the game state'
 # either a connection the client never made or a rebuild that never ran, and the two need
 # different fixes. Rebuilding separates them: if the second dump agrees, nothing is
 # missing and only the trigger is.
-Send-Peer 'circuit-rebuild'
+# Does a rebuild change anything on the client? Measured, not inferred - two earlier
+# rebuild calls were called ineffective from the comparison alone, which cannot separate
+# "ran and changed nothing" from "did not run".
+# Both peers, because the client's answer alone means nothing. A rebuild that
+# recomputes correctly changes nothing on a healthy grid either, so "changed 0" on the
+# client is only evidence once the host - whose grid is right - is asked the same thing.
+Send-Host 'rebuild-probe'
+Send-Peer 'rebuild-probe'
 Start-Sleep -Seconds 2
+
+# The wire-connect probe is deliberately not run here.
+#
+# They were how the power-grid defect was found, and leaving them in would repair the
+# very thing the comparison is meant to catch - the run would report a clean grid
+# whether or not the fix in BuildCompletePacket works. They stay available as scenario
+# commands for the next investigation.
 
 Send-Host 'state'
 Send-Peer 'state'

@@ -376,6 +376,84 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                // Ask every unconnected wire to connect, then rebuild, and report how
+                // many were touched.
+                //
+                // A measurement, not a fix. The client's newly built wires report
+                // IsConnected false where the host's report true, and everything
+                // downstream follows from that - no network, no circuit, and the region
+                // beyond them cut off from the generators. Whether Wire.Connect is enough
+                // to repair it decides where the real fix belongs: if the grid agrees
+                // afterwards, the connection is simply never applied on the client and
+                // BuildCompletePacket is the place to apply it; if it does not, the wire
+                // is missing something Connect cannot supply and the search moves.
+                // Does a forced rebuild actually change anything? Sampled before and
+                // after, in the same command.
+                //
+                // Two rebuild calls have been reported as "no effect" purely from the
+                // comparison afterwards, which cannot tell "it ran and changed nothing"
+                // from "it did not run". Those need opposite next steps. Counting how
+                // many cells change their network number across the call answers it
+                // without inference.
+                case "rebuild-probe":
+                {
+                    if (Game.Instance == null) throw new InvalidOperationException("no game");
+
+                    int layer = (int)ObjectLayer.Wire;
+                    var before = new Dictionary<int, ushort>();
+                    for (int cell = 0; cell < Grid.CellCount; cell++)
+                    {
+                        if (!Grid.IsValidCell(cell)) continue;
+                        var o = Grid.Objects[cell, layer];
+                        if (o == null || o.IsNullOrDestroyed()) continue;
+                        var w = o.GetComponent<Wire>();
+                        if (w != null) before[cell] = w.NetworkID;
+                    }
+
+                    Game.Instance.electricalConduitSystem.ForceRebuildNetworks();
+                    Game.Instance.circuitManager.Rebuild();
+
+                    int changed = 0, stillNone = 0;
+                    foreach (var kv in before)
+                    {
+                        var o = Grid.Objects[kv.Key, layer];
+                        var w = o == null ? null : o.GetComponent<Wire>();
+                        if (w == null) continue;
+                        if (w.NetworkID != kv.Value) changed++;
+                        if (w.NetworkID == ushort.MaxValue) stillNone++;
+                    }
+
+                    DebugConsole.Log($"{Tag} OK rebuild-probe :: watched {before.Count}, " +
+                                     $"changed {changed}, still unnetworked {stillNone}");
+                    break;
+                }
+
+                case "wire-connect":
+                {
+                    if (Game.Instance == null) throw new InvalidOperationException("no game");
+
+                    int touched = 0, already = 0;
+                    int layer = (int)ObjectLayer.Wire;
+                    for (int cell = 0; cell < Grid.CellCount; cell++)
+                    {
+                        if (!Grid.IsValidCell(cell)) continue;
+                        var occupant = Grid.Objects[cell, layer];
+                        if (occupant == null || occupant.IsNullOrDestroyed()) continue;
+
+                        var w = occupant.GetComponent<Wire>();
+                        if (w == null) continue;
+                        if (w.IsConnected) { already++; continue; }
+
+                        w.Connect();
+                        touched++;
+                    }
+
+                    Game.Instance.electricalConduitSystem.ForceRebuildNetworks();
+                    Game.Instance.circuitManager.Rebuild();
+                    DebugConsole.Log($"{Tag} OK wire-connect :: connected {touched}, already connected {already}");
+                    break;
+                }
+
                 case "circuit-rebuild":
                 {
                     if (Game.Instance == null || Game.Instance.circuitManager == null)
@@ -2018,6 +2096,106 @@ namespace ONI_Together.DebugTools
 				if (!cellsByCircuit.TryGetValue(circuit, out var list))
 					cellsByCircuit[circuit] = list = new List<int>();
 				list.Add(cell);
+			}
+
+			// Who occupies each wire cell, and what network that occupant reports.
+			//
+			// The previous diagnostic walked Building components and tripped on wires
+			// that are not the grid occupant - a cell can hold a Wire and a
+			// HighWattageWire, and only one of them is in Grid.Objects. Both peers
+			// reported those identically, which is why they said nothing: they were not
+			// the objects the circuit walk reads.
+			//
+			// This reads the occupant, which is exactly what GetCircuitID consults, so a
+			// cell the host puts on a circuit and the client does not can be compared
+			// object for object.
+			//
+			// meta, so it qualifies the circuit rows without being compared - the
+			// network id is local and the two peers are not expected to match on it.
+			for (int cell = 0; cell < Grid.CellCount; cell++)
+			{
+				if (!Grid.IsValidCell(cell)) continue;
+				var occupant = Grid.Objects[cell, wireLayer];
+				if (occupant == null || occupant.IsNullOrDestroyed()) continue;
+
+				var w = occupant.GetComponent<Wire>();
+				string net = w == null
+					? "no-comp"
+					: (w.NetworkID == ushort.MaxValue ? "none" : w.NetworkID.ToString());
+				ushort circ = manager.GetCircuitID(cell);
+
+				// The connection bits the wire is holding, not only whether it ended up
+				// on a network.
+				//
+				// Both peers put the same 970 wires in the same 970 cells - the input to
+				// the network walk is identical - and six of them come out connected on
+				// the host and not on the client, and a forced rebuild does not move
+				// them. A walk over identical input cannot produce different output
+				// unless the input includes something not being compared, and
+				// GetWireConnections is that something: the wire stores which sides it
+				// joins rather than deriving it from its neighbours each time, which is
+				// exactly why rebuilding re-reads the same wrong answer.
+				string bits = w == null ? "?" : ((int)w.GetWireConnections()).ToString();
+
+				rows.Add($"meta|_wirecell|{cell}|{occupant.PrefabID()} net={net} " +
+						 $"circuit={(circ == ushort.MaxValue ? "none" : circ.ToString())} " +
+						 $"conn={(w == null ? "?" : w.IsConnected.ToString())} bits={bits}");
+			}
+
+			// Wires that exist as objects but not as conductors.
+			//
+			// The client holds the same Wire under the same NetId as the host and its
+			// cells produce no circuit row at all, so the object is real and the grid
+			// does not know about it. Which of the two registrations is missing decides
+			// the fix, and they are separable: Grid.Objects is what the circuit walk
+			// reads, and a building that is not in that slot is invisible to it however
+			// correctly it was built.
+			foreach (var building in UnityEngine.Object.FindObjectsByType<Building>(
+						 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+			{
+				if (building.IsNullOrDestroyed() || building.gameObject.IsNullOrDestroyed()) continue;
+				if (building.Def == null || building.Def.ObjectLayer != ObjectLayer.Wire) continue;
+
+				int cell = Grid.PosToCell(building.gameObject);
+				if (!Grid.IsValidCell(cell)) continue;
+
+				bool inGrid = Grid.Objects[cell, wireLayer] == building.gameObject;
+				ushort circuit = manager.GetCircuitID(cell);
+
+				if (!inGrid || circuit == ushort.MaxValue)
+				{
+					// What the object actually is, not only whether the grid slot points
+					// at it.
+					//
+					// The grid says the wire is there and the circuit walk does not see
+					// it, on a client that has just been given a full
+					// ForceRebuildNetworks - so the trigger is not what is missing. The
+					// remaining candidates are all properties of the object: an inactive
+					// GameObject is skipped by the walk, and a building whose Wire
+					// component never spawned has nothing to walk.
+					var go = building.gameObject;
+					var wire = go.GetComponent<Wire>();
+					bool active = go.activeInHierarchy;
+					bool complete = go.GetComponent<BuildingComplete>() != null;
+
+					// What the wire says about itself.
+					//
+					// The object is active, complete, carries a Wire component and sits
+					// in the grid slot, and the circuit walk still does not see it - on a
+					// client that has just been handed a full ForceRebuildNetworks. Wire
+					// keeps its own record of which network it joined, and that separates
+					// the last two candidates: a wire reporting a network the circuit
+					// manager disagrees about is a bookkeeping split, and a wire
+					// reporting none never joined at all.
+					string net = wire == null
+						? "no-comp"
+						: (wire.NetworkID == ushort.MaxValue ? "none" : wire.NetworkID.ToString());
+					string connected = wire == null ? "?" : wire.IsConnected.ToString();
+
+					rows.Add($"meta|_wire|{go.PrefabID()}@{cell}|" +
+							 $"inGrid={inGrid} circuit={(circuit == ushort.MaxValue ? "none" : circuit.ToString())} " +
+							 $"active={active} complete={complete} wireNet={net} connected={connected}");
+				}
 			}
 
 			foreach (var pair in cellsByCircuit)
