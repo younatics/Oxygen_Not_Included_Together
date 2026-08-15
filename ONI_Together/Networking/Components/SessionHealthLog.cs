@@ -516,6 +516,7 @@ namespace ONI_Together.Networking.Components
 				$" le8={NetworkIdentity.AdoptMissWithin8}" +
 				$" far={NetworkIdentity.AdoptMissFar}]" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
+				$"|instRepeat={Packets.InstantiationsPacket.AlreadyHere}" +
 				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +
 				$"|annSent={NetworkIdentity.AnnounceSent}" +
 				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +

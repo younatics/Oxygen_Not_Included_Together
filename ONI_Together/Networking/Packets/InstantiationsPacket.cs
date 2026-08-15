@@ -1,4 +1,5 @@
 ﻿using ONI_Together.DebugTools;
+using ONI_Together.Networking;
 using ONI_Together.Networking.Packets.Architecture;
 using System.Collections.Generic;
 using System.IO;
@@ -154,12 +155,19 @@ namespace ONI_Together.Networking.Packets
 		/// client's own simulation had also made.
 		/// </summary>
 		public static int NamedOnArrival => _namedOnArrival;
+
+		/// <summary>
+		/// Announcements for an object this peer already holds under that id. Non-zero is
+		/// normal after a reconnect and each one is a duplicate that used to be created.
+		/// </summary>
+		public static int AlreadyHere => _alreadyHere;
 		public static int NamesDropped => _namesDropped;
 
 		private static int _adoptedInstead;
 		private static int _refusedMinions;
 		private static int _namedOnArrival;
 		private static int _namesDropped;
+		private static int _alreadyHere;
 
 		public static void ResetForNewSession()
 		{
@@ -167,6 +175,7 @@ namespace ONI_Together.Networking.Packets
 			_refusedMinions = 0;
 			_namedOnArrival = 0;
 			_namesDropped = 0;
+			_alreadyHere = 0;
 		}
 
 		private void Instantiate(InstantiationEntry e)
@@ -200,6 +209,28 @@ namespace ONI_Together.Networking.Packets
 					$"[InstantiationsPacket] refusing to build a duplicant from the prefab name " +
 					$"'{e.PrefabName}' (NetId {e.NetId}): it would have no personality and drawing it " +
 					"throws every frame. Duplicants replicate through the telepad path.");
+				return;
+			}
+
+			// Already holding this id? Then this is a repeat, not a spawn.
+			//
+			// SpawnPrefabPacket has had this check since the day announcing critters
+			// started working, and this path never got it. A reconnect is where it costs:
+			// the client rebuilds its world, the host announces again, and every
+			// announcement for an object the client already has becomes a second copy.
+			//
+			// Measured across a three-run batch. The two ordinary runs end with both
+			// peers holding 77 critters; the reconnect run leaves the client with 80,
+			// and the extras include an adult Pacu, which no hatch can explain - only a
+			// second copy of one the client already had.
+			//
+			// Checked before the preview match rather than after, because a client that
+			// already holds the id needs neither branch.
+			if (e.NetId != 0
+				&& NetworkIdentityRegistry.TryGet(e.NetId, out var already)
+				&& already != null && !already.gameObject.IsNullOrDestroyed())
+			{
+				_alreadyHere++;
 				return;
 			}
 
