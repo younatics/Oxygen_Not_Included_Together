@@ -29,6 +29,17 @@ namespace ONI_Together.Patches.GamePatches
         InstantiationBatcher.Update();
         WorldUpdateBatcher.Update();
       }
+      else
+      {
+        // The client's half of the same conversation.
+        //
+        // An announcement that finds nothing to name is held rather than built, so the
+        // client's own copy - which the measurements show arrives after the
+        // announcement, not beside it - can take the host's name instead of standing
+        // next to a second object forever. Holding needs somewhere to retry from, and
+        // this is the frame hook the host already uses for the sending side.
+        Networking.Packets.InstantiationsPacket.PumpDeferred();
+      }
     }
   }
 

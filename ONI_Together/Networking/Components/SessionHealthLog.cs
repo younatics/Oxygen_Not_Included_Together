@@ -517,6 +517,11 @@ namespace ONI_Together.Networking.Components
 				$" far={NetworkIdentity.AdoptMissFar}]" +
 				$"|instNamed={Packets.InstantiationsPacket.NamedOnArrival}" +
 				$"|instRepeat={Packets.InstantiationsPacket.AlreadyHere}" +
+				// Announcements held back waiting for this peer's own copy, and how they
+				// ended. If instLate stays near zero the wait buys nothing and should go.
+				$"|instHeld={Packets.InstantiationsPacket.DeferredCount}" +
+				$"|instLate={Packets.InstantiationsPacket.AdoptedLate}" +
+				$"|instBuiltLate={Packets.InstantiationsPacket.BuiltLate}" +
 				$"|instDropped={Packets.InstantiationsPacket.NamesDropped}" +
 				$"|annSent={NetworkIdentity.AnnounceSent}" +
 				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +

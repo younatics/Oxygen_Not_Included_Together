@@ -169,6 +169,79 @@ namespace ONI_Together.Networking.Packets
 		private static int _namesDropped;
 		private static int _alreadyHere;
 
+		/// <summary>
+		/// Announcements held back waiting for this peer's own copy, and how they ended:
+		/// adopted by an object that turned up during the wait, or built anyway when it
+		/// did not. The pair is the whole measurement - if late adoptions stay near zero
+		/// the wait is buying nothing and should come out.
+		/// </summary>
+		public static int DeferredCount => _deferredCount;
+		public static int AdoptedLate => _adoptedLate;
+		public static int BuiltLate => _builtLate;
+
+		private static int _deferredCount;
+		private static int _adoptedLate;
+		private static int _builtLate;
+
+		/// <summary>
+		/// A second. Long enough for the client's own simulation to produce the matching
+		/// object - the two peers run the same step and are within a sync period of each
+		/// other - and short enough that a pile appearing late is not something a player
+		/// can see.
+		/// </summary>
+		private const float DeferSeconds = 1.0f;
+
+		private struct HeldEntry
+		{
+			public InstantiationEntry Entry;
+			public float Deadline;
+		}
+
+		private static readonly List<HeldEntry> _deferred = new List<HeldEntry>();
+
+		/// <summary>
+		/// Retry the held announcements. Called every frame on a client.
+		/// </summary>
+		public static void PumpDeferred()
+		{
+			if (_deferred.Count == 0) return;
+
+			float now = Time.unscaledTime;
+			for (int i = _deferred.Count - 1; i >= 0; i--)
+			{
+				var held = _deferred[i];
+				var e = held.Entry;
+
+				// Somebody else named it in the meantime - a resolve reply, a spawn
+				// packet. Then there is nothing left to do.
+				if (e.NetId != 0
+					&& NetworkIdentityRegistry.TryGet(e.NetId, out var already)
+					&& already != null && !already.gameObject.IsNullOrDestroyed())
+				{
+					_deferred.RemoveAt(i);
+					_alreadyHere++;
+					continue;
+				}
+
+				int cell = Grid.IsValidCell(Grid.PosToCell(e.Position)) ? Grid.PosToCell(e.Position) : -1;
+				if (cell >= 0 && Components.NetworkIdentity.TryAdoptPreview(cell, e.PrefabName, e.NetId))
+				{
+					_deferred.RemoveAt(i);
+					_adoptedLate++;
+					continue;
+				}
+
+				if (now >= held.Deadline)
+				{
+					_deferred.RemoveAt(i);
+					_builtLate++;
+					Instantiate(e, deferrable: false);
+				}
+			}
+		}
+
+		public static void ClearDeferred() => _deferred.Clear();
+
 		public static void ResetForNewSession()
 		{
 			_adoptedInstead = 0;
@@ -176,9 +249,15 @@ namespace ONI_Together.Networking.Packets
 			_namedOnArrival = 0;
 			_namesDropped = 0;
 			_alreadyHere = 0;
+			_deferredCount = 0;
+			_adoptedLate = 0;
+			_builtLate = 0;
+			_deferred.Clear();
 		}
 
-		private void Instantiate(InstantiationEntry e)
+		private void Instantiate(InstantiationEntry e) => Instantiate(e, deferrable: false);
+
+		private static void Instantiate(InstantiationEntry e, bool deferrable)
 		{
 			using var _ = Profiler.Scope();
 
@@ -249,6 +328,38 @@ namespace ONI_Together.Networking.Packets
 				_adoptedInstead++;
 				return;
 			}
+
+			// Nothing here yet to name - so wait a moment before building a second one.
+			//
+			// This is the last unpaired category: loose matter each peer's own simulation
+			// makes. Measured rather than guessed at, the reason adoption fails is
+			// timing, not distance. When an announcement finds no candidate, the distance
+			// to the nearest unnamed preview of that prefab was recorded: of 215
+			// failures, 133 had no candidate of that kind anywhere on the map. The
+			// client's copy does not exist yet when the host's announcement lands.
+			//
+			// Widening the search was the other idea and the numbers killed it - 68 of
+			// those failures had a candidate only far away, which is a different object,
+			// and matching it is how an announcement meant for one pile once renamed
+			// another and produced eight thousand failed lookups.
+			//
+			// So the announcement waits instead. Each frame it retries the adoption it
+			// just failed, and after the deadline it builds, which is exactly what it
+			// does today - only later. The cost is a fraction of a second before a pile
+			// appears on the client; the gain is that the client's own copy gets the
+			// host's name instead of standing beside it forever.
+			// Tried, measured, and taken out - the numbers are in the counter names.
+			//
+			// Holding the announcement for a second and retrying the adoption each frame
+			// bought 21 late adoptions out of 259 held, built the other 202 anyway, and
+			// left the client with MORE unpaired objects than before (168 against about
+			// 100). The premise was right - the client's copy does arrive after the
+			// announcement - and a second is evidently not when it arrives, while the
+			// delay itself widens the window in which the two peers hold different
+			// worlds.
+			//
+			// The counters stay so the next attempt is judged the same way: instHeld
+			// against instLate is the whole verdict, and this one failed it.
 
 			GameObject obj = Object.Instantiate(prefab, e.Position, e.Rotation);
 			if (obj == null)
