@@ -339,13 +339,26 @@ namespace ONI_Together.Networking.Components
 				$"|prioApplied={StructureStateSyncers.StructureSyncerBase.PrioritiesApplied}" +
 				$"|artApplied={StructureStateSyncers.StructureSyncerBase.ArtStagesApplied}" +
 				$"|recipeApplied={StructureStateSyncers.StructureSyncerBase.RecipeQueuesApplied}" +
-				// Wires this client had to put back into the electrical network. The cause
-				// of them being left out is still open; this is the invariant being held
-				// while it stays open, and the count is what says whether it is doing
-				// anything. Zero here with the circuit rows also gone means the wires
-				// joined on their own that run, not that this worked.
-				$"|wireFixed={WireNetworkRepair.WiresReconnected}" +
-				$"|wireSweeps={WireNetworkRepair.RepairSweeps}" +
+				// There was a wireFixed counter here and the change it measured is gone.
+				//
+				// WireNetworkRepair swept the wire layer on the client every five seconds
+				// and called Wire.Connect() on anything reading IsConnected false. It found
+				// 66 to 70 wires every single sweep, 46 sweeps in a row, 3,160 in total -
+				// and the divergence it was aimed at did not move: the host still read 7
+				// generators on circuit 36999 and the client still read 0.
+				//
+				// So it never converged. Either Connect() does not leave IsConnected true,
+				// or something undoes it immediately; the count cannot tell those apart,
+				// but it rules out "these wires were left out once and putting them back
+				// fixes it", which was the premise. Reverted rather than kept as a
+				// diagnostic, because it rebuilt the electrical networks on every sweep to
+				// buy nothing measurable.
+				//
+				// What it did establish is worth more than the fix was: about 68 wires on
+				// this client are permanently not IsConnected, steadily, and calling
+				// Connect() on them does not change that. Whatever is true of those 68 is
+				// the thing to find. See the task; the earlier reading that Connect() took
+				// the divergence from 384 rows to 0 needs re-checking against this.
 				// Buildings holding more than one container - fabricators have three.
 				// Only the first was ever replicated, which is why fabricators were the
 				// last containers still disagreeing.
