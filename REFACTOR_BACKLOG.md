@@ -1,4 +1,4 @@
-# 리팩토링 백로그
+﻿# 리팩토링 백로그
 
 작성 근거는 추측이 아니라 `mp-stability` 작업에서 실제로 진단·수정하며 부딪힌 것들이다.
 각 항목은 "이것 때문에 무엇이 몇 번 잘못됐는지"를 같이 적는다. 그게 없으면 취향 논쟁이 된다.
@@ -400,12 +400,23 @@ What is still open, with what is known about each:
    seconds. Every other vital agrees. Not explained by the snapshot gap, which is
    0.23s.
 
-3. **Three containers of 953.** No refusal counter fired - `storeNoPrefab`,
-   `storeRefused` and `storeNotLanded` all read 0 while 100,331 applications
-   succeeded - so these are either in flight at the instant of the snapshot or a
-   defect a single snapshot cannot distinguish from one. Deciding needs two dumps
-   a few seconds apart, which is the tool this project already wrote for ids and
-   has never had for containers.
+3. **Three containers of 953 - narrowed, and it is a distribution difference.**
+   Each syncer now reports how long ago a packet last set its state, and the
+   answer is that all 1,396 of them read the same 15.4 seconds: the three that
+   disagree are not staler than the 950 that agree, so this is not an update that
+   was in flight.
+
+   What differs is where the mass sits, not how much. One building holds 1.0 in
+   its second container and 2.0 in its first on the host, and 0 and 3.0 on the
+   client - the same three kilograms of the same prefab, distributed differently
+   between two containers of one building. Both peers emit the same container
+   keys, so the index mapping is not the problem.
+
+   That leaves the client's own building logic moving items between its
+   containers in the window between corrections. Deciding it needs the contents
+   sampled twice while the colony runs, not while it is paused - a paused colony
+   produces the same numbers twice, which is why the second-dump idea recorded
+   here before does not work.
 
 4. **The chore-waiting flag, by design.** 64 rows, every one a job the host's
    duplicants have claimed and the client's cannot, because a client runs no
