@@ -1593,6 +1593,12 @@ namespace ONI_Together.DebugTools
 						.SecondsSinceApplied(subjectId, pair.Item2.Id);
 					if (age >= 0f)
 						rows.Add($"vitalage|{key}|{pair.Item1}|{Math.Round(age, 1)}");
+
+					// What the last packet actually set, next to what is there now.
+					float applied = Networking.Packets.DuplicantActions.VitalStatsPacket
+						.LastApplied(subjectId, pair.Item2.Id);
+					if (!float.IsNaN(applied))
+						rows.Add($"vitalappliedage|{key}|{pair.Item1}|{Math.Round(applied, 1)}");
 				}
 			}
 		}

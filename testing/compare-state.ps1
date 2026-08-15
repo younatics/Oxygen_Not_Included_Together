@@ -180,7 +180,7 @@ foreach ($key in $h.Keys) {
     # category is judged with - both are inputs to the comparison, not facts the peers
     # should agree about. Only the receiving peer measures a rate, so leaving those in
     # would report every one as a one-sided difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or $category.EndsWith('age')) { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or ($category.EndsWith('age') -or $category -eq 'syncage')) { continue }
 
     # A pipe cell nobody ever sent is not a replication failure.
     #
@@ -283,7 +283,7 @@ foreach ($key in $c.Keys) {
     # transmitted - all three are inputs to the comparison, not facts the peers should
     # agree about. Only one peer emits them, so leaving them in would report every one
     # as a one-sided difference.
-    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or $category.EndsWith('age')) { continue }
+    if ($category -eq 'meta' -or $category.EndsWith('rate') -or $category.EndsWith('sent') -or ($category.EndsWith('age') -or $category -eq 'syncage')) { continue }
 
     # Same split as the host loop: a pipe cell the host never sent cannot be a
     # replication failure, and a client-only one is the client's own simulation having

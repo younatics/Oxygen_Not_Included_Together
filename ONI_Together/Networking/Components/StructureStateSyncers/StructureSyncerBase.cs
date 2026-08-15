@@ -59,6 +59,22 @@ namespace ONI_Together.Networking.Components.StructureStateSyncers
         private const float INITIAL_DELAY = 5f;
 
         private float _lastClientPacketTime;
+
+        /// <summary>
+        /// Seconds since a packet last set this syncer's state, or -1 if none ever has.
+        ///
+        /// Three containers of 953 disagree at the instant of the snapshot while every
+        /// refusal counter reads zero and a hundred thousand applications succeeded. A
+        /// single snapshot cannot say whether that is a container the sync is failing on
+        /// or one whose update was simply in flight when both peers froze, and those need
+        /// opposite responses. Pausing and dumping again cannot answer it either - a
+        /// paused colony produces the same numbers twice.
+        ///
+        /// When it was last updated does answer it. A container corrected a moment before
+        /// the pause was in flight; one that has not been touched in a minute is not.
+        /// </summary>
+        public float SecondsSinceApplied =>
+            _lastClientPacketTime == 0 ? -1f : Time.unscaledTime - _lastClientPacketTime;
         private float _clientRequestTimer;
         private const float CLIENT_REQUEST_COOLDOWN = 0.5f;
         private const float CLIENT_STALE_THRESHOLD = 2f;

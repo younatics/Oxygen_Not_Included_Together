@@ -130,6 +130,25 @@ namespace ONI_Together.Networking.Packets.DuplicantActions
 		/// arriving. A value that stopped being corrected and a value that is corrected
 		/// and then overwritten look identical in a snapshot and need opposite fixes.
 		/// </summary>
+		/// <summary>
+		/// The last value an arriving packet set, or float.NaN if none ever did.
+		///
+		/// Four duplicants end a long run with their stamina about 1.4 below the host's -
+		/// all four in the same direction and within a tenth of the same magnitude, which
+		/// is a lag and not noise. Two explanations remain and a snapshot cannot separate
+		/// them: the client applied a value and its own simulation then moved it, or the
+		/// value it applied was already behind.
+		///
+		/// Comparing what was applied against what is there now answers it directly. If
+		/// they are equal, this peer never touched it after the apply and the host's
+		/// value was already different when it was sent.
+		/// </summary>
+		public static float LastApplied(int subject, string amount)
+		{
+			if (!_motion.TryGetValue(subject + "|" + amount, out var m) || !m.Seen) return float.NaN;
+			return m.LastValue;
+		}
+
 		public static float SecondsSinceApplied(int subject, string amount)
 		{
 			if (!_motion.TryGetValue(subject + "|" + amount, out var m) || !m.Seen) return -1f;

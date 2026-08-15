@@ -50,6 +50,16 @@ namespace ONI_Together.DebugTools.UnitTests
                 {
                     rows.Add($"[STATE] {identity.NetId}|{syncer.GetType().Name}|{kvp.Key}|{Describe(kvp.Value)}");
                 }
+
+                // How long ago a packet last set this syncer's state. Emitted as its own
+                // category so it qualifies the rows above without being compared - the
+                // host applies nothing and would read -1 for everything.
+                float age = syncer.SecondsSinceApplied;
+                if (age >= 0f)
+                {
+                    rows.Add($"[GAMESTATE] syncage|{syncer.GetType().Name}@{identity.NetId}|age|" +
+                             $"{System.Math.Round(age, 1)}");
+                }
             }
 
             if (rows.Count == 0)
