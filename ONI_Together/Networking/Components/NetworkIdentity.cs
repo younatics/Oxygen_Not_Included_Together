@@ -1777,7 +1777,25 @@ namespace ONI_Together.Networking.Components
 			// The client normally has its own copy already - Repairable.CreateStorageProxy
 			// runs there too - so the announcement is usually satisfied by adoption
 			// rather than by building a second one.
-			return TryGetComponent<Workable>(out _);
+			//
+			// Narrowed to the repair proxy after "any Workable" killed a client.
+			//
+			// Announcing means the other peer may rebuild the object from its prefab
+			// name, and plenty of workables cannot survive that. A BalloonStand is one:
+			// the host announced it, the client instantiated it, and
+			// BalloonStandConfig.OnSpawn threw a NullReferenceException on an object that
+			// had been assembled rather than grown. The game logged it at ERROR and shut
+			// the client down 1.4 seconds later, which is the same ending this file
+			// already documents for duplicants - "a colonist cannot be rebuilt from a
+			// prefab name" - and I walked another object into it while widening this
+			// line.
+			//
+			// So the rule is not "everything that is addressed" after all. It is "the
+			// thing this was written for": the repair proxy, which is created identically
+			// on both peers by Repairable.CreateStorageProxy and is therefore always
+			// adopted rather than built. Anything else that turns out to need announcing
+			// has to earn it one type at a time, with the rebuild path checked first.
+			return GetComponent<RepairableStorageProxy>() != null;
 		}
 
 		/// <summary>
