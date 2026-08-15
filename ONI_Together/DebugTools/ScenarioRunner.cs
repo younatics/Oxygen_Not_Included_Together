@@ -1738,21 +1738,37 @@ namespace ONI_Together.DebugTools
 				var values = kpid.gameObject.GetAmounts();
 				if (values == null) continue;
 
-				string key = $"{kpid.gameObject.PrefabID()}@{cell}";
+				// By id, because critters walk.
+				//
+				// Keyed by cell, this compared whichever animal of that species happened
+				// to stand at that cell on each peer - two different Pacus paired because
+				// they share a species and a coordinate, while the same Pacu appeared as
+				// one-sided on both. A reconnect run reported four "extra" critters on
+				// the client and every one of them turned out to be an animal the host
+				// also had, a few cells along: the host held HatchHardBaby 687120918 at
+				// cell 54152 and the client held the same id at 54141.
+				//
+				// The same mistake the priority dump made and the same fix. A moving
+				// object is keyed by the identity that moves with it.
+				//
+				// Without an id there is nothing to compare it by, and cell is recorded
+				// so the row is still visible - but it is marked, because a matching
+				// noid row on the two peers is not evidence that they agree.
+				// Not the proper name: every Drecko shares one, which is what made the
+				// first version of the rate measurement read 6.7 million a second.
+				int subjectId = kpid.gameObject.TryGetNetIdentity(out var critterIdentity)
+					? critterIdentity.NetId
+					: 0;
+
+				string key = subjectId != 0
+					? $"{kpid.gameObject.PrefabID()}#{subjectId}"
+					: $"{kpid.gameObject.PrefabID()}#noid@{cell}";
+
 				// ModifierList, not the collection itself. Iterating Amounts directly is
 				// marked obsolete by the game with a reason - the abstract enumerator
 				// allocates - and this project treats those as errors, which is how the
 				// right accessor got named without a guess. VitalStatsPacket's constructor
 				// already walks it this way.
-				// The name the drift table is keyed by, which is not the dump key. The
-				// dump key is prefab and cell because that is what makes the two peers
-				// comparable; the correction was recorded against the animal's own name.
-				// Not the proper name. Every Drecko shares one, which is what made the
-				// first version of this measure a rate of 6.7 million a second.
-				int subjectId = kpid.gameObject.TryGetNetIdentity(out var critterIdentity)
-					? critterIdentity.NetId
-					: 0;
-
 				foreach (var instance in values.ModifierList)
 				{
 					if (instance?.amount == null) continue;

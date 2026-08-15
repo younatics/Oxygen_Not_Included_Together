@@ -1,0 +1,343 @@
+﻿[08-15 14:11:42] soak starting: 4 runs on '싱크검증본'
+[08-15 14:11:42] run 1/4  label=soak01 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=True
+[08-15 14:11:43]   colony reset from '꾸밈 없는 우주 오두막'
+[08-15 14:18:14]   exit=1
+      host  errors=0  row=5|role=host|frameMs=19.0|worstMs=1781|stutters=43|hitches=4|rttMs=-1|registry=9140|lookupFails=94|lookupFailsPerRow=2|failsResolvedLater=0|unresolvedIds=94|expectedMisses=2|retiredIds=179|removedByCell=0|removalsUnmatched=2|framesThisRow=3155|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=511|ephemeral=191|refusedAsked=1411|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=3061|storeMade=0|storeNoPrefab=0|storeNoCritter=0|storeNamed=0|storeRefused=0|storeNotLanded=0|made[none]|storeMended=0|resyncs=24766|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|replayed=0|replayNone=2|siteNamed=0|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[none]|critterNoAnim=0|critterSent=8|lazyFixed=1|walkSkipped=0|spawnDup=0|noIdSkipped=9|doorForced=0|doorOk=0|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|dropsBlocked=0|ordersBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioByCell=1|prioCellApplied=0|prioCellSame=20|prioCellMissing=8|oreMisnamed=0|mergeKept=0|mergeBoth=42|mergeUnclear=0|byAmount[none]|selfSpawn=0|askedSpawn=0|adoptNearMiss=0|adoptMiss[none=0 le2=0 le8=0 far=0]|instNamed=0|instRepeat=0|instDropped=0|annSent=267|annNoId=0|annNotHost=0|annNotRepl=8|assignRefused=0|resolvePrefab=4|resolveElement=87|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1535|cost[BuildingDamageSyncer=2157ms/3155,PacketSender.SendToAllClients=1206ms/73510,AnimSyncCoordinator=868ms/3155,ConduitFlowSyncer=312ms/3155,KAnimControllerBase_Patches.SendAnimPacketToClients=77ms/5446,KAnimControllerBase_Play_Patch.Prefix=70ms/2626,WorldStateSyncer=53ms/3155,CursorManager=48ms/3155]|gap[SwampLilyFlower:1announced RepairableStorageProxy:27announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced Pacu:1announced MushBar:1announced]
+      FAIL client  NetId | No registry lookup failures | 0.6 | 1 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (2042 misses in total). Asked by: EntityPositio ...
+      client  errors=0  row=4|role=client|frameMs=17.3|worstMs=233|stutters=27|hitches=0|rttMs=33|registry=9053|lookupFails=2042|lookupFailsPerRow=74|failsResolvedLater=1103|unresolvedIds=2284|expectedMisses=76|retiredIds=264|removedByCell=0|removalsUnmatched=76|framesThisRow=3461|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5403|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=358/24|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=1|localOnly=540|ephemeral=222|refusedAsked=2|storeSync=602|skipConduit=0|storeInPlace=13049|storeRebuild=1|storeKept=3711|storeEntities=102|storeMade=3|storeNoPrefab=0|storeNoCritter=0|storeNamed=3|storeRefused=0|storeNotLanded=0|made[BasicPlantFood:3]|storeMended=2503|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=12|previewsNoId=311|mintsRefused=439|adoptRefused=8|scaffoldsCleared=2|scaffoldsSpared=0|replayed=0|replayNone=0|siteNamed=4|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[-99076679|Calories:185x avg9578 -191214231|Calories:185x avg5510 482917759|Calories:185x avg2268 -1477337111|Calories:185x avg616]|critterNoAnim=0|critterSent=0|lazyFixed=0|walkSkipped=1|spawnDup=8|noIdSkipped=0|doorForced=2|doorOk=1345|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=3|productsBlocked=3|dropsBlocked=16|ordersBlocked=315|heldNotSent=5|instAdopted=22|byCell=22|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=312|reassignments=1|plantIdsAbandoned=0|prioritiesDropped=4|prioByCell=3|prioCellApplied=0|prioCellSame=3|prioCellMissing=0|oreMisnamed=0|mergeKept=1|mergeBoth=45|mergeUnclear=0|byAmount[HitPoints:18040x avg0 Calories:17485x avg232.726 CritterTemperature:13970x avg0.001 Age:13415x avg0 Wildness:13415x avg0 Fertility:12130x avg0.018 ImmuneLevel:4070x avg0 Breath:4070x avg0.157]|selfSpawn=21|askedSpawn=46|adoptNearMiss=0|adoptMiss[none=154 le2=3 le8=12 far=62]|instNamed=231|instRepeat=0|instDropped=0|annSent=0|annNoId=0|annNotHost=0|annNotRepl=0|assignRefused=0|resolvePrefab=0|resolveElement=0|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1419|cost[ClientDamageWatcher=2575ms/3461,NetworkIdentityRegistry.TryGet=167ms/144916,BuildingDamageSyncer=136ms/3461,CursorManager=43ms/3461,PacketSender.SendToHost=34ms/569,KAnimControllerBase_Play_Patch.Prefix=12ms/4379,KAnimControllerBase_Queue_Patch.Prefix=6ms/5117,MissingEntityResolver=4ms/3461]|gap[WireUnderConstruction:1unnamed/1drawn/0announced TileComplete:1unnamed/1drawn/0announced SwampLilyFlower:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:1unnamed/1drawn/0announced HighWattageWireComplete:1unnamed/1drawn/0announced HatchBaby:2unnamed/2drawn/0announced]
+      netid  [netid] ids on both peers: 9031   pointing at different things: 0
+      netid  [netid] ids the host issued that the client never heard of: 107
+      netid  [netid] MISMATCH 9   HOST-ONLY 109   CLIENT-ONLY 34
+      hp     [hp] damaged buildings - host 80, client 80
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 529, client 500
+      store  [store] COUNT 1   MASS 2   HOST-ONLY 33   PEER-ONLY 4
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 0  ids agree
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      0
+      xstate host only   0
+      xstate client only 0
+      xstate buildings: host 5616, client 5612, client-only 0, host-only 4, mid-construction 0
+      xstate damaged buildings: host 80, client 80, disagreeing 0
+      state  [state] facts dumped - host 34921, client 36173
+      state  [state] snapshots taken -0.26s apart in sim time (host 122245.74, client 122245.48)
+      state  [state] chore     shared  9051   DIFFERENT   22   NEAR    0   HOST-ONLY   23   PEER-ONLY   51
+      state  [state] conduit   shared  1418   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] critter   shared   443   DIFFERENT    0   NEAR   69   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] flag      shared  1306   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] plant     shared   796   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] power     shared    17   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] prio      shared 18102   DIFFERENT    0   NEAR    0   HOST-ONLY   46   PEER-ONLY  102
+      state  [state] recipe    shared     9   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BuildingFlagsSyncer shared  1779   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   953   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT    3   NEAR   22   HOST-ONLY    0   PEER-ONLY    0
+      state    --- chore ---
+      state    both hold it, values differ:
+      state    chore|Wire@45219|waiting  host=0 client=1
+      state    chore|Wire@45220|waiting  host=0 client=1
+      state    chore|Wire@50018|waiting  host=0 client=1
+      state    chore|Wire@48746|waiting  host=0 client=1
+      state    host only:
+      state    chore|Water#-931041451|waiting = 0
+      state    chore|DirtyWater#noid@37013|waiting = 0
+      state    chore|Cuprite#-913599939|waiting = 0
+      state    chore|SlimeMold#-147781593|waiting = 0
+      state    client only:
+      state    chore|DirtyWater#noid@54163|waiting = 0
+      state    chore|DirtyWater#-1756541340|waiting = 0
+      state    chore|DirtyWater#noid@52880|waiting = 0
+      state    chore|Water#1983299194|waiting = 0
+      state    --- critter ---
+      state  near - drift between two snapshots, not a gate failure:
+      state    critter|PacuTropical@32953|Calories  host=91346.1 client=91371.1  (25.00 apart; moves 41.680/s, 1.3s of slack)
+      state    critter|Hatch@49027|Calories  host=5290774 client=5290949.5  (175.50 apart; moves 292.500/s, 1.3s of slack)
+      state    critter|PuftAlpha@63908|Calories  host=1087218.1 client=1087268  (49.90 apart; moves 83.128/s, 1.3s of slack)
+      state    critter|Pacu@30822|Calories  host=450017.7 client=450042.7  (25.00 apart; moves 41.719/s, 1.3s of slack)
+      state    --- prio ---
+      state    host only:
+      state    prio|GoldAmalgam#635424206|class = 0
+      state    prio|Dirt#-1929233071|class = 0
+      state    prio|Cuprite#-913599939|class = 0
+      state    prio|GoldAmalgam#-124950578|value = 5
+      state    client only:
+      state    prio|DirtyWater#noid@48998|class = 0
+      state    prio|DirtyWater#noid@52880|value = 5
+      state    prio|Water#1358580591|value = 5
+      state    prio|CarbonDioxide#1574465816|class = 0
+      state    --- vital ---
+      state    both hold it, values differ:
+      state    vital|에이브|stamina  host=33.4 client=33.6
+      state    vital|데본|stamina  host=27 client=27.2
+      state    vital|맥스|stamina  host=25.4 client=25.6
+      state  near - drift between two snapshots, not a gate failure:
+      state    vital|Leah|calories  host=3223612 client=3224112.2  (500.20 apart; moves 833.750/s, 1.3s of slack)
+      state    vital|Humphrey|calories  host=3978997.8 client=3979498  (500.20 apart; moves 7,142.732/s, 1.3s of slack)
+      state    vital|Celeste|calories  host=3352843.8 client=3353344  (500.20 apart; moves 833.750/s, 1.3s of slack)
+      state    vital|에이브|calories  host=3185396.2 client=3185896.5  (500.30 apart; moves 833.750/s, 1.3s of slack)
+      state  [state] not covered yet: power circuit topology (no confirmed accessor in this repository). Stored power, plant growth, critter amounts and conduit contents left this list and are now compared.
+[08-15 14:18:19] run 2/4  label=soak02 dig=6 settle=120s build=4 peerBuild=0 deconstruct=0 reconnect=True
+[08-15 14:18:19]   colony reset from '꾸밈 없는 우주 오두막'
+[08-15 14:24:22]   exit=1
+      host  errors=0  row=4|role=host|frameMs=18.0|worstMs=252|stutters=44|hitches=1|rttMs=-1|registry=9151|lookupFails=76|lookupFailsPerRow=21|failsResolvedLater=0|unresolvedIds=76|expectedMisses=0|retiredIds=136|removedByCell=0|removalsUnmatched=0|framesThisRow=3341|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=508|ephemeral=173|refusedAsked=577|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=2382|storeMade=0|storeNoPrefab=0|storeNoCritter=0|storeNamed=0|storeRefused=0|storeNotLanded=0|made[none]|storeMended=0|resyncs=19172|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|replayed=0|replayNone=1|siteNamed=0|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[none]|critterNoAnim=0|critterSent=10|lazyFixed=1|walkSkipped=0|spawnDup=0|noIdSkipped=0|doorForced=0|doorOk=0|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|dropsBlocked=0|ordersBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioByCell=0|prioCellApplied=0|prioCellSame=3|prioCellMissing=0|oreMisnamed=0|mergeKept=0|mergeBoth=31|mergeUnclear=0|byAmount[none]|selfSpawn=0|askedSpawn=0|adoptNearMiss=0|adoptMiss[none=0 le2=0 le8=0 far=0]|instNamed=0|instRepeat=0|instDropped=0|annSent=231|annNoId=0|annNotHost=0|annNotRepl=8|assignRefused=0|resolvePrefab=2|resolveElement=87|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1441|cost[BuildingDamageSyncer=2229ms/3341,PacketSender.SendToAllClients=2212ms/114052,AnimSyncCoordinator=1109ms/3341,KAnimControllerBase_Patches.SendAnimPacketToClients=187ms/9549,KAnimControllerBase_Play_Patch.Prefix=172ms/4702,ConduitFlowSyncer=104ms/3341,WorldStateSyncer=91ms/3341,CursorManager=40ms/3341]|gap[SwampLilySeed:1announced SwampLilyFlower:1announced RepairableStorageProxy:19announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PlantFiber:3announced PacuBaby:2announced Pacu:1announced]
+      client  errors=0  row=4|role=client|frameMs=20.7|worstMs=6283|stutters=30|hitches=6|rttMs=-1|registry=9070|lookupFails=0|lookupFailsPerRow=-888|failsResolvedLater=3269|unresolvedIds=83|expectedMisses=67|retiredIds=4|removedByCell=0|removalsUnmatched=67|framesThisRow=2902|collisions=0|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5405|statusSubs=0|choreSubs=0|plants=796|dupes=22|deathsApplied=0|previews=284/25|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=2|localOnly=1025|ephemeral=330|refusedAsked=94|storeSync=1200|skipConduit=0|storeInPlace=12815|storeRebuild=4|storeKept=3268|storeEntities=120|storeMade=7|storeNoPrefab=0|storeNoCritter=0|storeNamed=7|storeRefused=0|storeNotLanded=0|made[BasicPlantFood:7]|storeMended=1810|resyncs=0|multiStore=44|reattached=0|reattachSweeps=0|flagWatched=1606|flagRepaired=11|previewsNoId=238|mintsRefused=213|adoptRefused=6|scaffoldsCleared=2|scaffoldsSpared=0|replayed=0|replayNone=0|siteNamed=4|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[-99076679|Calories:157x avg8136 -191214231|Calories:157x avg6594 1411116178|Calories:157x avg691 -1477337111|Calories:157x avg594]|critterNoAnim=0|critterSent=0|lazyFixed=0|walkSkipped=3687|spawnDup=10|noIdSkipped=0|doorForced=2|doorOk=1264|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=4|productsBlocked=3|dropsBlocked=19|ordersBlocked=179|heldNotSent=4|instAdopted=25|byCell=25|staleIndex=0|minionsRefused=1|renamesRefused=0|idMoves=284|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=4|prioByCell=20|prioCellApplied=0|prioCellSame=20|prioCellMissing=1|oreMisnamed=0|mergeKept=0|mergeBoth=47|mergeUnclear=0|byAmount[HitPoints:15526x avg0 Calories:15055x avg230.945 CritterTemperature:12072x avg0.001 Age:11601x avg0.001 Wildness:11601x avg0.009 Fertility:10282x avg0.02 ImmuneLevel:3454x avg0 Breath:3454x avg0.249]|selfSpawn=54|askedSpawn=38|adoptNearMiss=0|adoptMiss[none=136 le2=4 le8=13 far=53]|instNamed=206|instRepeat=0|instDropped=0|annSent=0|annNoId=0|annNotHost=0|annNotRepl=0|assignRefused=0|resolvePrefab=0|resolveElement=0|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1972|cost[ClientDamageWatcher=2382ms/2902,BuildingDamageSyncer=139ms/2902,NetworkIdentityRegistry.TryGet=87ms/72506,CursorManager=56ms/2902,PacketSender.SendToHost=49ms/517,KAnimControllerBase_Play_Patch.Prefix=17ms/20897,CreatureSpawnPatch.Postfix=16ms/10243,BuildingSpawnPatch.Postfix=16ms/5616]|gap[TileUnderConstruction:1unnamed/1drawn/0announced TileComplete:2unnamed/2drawn/0announced SwampLilyFlower:1unnamed/1drawn/0announced PuftAlphaEgg:1unnamed/1drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:2unnamed/2drawn/0announced]
+      netid  [netid] ids on both peers: 9045   pointing at different things: 0
+      netid  [netid] ids the host issued that the client never heard of: 106
+      netid  [netid] MISMATCH 10   HOST-ONLY 107   CLIENT-ONLY 30
+      hp     [hp] damaged buildings - host 82, client 82
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 538, client 507
+      store  [store] COUNT 1   MASS 2   HOST-ONLY 32   PEER-ONLY 1
+      gate   diff_logs      exit 0  clean
+      gate   netid_compare  exit 0  ids agree
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      2
+      xstate host only   0
+      xstate client only 0
+      xstate buildings: host 5616, client 5613, client-only 0, host-only 3, mid-construction 0
+      xstate damaged buildings: host 82, client 82, disagreeing 0
+      state  [state] facts dumped - host 35091, client 36291
+      state  [state] snapshots taken -0.93s apart in sim time (host 122215.28, client 122214.35)
+      state  [state] chore     shared  9079   DIFFERENT   17   NEAR    0   HOST-ONLY   20   PEER-ONLY   39
+      state  [state] conduit   shared  1478   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] critter   shared   448   DIFFERENT    0   NEAR   70   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] flag      shared  1306   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] plant     shared   796   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] power     shared    17   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] prio      shared 18158   DIFFERENT    0   NEAR    0   HOST-ONLY   40   PEER-ONLY   78
+      state  [state] recipe    shared     9   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BuildingFlagsSyncer shared  1779   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   953   DIFFERENT    2   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT    0   NEAR   22   HOST-ONLY    0   PEER-ONLY    0
+      state    --- chore ---
+      state    both hold it, values differ:
+      state    chore|Wire@43655|waiting  host=0 client=1
+      state    chore|Wire@43403|waiting  host=0 client=1
+      state    chore|Wire@43679|waiting  host=0 client=1
+      state    chore|Wire@47727|waiting  host=0 client=1
+      state    host only:
+      state    chore|Sand#-2085102145|waiting = 0
+      state    chore|DirtyWater#310710632|waiting = 0
+      state    chore|DirtyWater#noid@37013|waiting = 0
+      state    chore|SlimeMold#-147781593|waiting = 0
+      state    client only:
+      state    chore|DirtyWater#noid@54163|waiting = 0
+      state    chore|DirtyWater#noid@52880|waiting = 0
+      state    chore|DirtyWater#noid@45150|waiting = 0
+      state    chore|Water#1983299194|waiting = 0
+      state    --- critter ---
+      state  near - drift between two snapshots, not a gate failure:
+      state    critter|Pacu@27784|Calories  host=196914 client=196922.4  (8.40 apart; moves 41.641/s, 1.9s of slack)
+      state    critter|PacuTropicalBaby@35230|Calories  host=440310.5 client=440311.3  (0.80 apart; moves 4.219/s, 1.9s of slack)
+      state    critter|Drecko@55103|Calories  host=9392621 client=9392788  (167.00 apart; moves 835.000/s, 1.9s of slack)
+      state    critter|Hatch@55944|Calories  host=3379174.2 client=3379407.5  (233.30 apart; moves 1,166.250/s, 1.9s of slack)
+      state    --- prio ---
+      state    host only:
+      state    prio|GoldAmalgam#363823509|value = 5
+      state    prio|Cuprite#-238297537|value = 5
+      state    prio|GoldAmalgam#635424206|class = 0
+      state    prio|Dirt#-1929233071|class = 0
+      state    client only:
+      state    prio|DirtyWater#noid@52880|value = 5
+      state    prio|Water#1358580591|value = 5
+      state    prio|CarbonDioxide#1574465816|class = 0
+      state    prio|Water#-257074596|value = 5
+      state    --- sync:StorageStateSyncer ---
+      state    both hold it, values differ:
+      state    sync:StorageStateSyncer|636861826|stor  host=1027023291:2.0,1624244999:150.0,1836671383:150.0 client=1027023291:4.0,1624244999:150.0,1836671383:150.0
+      state    sync:StorageStateSyncer|636861826|s1stor  host=1027023291:2.0,1836671383:50.0 client=1836671383:50.0
+      state    --- vital ---
+      state  near - drift between two snapshots, not a gate failure:
+      state    vital|아마리|stamina  host=67.3 client=67  (0.30 apart; moves 1.683/s, 1.9s of slack)
+      state    vital|Leah|calories  host=3248958 client=3249124.8  (166.80 apart; moves 833.750/s, 1.9s of slack)
+      state    vital|Humphrey|calories  host=3681564.5 client=3683064.5  (1,500.00 apart; moves 7,500.000/s, 1.9s of slack)
+      state    vital|Celeste|calories  host=3378189.8 client=3378356.5  (166.70 apart; moves 833.750/s, 1.9s of slack)
+      state  [state] not covered yet: power circuit topology (no confirmed accessor in this repository). Stored power, plant growth, critter amounts and conduit contents left this list and are now compared.
+[08-15 14:24:26] run 3/4  label=soak03 dig=3 settle=180s build=3 peerBuild=3 deconstruct=3 reconnect=True
+[08-15 14:24:26]   colony reset from '꾸밈 없는 우주 오두막'
+[08-15 14:33:53]   exit=1
+      host  errors=0  row=7|role=host|frameMs=17.8|worstMs=250|stutters=43|hitches=1|rttMs=-1|registry=9160|lookupFails=86|lookupFailsPerRow=2|failsResolvedLater=0|unresolvedIds=84|expectedMisses=0|retiredIds=229|removedByCell=0|removalsUnmatched=0|framesThisRow=3364|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=512|ephemeral=197|refusedAsked=1104|storeSync=605|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=4276|storeMade=0|storeNoPrefab=0|storeNoCritter=0|storeNamed=0|storeRefused=0|storeNotLanded=0|made[none]|storeMended=0|resyncs=35023|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=804|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|replayed=0|replayNone=2|siteNamed=0|siteEchoed=3|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[none]|critterNoAnim=0|critterSent=8|lazyFixed=1|walkSkipped=0|spawnDup=0|noIdSkipped=12|doorForced=0|doorOk=0|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=214|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|dropsBlocked=0|ordersBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=3|prioByCell=0|prioCellApplied=0|prioCellSame=3|prioCellMissing=0|oreMisnamed=0|mergeKept=0|mergeBoth=49|mergeUnclear=0|byAmount[none]|selfSpawn=0|askedSpawn=0|adoptNearMiss=0|adoptMiss[none=0 le2=0 le8=0 far=0]|instNamed=0|instRepeat=0|instDropped=0|annSent=353|annNoId=0|annNotHost=0|annNotRepl=10|assignRefused=0|resolvePrefab=38|resolveElement=106|prioFixed=3|prioDefaulted=0|removalsApplied=0|gcMB=1471|cost[PacketSender.SendToAllClients=3106ms/145140,BuildingDamageSyncer=2201ms/3364,AnimSyncCoordinator=650ms/3364,KAnimControllerBase_Patches.SendAnimPacketToClients=482ms/14357,KAnimControllerBase_Queue_Patch.Prefix=283ms/8025,KAnimControllerBase_Play_Patch.Prefix=227ms/6804,WorldStateSyncer=117ms/3364,ConduitFlowSyncer=106ms/3364]|gap[SwampLilyFlower:1announced SpiceNut:1announced RotPile:3announced RepairableStorageProxy:39announced PuftAlphaEgg:1announced PuftAlphaBaby:1announced PlantFiber:2announced PacuBaby:1announced]
+      FAIL client  NetId | No registry lookup failures | 0.6 | 2 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (934 misses in total). Asked by: WorkableProgre ...
+      client  errors=0  row=7|role=client|frameMs=17.2|worstMs=217|stutters=26|hitches=0|rttMs=33|registry=9090|lookupFails=928|lookupFailsPerRow=65|failsResolvedLater=1303|unresolvedIds=2296|expectedMisses=115|retiredIds=37|removedByCell=0|removalsUnmatched=115|framesThisRow=3484|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5402|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=154/4|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=577|ephemeral=247|refusedAsked=2|storeSync=605|skipConduit=0|storeInPlace=23452|storeRebuild=33|storeKept=6509|storeEntities=174|storeMade=36|storeNoPrefab=0|storeNoCritter=0|storeNamed=36|storeRefused=0|storeNotLanded=0|made[BasicPlantFood:36]|storeMended=3600|resyncs=0|multiStore=22|reattached=9164|reattachSweeps=1|flagWatched=804|flagRepaired=17|previewsNoId=468|mintsRefused=1166|adoptRefused=20|scaffoldsCleared=2|scaffoldsSpared=2|replayed=0|replayNone=0|siteNamed=6|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[-99076679|Calories:315x avg9060 591865020|Calories:315x avg4688 -191214231|Calories:315x avg3570 -1236352933|Calories:315x avg3361]|critterNoAnim=0|critterSent=0|lazyFixed=0|walkSkipped=3|spawnDup=8|noIdSkipped=0|doorForced=6|doorOk=2331|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=214|convergesRefused=1|resProtected=0|hatchesBlocked=3|productsBlocked=2|dropsBlocked=35|ordersBlocked=343|heldNotSent=7|instAdopted=3|byCell=3|staleIndex=1|minionsRefused=0|renamesRefused=0|idMoves=512|reassignments=3|plantIdsAbandoned=0|prioritiesDropped=3|prioByCell=3|prioCellApplied=0|prioCellSame=3|prioCellMissing=0|oreMisnamed=0|mergeKept=2|mergeBoth=117|mergeUnclear=0|byAmount[HitPoints:30854x avg0 Calories:29909x avg660.483 CritterTemperature:23924x avg0.004 Age:22979x avg0.001 Wildness:22979x avg0.009 Fertility:20708x avg0.015 ImmuneLevel:6930x avg0.001 Breath:6930x avg0.13]|selfSpawn=94|askedSpawn=76|adoptNearMiss=0|adoptMiss[none=225 le2=4 le8=13 far=72]|instNamed=16|instRepeat=0|instDropped=0|annSent=0|annNoId=0|annNotHost=0|annNotRepl=0|assignRefused=0|resolvePrefab=0|resolveElement=0|prioFixed=6|prioDefaulted=0|removalsApplied=0|gcMB=1433|cost[ClientDamageWatcher=2616ms/3484,NetworkIdentityRegistry.TryGet=143ms/112294,BuildingDamageSyncer=140ms/3484,CursorManager=52ms/3484,PacketSender.SendToHost=42ms/546,KAnimControllerBase_Play_Patch.Prefix=8ms/2909,KAnimControllerBase_Queue_Patch.Prefix=5ms/3527,WorldStateSyncer=4ms/3484]|gap[PuftAlphaBaby:1unnamed/1drawn/0announced PacuBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:2unnamed/2drawn/0announced HatchHardBaby:1unnamed/1drawn/0announced BasicPlantFood:14unnamed/14drawn/0announced BasicPlantBar:9unnamed/10drawn/0announced <link="WATER">물</link>:9unnamed/17drawn/0announced]
+      netid  [netid] ids on both peers: 9007   pointing at different things: 0
+      netid  [netid] ids the host issued that the client never heard of: 153
+      netid  [netid] MISMATCH 8   HOST-ONLY 144   CLIENT-ONLY 87
+      hp     [hp] damaged buildings - host 75, client 75
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 552, client 514
+      store  [store] COUNT 1   MASS 2   HOST-ONLY 43   PEER-ONLY 5
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 0  ids agree
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      1
+      xstate host only   0
+      xstate client only 0
+      xstate buildings: host 5618, client 5614, client-only 0, host-only 4, mid-construction 0
+      xstate damaged buildings: host 75, client 75, disagreeing 0
+      state  [state] facts dumped - host 34734, client 36121
+      state  [state] snapshots taken -0.37s apart in sim time (host 122387.38, client 122387.01)
+      state  [state] chore     shared  9045   DIFFERENT   30   NEAR    0   HOST-ONLY   27   PEER-ONLY   64
+      state  [state] conduit   shared  1290   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] critter   shared   443   DIFFERENT    0   NEAR   69   HOST-ONLY    0   PEER-ONLY   21
+      state  [state] flag      shared  1309   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] plant     shared   796   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] power     shared    17   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] prio      shared 18090   DIFFERENT    0   NEAR    0   HOST-ONLY   54   PEER-ONLY  128
+      state  [state] recipe    shared     9   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BuildingFlagsSyncer shared  1783   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   957   DIFFERENT    1   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT    4   NEAR   29   HOST-ONLY    0   PEER-ONLY    0
+      state    --- chore ---
+      state    both hold it, values differ:
+      state    chore|Wire@51314|waiting  host=0 client=1
+      state    chore|Wire@52598|waiting  host=0 client=1
+      state    chore|Wire@43403|waiting  host=0 client=1
+      state    chore|Wire@43656|waiting  host=0 client=1
+      state    host only:
+      state    chore|Clay#1784583268|waiting = 0
+      state    chore|DirtyWater#310710632|waiting = 0
+      state    chore|Cuprite#-913599939|waiting = 0
+      state    chore|SlimeMold#1181306807|waiting = 0
+      state    client only:
+      state    chore|DirtyWater#noid@54163|waiting = 0
+      state    chore|DirtyWater#noid@52880|waiting = 0
+      state    chore|DirtyWater#364600899|waiting = 0
+      state    chore|Methane#-1803642542|waiting = 0
+      state    --- critter ---
+      state  near - drift between two snapshots, not a gate failure:
+      state    critter|PacuTropicalBaby@36270|Calories  host=439584 client=439585.7  (1.70 apart; moves 4.219/s, 1.4s of slack)
+      state    critter|Puft@43977|Calories  host=1083274.9 client=1083308.1  (33.20 apart; moves 83.125/s, 1.4s of slack)
+      state    critter|Hatch@55944|Calories  host=3686006.5 client=3686473  (466.50 apart; moves 1,166.250/s, 1.4s of slack)
+      state    critter|Hatch@55934|Calories  host=3178346 client=3178812.5  (466.50 apart; moves 1,166.250/s, 1.4s of slack)
+      state    client only:
+      state    critter|HatchHardBaby@54141|HitPoints = 200
+      state    critter|Pacu@57018|Wildness = 100
+      state    critter|PacuBaby@31881|Calories = 498673.6
+      state    critter|PuftAlphaBaby@41658|Age = 0.5
+      state    --- prio ---
+      state    host only:
+      state    prio|Clay#-2117574546|value = 5
+      state    prio|ToxicSand#1087385330|class = 0
+      state    prio|Cuprite#-238297537|value = 5
+      state    prio|GoldAmalgam#635424206|class = 0
+      state    client only:
+      state    prio|DirtyWater#noid@52880|value = 5
+      state    prio|Water#1358580591|value = 5
+      state    prio|DirtyWater#noid@42651|class = 0
+      state    prio|Water#-41892612|value = 5
+      state    --- sync:StorageStateSyncer ---
+      state    both hold it, values differ:
+      state    sync:StorageStateSyncer|636861826|s1stor  host=1027023291:0.0,1624244999:75.0,1836671383:75.0 client=1624244999:75.0,1836671383:75.0
+      state    --- vital ---
+      state    both hold it, values differ:
+      state    vital|마리|stamina  host=28.8 client=28.1
+      state    vital|니콜라|stamina  host=15.9 client=15.2
+      state    vital|Ruby|stamina  host=38.9 client=38.2
+      state    vital|렌|stamina  host=29.6 client=28.9
+      state  near - drift between two snapshots, not a gate failure:
+      state    vital|아마리|stamina  host=65.6 client=64.9  (0.70 apart; moves 1.717/s, 1.4s of slack)
+      state    vital|Leah|calories  host=3705416.5 client=3705750  (333.50 apart; moves 833.750/s, 1.4s of slack)
+      state    vital|Eleanor|stamina  host=79.8 client=79.1  (0.70 apart; moves 1.688/s, 1.4s of slack)
+      state    vital|Humphrey|calories  host=3930473.5 client=3930807  (333.50 apart; moves 833.750/s, 1.4s of slack)
+      state  [state] not covered yet: power circuit topology (no confirmed accessor in this repository). Stored power, plant growth, critter amounts and conduit contents left this list and are now compared.
+[08-15 14:33:57] run 4/4  label=soak04 dig=4 settle=150s build=4 peerBuild=0 deconstruct=0 reconnect=True
+[08-15 14:33:57]   colony reset from '꾸밈 없는 우주 오두막'
+[08-15 14:40:30]   exit=1
+      host  errors=0  row=5|role=host|frameMs=19.0|worstMs=1760|stutters=41|hitches=4|rttMs=-1|registry=9152|lookupFails=88|lookupFailsPerRow=6|failsResolvedLater=0|unresolvedIds=87|expectedMisses=2|retiredIds=173|removedByCell=0|removalsUnmatched=2|framesThisRow=3158|collisions=2|fieldFixes=7|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=0|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=0/0|namedOnSpawn=4|unnamedOnSpawn=0|adoptedByPacket=0|localOnly=521|ephemeral=187|refusedAsked=1059|storeSync=602|skipConduit=0|storeInPlace=0|storeRebuild=0|storeKept=0|storeEntities=2988|storeMade=0|storeNoPrefab=0|storeNoCritter=0|storeNamed=0|storeRefused=0|storeNotLanded=0|made[none]|storeMended=0|resyncs=24713|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=0|previewsNoId=0|mintsRefused=0|adoptRefused=0|scaffoldsCleared=0|scaffoldsSpared=0|replayed=0|replayNone=2|siteNamed=0|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[none]|critterNoAnim=0|critterSent=8|lazyFixed=2|walkSkipped=0|spawnDup=0|noIdSkipped=14|doorForced=0|doorOk=0|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=0|resProtected=0|hatchesBlocked=0|productsBlocked=0|dropsBlocked=0|ordersBlocked=0|heldNotSent=0|instAdopted=0|byCell=0|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=4|reassignments=0|plantIdsAbandoned=0|prioritiesDropped=0|prioByCell=1|prioCellApplied=0|prioCellSame=19|prioCellMissing=1|oreMisnamed=0|mergeKept=0|mergeBoth=36|mergeUnclear=0|byAmount[none]|selfSpawn=0|askedSpawn=0|adoptNearMiss=0|adoptMiss[none=0 le2=0 le8=0 far=0]|instNamed=0|instRepeat=0|instDropped=0|annSent=281|annNoId=0|annNotHost=0|annNotRepl=8|assignRefused=0|resolvePrefab=3|resolveElement=99|prioFixed=0|prioDefaulted=0|removalsApplied=0|gcMB=1540|cost[BuildingDamageSyncer=2193ms/3158,PacketSender.SendToAllClients=1274ms/79050,AnimSyncCoordinator=868ms/3158,ConduitFlowSyncer=99ms/3158,KAnimControllerBase_Patches.SendAnimPacketToClients=77ms/5502,KAnimControllerBase_Play_Patch.Prefix=72ms/2671,WorldStateSyncer=58ms/3158,CursorManager=42ms/3158]|gap[SwampLilyFlower:1announced RepairableStorageProxy:30announced PuftEgg:1announced PuftAlphaBaby:1announced PlantFiber:3announced Pacu:1announced MushBar:1announced MopPlacer:6announced]
+      FAIL client  NetId | No registry lookup failures | 0.6 | 1 NetIds could not be resolved even after asking the host - these are objects this peer is genuinely missing (993 misses in total). Asked by: WorkableProgre ...
+      client  errors=0  row=4|role=client|frameMs=17.3|worstMs=217|stutters=26|hitches=0|rttMs=23|registry=9069|lookupFails=980|lookupFailsPerRow=169|failsResolvedLater=1111|unresolvedIds=2287|expectedMisses=73|retiredIds=253|removedByCell=0|removalsUnmatched=73|framesThisRow=3463|collisions=0|fieldFixes=0|navPending=0|chunkSets=0|resolverQueue=0|hpTracked=5403|statusSubs=0|choreSubs=0|plants=398|dupes=22|deathsApplied=0|previews=338/20|namedOnSpawn=0|unnamedOnSpawn=0|adoptedByPacket=1|localOnly=552|ephemeral=218|refusedAsked=3|storeSync=602|skipConduit=0|storeInPlace=13851|storeRebuild=12|storeKept=3612|storeEntities=102|storeMade=14|storeNoPrefab=0|storeNoCritter=0|storeNamed=14|storeRefused=0|storeNotLanded=0|made[BasicPlantFood:14]|storeMended=2094|resyncs=0|multiStore=22|reattached=0|reattachSweeps=0|flagWatched=803|flagRepaired=14|previewsNoId=257|mintsRefused=293|adoptRefused=15|scaffoldsCleared=3|scaffoldsSpared=0|replayed=0|replayNone=0|siteNamed=4|siteEchoed=0|siteUnnamed=0|buildNothing=0|buildRefused=0|vitalClamped=0|drift[-99076679|Calories:184x avg6762 -191214231|Calories:184x avg5538 1411116178|Calories:184x avg717 -1477337111|Calories:184x avg635]|critterNoAnim=0|critterSent=0|lazyFixed=0|walkSkipped=3|spawnDup=8|noIdSkipped=0|doorForced=3|doorOk=1343|siteOtherLayer=0|ghostSites=1|ghostNew=0|ghostWorst=1|sites=212|convergesRefused=1|resProtected=0|hatchesBlocked=3|productsBlocked=2|dropsBlocked=26|ordersBlocked=280|heldNotSent=4|instAdopted=18|byCell=18|staleIndex=0|minionsRefused=0|renamesRefused=0|idMoves=343|reassignments=3|plantIdsAbandoned=0|prioritiesDropped=4|prioByCell=3|prioCellApplied=0|prioCellSame=3|prioCellMissing=0|oreMisnamed=0|mergeKept=2|mergeBoth=66|mergeUnclear=0|byAmount[HitPoints:18023x avg0 Calories:17471x avg182.671 CritterTemperature:13975x avg0.001 Age:13423x avg0 Wildness:13423x avg0.008 Fertility:12063x avg0.018 ImmuneLevel:4048x avg0 Breath:4048x avg0.247]|selfSpawn=17|askedSpawn=50|adoptNearMiss=0|adoptMiss[none=171 le2=2 le8=16 far=60]|instNamed=249|instRepeat=0|instDropped=0|annSent=0|annNoId=0|annNotHost=0|annNotRepl=0|assignRefused=0|resolvePrefab=0|resolveElement=0|prioFixed=4|prioDefaulted=0|removalsApplied=0|gcMB=1420|cost[ClientDamageWatcher=2501ms/3463,NetworkIdentityRegistry.TryGet=349ms/142703,LogicStateSyncer=192ms/3463,BuildingDamageSyncer=136ms/3463,CursorManager=48ms/3463,PacketSender.SendToHost=39ms/571,KAnimControllerBase_Play_Patch.Prefix=11ms/4179,KAnimControllerBase_Queue_Patch.Prefix=7ms/4889]|gap[WireUnderConstruction:1unnamed/1drawn/0announced TileComplete:2unnamed/2drawn/0announced PuftAlphaBaby:1unnamed/1drawn/0announced Pacu:1unnamed/1drawn/0announced MushBar:1unnamed/1drawn/0announced HatchHardBaby:1unnamed/1drawn/0announced CrabBaby:1unnamed/1drawn/0announced ColdWheatSeed:1unnamed/1drawn/0announced]
+      netid  [netid] ids on both peers: 9043   pointing at different things: 0
+      netid  [netid] ids the host issued that the client never heard of: 110
+      netid  [netid] MISMATCH 7   HOST-ONLY 109   CLIENT-ONLY 35
+      hp     [hp] damaged buildings - host 86, client 86
+      hp     [hp] DIFFERENT 0   HOST-ONLY 0   PEER-ONLY 0
+      store  [store] container/item groups - host 533, client 504
+      store  [store] COUNT 1   MASS 1   HOST-ONLY 32   PEER-ONLY 3
+      gate   diff_logs      exit 1  DIVERGENCE CONFIRMED
+      gate   netid_compare  exit 0  ids agree
+      gate   selfcheck      host exit 0, client exit 0
+      gate   state_compare  exit 1  PEERS DISAGREE ABOUT WORLD STATE
+      xstate differ      1
+      xstate host only   0
+      xstate client only 0
+      xstate buildings: host 5615, client 5611, client-only 0, host-only 4, mid-construction 0
+      xstate damaged buildings: host 86, client 86, disagreeing 0
+      state  [state] facts dumped - host 34953, client 36166
+      state  [state] snapshots taken -0.50s apart in sim time (host 122244.98, client 122244.48)
+      state  [state] chore     shared  9071   DIFFERENT   25   NEAR    0   HOST-ONLY   21   PEER-ONLY   39
+      state  [state] conduit   shared  1416   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] critter   shared   424   DIFFERENT    0   NEAR   66   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] flag      shared  1306   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] plant     shared   796   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] power     shared    17   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] prio      shared 18142   DIFFERENT    0   NEAR    0   HOST-ONLY   42   PEER-ONLY   78
+      state  [state] recipe    shared     9   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] research  shared   100   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BatteryStateSyncer shared    10   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:BuildingFlagsSyncer shared  1779   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:EnergyGeneratorSyncer shared    21   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:StorageStateSyncer shared   953   DIFFERENT    1   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] sync:ToiletSyncer shared    51   DIFFERENT    0   NEAR    0   HOST-ONLY    0   PEER-ONLY    0
+      state  [state] vital     shared    84   DIFFERENT    1   NEAR   30   HOST-ONLY    0   PEER-ONLY    0
+      state    --- chore ---
+      state    both hold it, values differ:
+      state    chore|Wire@45219|waiting  host=0 client=1
+      state    chore|Wire@52598|waiting  host=0 client=1
+      state    chore|Wire@43682|waiting  host=0 client=1
+      state    chore|Wire@43679|waiting  host=0 client=1
+      state    host only:
+      state    chore|DirtyWater#310710632|waiting = 0
+      state    chore|DirtyWater#noid@37013|waiting = 0
+      state    chore|Sand#-1015733135|waiting = 0
+      state    chore|SlimeMold#-147781593|waiting = 0
+      state    client only:
+      state    chore|DirtyWater#noid@51558|waiting = 0
+      state    chore|ContaminatedOxygen#-1310647186|waiting = 0
+      state    chore|DirtyWater#noid@49004|waiting = 0
+      state    chore|DirtyWater#1622935807|waiting = 0
+      state    --- critter ---
+      state  near - drift between two snapshots, not a gate failure:
+      state    critter|LightBug@50308|Calories  host=140078 client=140091.3  (13.30 apart; moves 16.641/s, 1.5s of slack)
+      state    critter|Drecko@55362|Calories  host=9852539 client=9853207  (668.00 apart; moves 835.000/s, 1.5s of slack)
+      state    critter|Puft@62869|Calories  host=1084947.2 client=1085013.8  (66.60 apart; moves 83.125/s, 1.5s of slack)
+      state    critter|PuftAlpha@62624|Calories  host=1086673.4 client=1086739.9  (66.50 apart; moves 83.125/s, 1.5s of slack)
+      state    --- prio ---
+      state    host only:
+      state    prio|Sand#-1015733135|value = 5
+      state    prio|GoldAmalgam#124067643|class = 0
+      state    prio|Cuprite#-238297537|value = 5
+      state    prio|GoldAmalgam#124067643|value = 5
+      state    client only:
+      state    prio|ContaminatedOxygen#-1310647186|value = 5
+      state    prio|Methane#-44343528|value = 5
+      state    prio|DirtyWater#noid@42651|class = 0
+      state    prio|Carbon#1498558756|value = 5
+      state    --- sync:StorageStateSyncer ---
+      state    both hold it, values differ:
+      state    sync:StorageStateSyncer|636861826|s1stor  host=1027023291:2.0,1836671383:50.0 client=1836671383:50.0
+      state    --- vital ---
+      state    both hold it, values differ:
+      state    vital|버트|stamina  host=26.6 client=26.8
+      state  near - drift between two snapshots, not a gate failure:
+      state    vital|Leah|calories  host=3224279 client=3224946  (667.00 apart; moves 833.750/s, 1.5s of slack)
+      state    vital|Humphrey|calories  host=3574216.5 client=3574883.5  (667.00 apart; moves 7,500.229/s, 1.5s of slack)
+      state    vital|Celeste|calories  host=3353510.8 client=3354177.8  (667.00 apart; moves 833.750/s, 1.5s of slack)
+      state    vital|니콜라|stamina  host=22.6 client=22.8  (0.20 apart; moves 0.203/s, 1.5s of slack)
+      state  [state] not covered yet: power circuit topology (no confirmed accessor in this repository). Stored power, plant growth, critter amounts and conduit contents left this list and are now compared.
+[08-15 14:40:33] soak finished
