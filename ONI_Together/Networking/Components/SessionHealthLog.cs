@@ -344,6 +344,21 @@ namespace ONI_Together.Networking.Components
 				// nothing, and plants now travel this path, so this is the number that says
 				// the guard is holding rather than that it was never needed.
 				$"|annRepeat={NetworkIdentity.AnnounceSkippedRepeat}" +
+				// The rolling census: what the host holds that this peer does not, asked
+				// continuously instead of by hand after somebody complains.
+				//
+				// Read censusMissing2 and ignore censusMissing1. The first counts ids that
+				// were not there at the moment they were offered, which includes everything
+				// still in flight; the second counts ids absent on two consecutive passes,
+				// four minutes apart on this colony, and nothing legitimate is in flight
+				// that long.
+				//
+				// censusCycles is the control. Zero there means the census never completed
+				// a pass, and then a zero in the other two says nothing at all.
+				$"|censusChecked={IdCensus.Checked}" +
+				$"|censusMissing1={IdCensus.MissingNow}" +
+				$"|censusMissing2={IdCensus.MissingPersistent}" +
+				$"|censusCycles={IdCensus.CyclesCompleted}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//
 				// WireNetworkRepair swept the wire layer on the client every five seconds

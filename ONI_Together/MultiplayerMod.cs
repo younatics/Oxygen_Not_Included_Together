@@ -149,6 +149,7 @@ namespace ONI_Together
 				go.AddComponent<BuildingDamageSyncer>();
 				go.AddComponent<MissingEntityResolver>();
 				go.AddComponent<ClientDamageWatcher>();
+				go.AddComponent<IdCensus>();
 				go.AddComponent<SessionHealthLog>();
 				go.AddComponent<LinkQualitySampler>();
 
