@@ -503,6 +503,55 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                // Describe every wire on this peer, so the two descriptions can be diffed.
+                //
+                // The electrical divergence is the largest thing in the comparison by a
+                // wide margin - 474 of 1,051 circuit cells assigned to different groups,
+                // against 0 of 1,754 for gas and liquid conduits, which are perfect. Three
+                // attempts to fix it have failed, and every one of them started by acting:
+                // reconnecting wires, rebuilding networks, patching the completion path.
+                // None started by writing down what the wires actually are.
+                //
+                // One row per wire cell, both peers, diffed afterwards. The fields are
+                // chosen to separate the explanations that are still open: NetworkID says
+                // which circuit this peer put the wire in, IsConnected says whether it
+                // thinks it is in one at all, and the connection bits say what the wire
+                // believes its neighbours are. If the bits agree and the NetworkIDs do
+                // not, the fault is in how the network is walked; if the bits differ, it
+                // is in the grid underneath.
+                case "wire-dump":
+                {
+                    if (Game.Instance == null) throw new InvalidOperationException("no game");
+
+                    int layer = (int)ObjectLayer.Wire;
+                    int rows = 0, unnetworked = 0;
+                    for (int cell = 0; cell < Grid.CellCount; cell++)
+                    {
+                        if (!Grid.IsValidCell(cell)) continue;
+                        var occupant = Grid.Objects[cell, layer];
+                        if (occupant == null || occupant.IsNullOrDestroyed()) continue;
+
+                        var wire = occupant.GetComponent<Wire>();
+                        if (wire == null) continue;
+
+                        if (wire.NetworkID == ushort.MaxValue) unnetworked++;
+
+                        // The connection bits describe which sides this wire believes it
+                        // joins. Read off the same utility network the game walks, so a
+                        // difference here is a difference the game itself would act on.
+                        int bits = (int)Game.Instance.electricalConduitSystem
+                            .GetConnections(cell, true);
+
+                        DebugConsole.Log(
+                            $"{Tag} WIRE {cell}|{occupant.PrefabID()}|{wire.NetworkID}|" +
+                            $"{(wire.IsConnected ? 1 : 0)}|{bits}");
+                        rows++;
+                    }
+
+                    DebugConsole.Log($"{Tag} OK wire-dump :: {rows} wire(s), {unnetworked} with no network");
+                    break;
+                }
+
                 case "wire-connect":
                 {
                     if (Game.Instance == null) throw new InvalidOperationException("no game");
@@ -990,11 +1039,46 @@ namespace ONI_Together.DebugTools
 						site.initialTemperature = ambient;
 					}
 
-					// Signature read off the compiler rather than guessed:
-					// FinishConstruction(UtilityConnections, WorkerBase). No connections
-					// and no worker - the mod's patch reads the building, not the
-					// duplicant, and a fresh site has nothing wired to it yet.
-					site.FinishConstruction((UtilityConnections)0, null);
+					// The connections the cell actually has, not zero.
+					//
+					// This passed (UtilityConnections)0 for a long time, on the reasoning
+					// that "a fresh site has nothing wired to it yet". That reasoning was
+					// wrong and it cost three rounds of investigation aimed at the mod.
+					//
+					// Zero tells the finished wire it joins nothing. In a real build the
+					// game passes the connections the placement implies, so a duplicant
+					// completing the same wire gets a conductor that knows its neighbours.
+					// The forced one does not, and its neighbour is never asked to look
+					// again either.
+					//
+					// What that produced, measured: the host finished HighWattageWire at
+					// cell 54161 with bits=0 while the client - which builds the same wire
+					// from BuildCompletePacket, through the normal path - got bits=1. One
+					// wire. The host then held it as a circuit of its own where the client
+					// had it joined to the 471-cell circuit next door, and every cell in
+					// both circuits reported a different group: 474 of 1,051 circuit rows,
+					// the largest single divergence in the whole comparison, and none of it
+					// real.
+					//
+					// Three attempts to fix "the client's unconnected wires" failed against
+					// this, because the client was right and the host was the one holding
+					// the wrong answer - put there by this line. The wire dumps that
+					// finally caught it agreed on all 931 rows BEFORE finishbuild ran and
+					// differed on exactly this cell after.
+					//
+					// Read from the same conduit system the circuit walk reads, so the
+					// forced completion and a real one describe the wire the same way.
+					var conns = (UtilityConnections)0;
+					if (site.TryGetComponent<Building>(out var siteBuilding)
+						&& siteBuilding.Def != null
+						&& siteBuilding.Def.ObjectLayer == ObjectLayer.Wire)
+					{
+						int siteCell = Grid.PosToCell(site.gameObject);
+						if (Grid.IsValidCell(siteCell))
+							conns = Game.Instance.electricalConduitSystem.GetConnections(siteCell, true);
+					}
+
+					site.FinishConstruction(conns, null);
 					done++;
 					DebugConsole.Log($"{Tag} finishbuild: '{site.gameObject.PrefabID()}' completed at cell {Grid.PosToCell(site.gameObject)}");
 				}
