@@ -54,6 +54,31 @@ namespace ONI_Together.DebugTools
 			"ClientDamageWatcher",
 			"BulkPacketMonitor",
 			"CursorManager",
+
+			// Added after the list itself turned out to be the blind spot.
+			//
+			// cost[] was read as "what the mod costs" for a long time, and it is only ever
+			// what this array names. Everything else reads as zero, which is
+			// indistinguishable from free - the same trap as a check that cannot fire.
+			//
+			// TransportClient and TransportServer pump the network every frame and were
+			// never in it. IdCensus and WireRejoin are recent and were never added.
+			// SessionHealthLog is the instrument itself and walks the world once a minute.
+			"TransportClient",
+			"TransportServer",
+			"IdCensus",
+			"WireRejoin",
+			"SessionHealthLog",
+
+			// SyncedEntityBase is the important one and it cannot be caught this way.
+			//
+			// Every structure syncer inherits Update from it, so AccessTools.Method finds
+			// the base method and the DeclaringType check below skips it for every
+			// subclass. There are thousands of these instances and their per-frame cost has
+			// never been measured at all - not "measured as small", never measured. Naming
+			// the base here times the one method they all share, which is what there is to
+			// time: the subclasses do not declare their own.
+			"SyncedEntityBase",
 		};
 
 		public static void Note(string name, long elapsedTicks)
@@ -170,6 +195,19 @@ namespace ONI_Together.DebugTools
 
 					var update = AccessTools.Method(type, "Update");
 					if (update == null || update.DeclaringType != type) continue;
+
+					// An abstract method has no body to time, and offering one here does
+					// not skip that entry - it throws out of Harmony and takes the whole
+					// patch class with it. TransportClient.Update is abstract, and adding
+					// it to the watch list silently removed EVERY Update timing: the next
+					// run's cost[] listed only the static patches, which reads exactly like
+					// "those components became free".
+					//
+					// The mod already applies patch CLASSES one at a time so a bad one
+					// cannot take the rest of the mod down. This is the same hazard one
+					// level in, and it needs the same treatment.
+					if (update.IsAbstract) continue;
+
 					yield return update;
 				}
 			}

@@ -166,6 +166,17 @@ namespace ONI_Together.Networking.Components
 			// FindObjectsByType over Buildings; the sites it then walks are a handful.
 			GhostSiteScan.Scan();
 
+			// Once a minute, check the damageable-building index against the scene.
+			//
+			// The index replaced two timed FindObjectsByType scans that between them cost
+			// about 5.7 seconds a minute across both peers, and it is only as complete as
+			// the OnSpawn patch that fills it. This codebase has been caught once by an
+			// exclusion rule that ninety-one call sites went around, so completeness is
+			// measured rather than assumed: hpIndexMisses staying at 0 is what says the
+			// cheap path can be trusted, and a non-zero value names a spawn path that does
+			// not go through OnSpawn.
+			BuildingHPIndex.Audit();
+
 			// Once a minute is enough to notice a registry that has been emptied.
 			//
 			// A reconnect wipes the registry and nothing re-files the world, because
@@ -389,6 +400,13 @@ namespace ONI_Together.Networking.Components
 				// mark CLEARED because a duplicant collected the debris is not a tool action
 				// at all, which is why the client kept showing work the host had finished.
 				$"|censusSweep={IdCensus.SweepMarksCorrected}" +
+				// The damageable-building index that replaced two timed scene scans, and
+				// whether it is complete. hpIndexMisses must stay 0; anything else means a
+				// building spawned by a path the OnSpawn patch does not see, and the damage
+				// paths would be blind to it.
+				$"|hpIndex={BuildingHPIndex.Count}" +
+				$"|hpIndexMisses={BuildingHPIndex.IndexMisses}" +
+				$"|hpIndexAudits={BuildingHPIndex.Audits}" +
 				// Planting ghosts removed before the plant that replaced them was built.
 				// Zero here beside a plant announcement means the ghost was not found and
 				// this peer is about to hold two objects in one cell - the state that killed

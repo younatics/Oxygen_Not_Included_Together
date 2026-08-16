@@ -38,7 +38,7 @@ namespace ONI_Together.Networking.Components
         /// <summary>How long a cached component list is trusted before it is rebuilt.</summary>
         private const float RefreshInterval = 5f;
 
-        private BuildingHP[] _buildings = new BuildingHP[0];
+        private readonly System.Collections.Generic.List<BuildingHP> _indexScratch = new System.Collections.Generic.List<BuildingHP>();
         private float _nextRefresh;
         private int _cursor;
 
@@ -72,7 +72,7 @@ namespace ONI_Together.Networking.Components
             UnexplainedDrops = 0;
             _cursor = 0;
             _nextRefresh = 0f;
-            _buildings = new BuildingHP[0];
+            _indexScratch.Clear();
         }
 
         public string Describe()
@@ -93,12 +93,25 @@ namespace ONI_Together.Networking.Components
             if (Time.unscaledTime >= _nextRefresh)
             {
                 _nextRefresh = Time.unscaledTime + RefreshInterval;
-                _buildings = Object.FindObjectsByType<BuildingHP>(
-                    FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-                if (_cursor >= _buildings.Length) _cursor = 0;
+
+                // From the index rather than from the scene.
+                //
+                // This line was Object.FindObjectsByType<BuildingHP>() and it was the
+                // single most expensive thing the mod did on a client: 3,246 ms a minute
+                // over twelve refreshes, about 270 ms each, on a colony of some 1,400
+                // damageable buildings. It never showed in the average frame time - work
+                // that fits inside the wait on the native simulation costs nothing in wall
+                // clock - but it is most of the difference between a worst frame of 84 ms
+                // with the session ended and 250 to 475 ms while connected, which is the
+                // stutter a player actually feels.
+                //
+                // The examination below was already spread over frames. Only the rescan
+                // was not, and a rescan is exactly the thing that does not need doing.
+                BuildingHPIndex.CopyTo(_indexScratch);
+                if (_cursor >= _indexScratch.Count) _cursor = 0;
             }
 
-            if (_buildings.Length == 0)
+            if (_indexScratch.Count == 0)
                 return;
 
             // Whether either patch saw anything at all since the last sample. A
@@ -110,10 +123,10 @@ namespace ONI_Together.Networking.Components
             _lastEventActivity = activity;
 
             int examined = 0;
-            while (examined < PerFrame && examined < _buildings.Length)
+            while (examined < PerFrame && examined < _indexScratch.Count)
             {
-                if (_cursor >= _buildings.Length) _cursor = 0;
-                var hp = _buildings[_cursor++];
+                if (_cursor >= _indexScratch.Count) _cursor = 0;
+                var hp = _indexScratch[_cursor++];
                 examined++;
 
                 if (hp.IsNullOrDestroyed() || hp.gameObject.IsNullOrDestroyed())
