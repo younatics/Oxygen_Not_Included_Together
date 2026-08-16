@@ -1425,6 +1425,33 @@ namespace ONI_Together.Networking.Components
 		public static int AnnounceSkippedNotReplicated { get; private set; }
 		public static int AnnounceSent { get; private set; }
 
+		/// <summary>
+		/// Announcements not repeated because this object was already announced under this
+		/// same id.
+		///
+		/// WasAnnounced existed and nothing read it, which is the shape this file already
+		/// documents for a flag that eight call sites toggled and nobody consulted. It
+		/// matters more now than it did: an announcement asks the far peer to build the
+		/// object, and the adoption path that would otherwise absorb a repeat only adopts
+		/// unnamed client previews - so a second announcement for an object the client
+		/// already has produces a second object, not a no-op.
+		///
+		/// ReattachAll calls RegisterIdentity on everything it finds unfiled, and
+		/// RegisterIdentity reaches the announcement. Reattachment has measured zero on
+		/// both peers in every run so far, so this is a hole nothing has fallen into yet
+		/// rather than a fault being fixed - and the reason to close it now is that the
+		/// next commit puts plants through here, which turns "unlikely" into "458 objects".
+		///
+		/// Keyed on the id rather than on the flag alone, because a rename has to be
+		/// announced: AnnounceRenameIfHost comes through this same method deliberately, and
+		/// blocking it would make the peers disagree about the name instead.
+		/// </summary>
+		public static int AnnounceSkippedRepeat { get; private set; }
+
+		/// <summary>The id this object was last announced under, so a rename still gets through.</summary>
+		[SkipSaveFileSerialization]
+		private int _announcedNetId;
+
 		private void AnnounceSpawnIfHost()
 		{
 			if (NetId == 0) { AnnounceSkippedNoId++; return; }
@@ -1456,8 +1483,16 @@ namespace ONI_Together.Networking.Components
 				return;
 			}
 
+			// Already told them about this object under this number - see AnnounceSkippedRepeat.
+			if (WasAnnounced && _announcedNetId == NetId)
+			{
+				AnnounceSkippedRepeat++;
+				return;
+			}
+
 			AnnounceSent++;
 			WasAnnounced = true;
+			_announcedNetId = NetId;
 
 			// One line per announcement, by name and id.
 			//
@@ -1796,6 +1831,61 @@ namespace ONI_Together.Networking.Components
 			// adopted rather than built. Anything else that turns out to need announcing
 			// has to earn it one type at a time, with the rebuild path checked first.
 			return GetComponent<RepairableStorageProxy>() != null;
+
+			// PLANTS WERE TRIED HERE AND KILLED THE CLIENT. Read this before trying again.
+			//
+			// A duplicant sowed a Wheezewort during a run: the host ended with 19
+			// ColdBreathers and the client with 18, the missing one exactly the cell that
+			// was sown, and this method is what turned it down - the host's own log says
+			// "not replicating 'ColdBreather' - building=False minion=False
+			// pickupable=False navigator=False". A plant is none of the four. The 458
+			// plants that do agree came from the save, which both peers load, so a count
+			// of plants never showed this and only sowing during a session does.
+			//
+			// It is the same shape as the artwork that finished on the host and stayed
+			// blank on the client: the order is replicated, the completion is not, and the
+			// client cannot produce the completion itself because its duplicants do not
+			// work.
+			//
+			// The rebuild path WAS checked first, as the paragraph above requires, and the
+			// check still gave the wrong answer - which is the part worth keeping.
+			//
+			// "spawn-probe ColdBreather keep" instantiated the prefab on a live peer and
+			// nothing threw; SwampLily and BasicSingleHarvestPlant too. So the line went in
+			// with Uprootable as the marker, and the run measured this:
+			//
+			//   client errors   0 -> 159
+			//   AnimEventHandler.UpdateOffset -> KAnimControllerBase.GetPivotSymbolPosition
+			//                   -> Component.get_transform    NullReference, 52 frames
+			//   Game.StopBE -> Component.get_gameObject       NullReference, 53 frames
+			//
+			// The three runs before it had 0 and the same four test-scope lines, so the
+			// test suite is ruled out as the source.
+			//
+			// The replication worked, which makes the failure sharper rather than softer:
+			// the host announced ColdBreather#1895125411 and the client logged "Registered
+			// overridden NetId 1895125411 for ColdBreather(Clone)" in the same second. The
+			// object arrived. It then threw from the animation and game-object teardown
+			// paths every frame afterwards.
+			//
+			// What the probe actually measured was instantiation ON THE HOST, in a game
+			// that grew that colony. The question was whether the CLIENT can carry one, and
+			// the client is a peer with its AI switched off and half its systems in a
+			// different state. That is the same distinction BalloonStand died on, and I
+			// re-ran into it while believing I had checked. A probe on the wrong peer is
+			// not a check.
+			//
+			// If this is attempted again: probe on the client, leave the object standing
+			// for several minutes, and watch the error count rather than the return value -
+			// the exception here is thrown by Unity's own LateUpdate, so nothing at the
+			// call site would ever see it.
+			//
+			// The marker used was Uprootable, from the host's own registration line. The
+			// marker was not the problem; announcing at all was. Replicating a sown plant
+			// needs the client to end up with a working plant, and instantiating the prefab
+			// there does not produce one - so the answer is somewhere else, most likely in
+			// the preview the client already holds at that cell becoming the plant, the way
+			// the host's does.
 		}
 
 		/// <summary>

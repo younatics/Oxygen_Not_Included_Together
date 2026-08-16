@@ -339,6 +339,11 @@ namespace ONI_Together.Networking.Components
 				$"|prioApplied={StructureStateSyncers.StructureSyncerBase.PrioritiesApplied}" +
 				$"|artApplied={StructureStateSyncers.StructureSyncerBase.ArtStagesApplied}" +
 				$"|recipeApplied={StructureStateSyncers.StructureSyncerBase.RecipeQueuesApplied}" +
+				// Announcements not repeated for an object already announced under the same
+				// id. A repeat builds a second object on the client rather than doing
+				// nothing, and plants now travel this path, so this is the number that says
+				// the guard is holding rather than that it was never needed.
+				$"|annRepeat={NetworkIdentity.AnnounceSkippedRepeat}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//
 				// WireNetworkRepair swept the wire layer on the client every five seconds
