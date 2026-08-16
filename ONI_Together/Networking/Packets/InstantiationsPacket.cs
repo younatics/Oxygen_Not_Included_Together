@@ -255,11 +255,86 @@ namespace ONI_Together.Networking.Packets
 			_deferred.Clear();
 		}
 
+		/// <summary>
+		/// Planting ghosts this peer removed to make room for the plant that replaced them.
+		/// Zero beside a non-zero plant announcement count means the ghost was not found and
+		/// the client is about to hold two objects in one cell - which is the state that
+		/// killed it last time.
+		/// </summary>
+		public static int PlantingGhostsCleared => _ghostsCleared;
+		private static int _ghostsCleared;
+
+		/// <summary>
+		/// Entries that reached Instantiate at all, counted before any branch can decline
+		/// them. Read against the host's annSent: a large gap means announcements are being
+		/// lost between the sender and this method, and every counter below it is measuring
+		/// the wrong half of the problem.
+		/// </summary>
+		public static int ArrivedAtInstantiate { get; private set; }
+
+		private static void RemovePlantingGhost(int cell, string prefabName)
+		{
+			if (string.IsNullOrEmpty(prefabName)) return;
+
+			string ghostName = prefabName + "_preview";
+
+			// Every layer, and the name is what makes that safe.
+			//
+			// The first version named two layers - Building and Plants - because a plant
+			// ghost "must" be on one of them. It is on neither: ghostsCleared read 0 for a
+			// whole run while the client's own dump listed ColdBreather_preview at that very
+			// cell, so the removal never fired and the plant was built beside the ghost
+			// exactly as before. Guessing which layer an object sits on is the same mistake
+			// as guessing a game API, and this file's own history has three of those.
+			//
+			// Walking every layer is what the leftover-scaffold path did when it deleted a
+			// neighbouring building's construction site - but the danger there was the
+			// MATCH, not the walk: it compared loosely and hit a different building's
+			// scaffold. This compares against one exact prefab name, "<Plant>_preview",
+			// which belongs to nothing else in the game. Broad walk, narrow match.
+			for (int layer = 0; layer < (int)ObjectLayer.NumLayers; layer++)
+			{
+				var occupant = Grid.Objects[cell, layer];
+				if (occupant == null || occupant.IsNullOrDestroyed()) continue;
+				if (occupant.PrefabID().Name != ghostName) continue;
+
+				Grid.Objects[cell, layer] = null;
+				occupant.DeleteObject();
+				_ghostsCleared++;
+
+				DebugTools.ThrottledLog.Warn(
+					$"[Instantiations] removed the planting ghost '{ghostName}' at cell {cell} " +
+					"before building the plant that replaced it");
+			}
+		}
+
 		private void Instantiate(InstantiationEntry e) => Instantiate(e, deferrable: false);
 
 		private static void Instantiate(InstantiationEntry e, bool deferrable)
 		{
 			using var _ = Profiler.Scope();
+
+			// Say that this entry arrived, before any branch can swallow it.
+			//
+			// A sown plant is announced by the host - "[Announce] sent
+			// ColdBreather#-2145270536" - the packets arrive intact, 225 sent against 225
+			// received, and the client ends the run without the plant and without a single
+			// line mentioning that id. Every branch below either logs or counts, and all of
+			// their counters read zero for it: instRepeat 0, instHeld 0, instLate 0,
+			// instBuiltLate 0, instDropped 0, no "Missing prefab" from this file, no
+			// adoption trace.
+			//
+			// So the question left is whether the entry reaches this method at all, and no
+			// existing counter can answer it - they all sit after a decision. This one sits
+			// before every decision, which is the only place that separates "it never
+			// arrived" from "it arrived and something declined it silently".
+			//
+			// Throttled: 225 packets a run carry a couple of hundred entries, and the last
+			// time this file logged per-entry the tail of a dying log was nothing else.
+			ArrivedAtInstantiate++;
+			DebugTools.ThrottledLog.Info(
+				$"[Instantiations] entry arrived: '{e.PrefabName}' NetId {e.NetId} " +
+				$"cell {(Grid.IsValidCell(Grid.PosToCell(e.Position)) ? Grid.PosToCell(e.Position) : -1)}");
 
 			GameObject prefab = Assets.GetPrefab(e.PrefabName);
 			if (prefab == null)
@@ -328,6 +403,28 @@ namespace ONI_Together.Networking.Packets
 				_adoptedInstead++;
 				return;
 			}
+
+			// A planting ghost standing where the finished plant is about to go.
+			//
+			// Adoption above cannot take it: the ghost's prefab is "<Plant>_preview" and the
+			// announcement names "<Plant>", so the names never match - and they should not,
+			// because a preview is a placement marker with a Storage, not a plant. Naming it
+			// as the plant would leave every packet about the plant landing on the wrong
+			// kind of object, which is a trap this repository has already paid for once.
+			//
+			// So the ghost is removed rather than renamed, and then the plant is built. The
+			// first attempt at replicating plants skipped this: the client created the plant
+			// beside its own leftover preview, one of the two was destroyed a few minutes
+			// later, and the teardown threw from Unity's LateUpdate 159 times in one run
+			// while the plant's id read UNRESOLVED. Two objects in one cell was the part
+			// that was wrong, not building the plant.
+			//
+			// Copied from BuildCompletePacket's leftover-scaffold path rather than invented:
+			// clear the grid slot first, then DeleteObject. That path also records why the
+			// match has to be narrow - sweeping every layer once deleted a neighbouring
+			// building's construction site - so this matches on the exact preview name for
+			// the prefab being announced and nothing else.
+			if (cell >= 0) RemovePlantingGhost(cell, e.PrefabName);
 
 			// Nothing here yet to name - so wait a moment before building a second one.
 			//

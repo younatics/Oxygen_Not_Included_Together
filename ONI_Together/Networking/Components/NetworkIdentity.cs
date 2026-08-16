@@ -1832,7 +1832,8 @@ namespace ONI_Together.Networking.Components
 			// has to earn it one type at a time, with the rebuild path checked first.
 			return GetComponent<RepairableStorageProxy>() != null;
 
-			// PLANTS WERE TRIED HERE AND KILLED THE CLIENT. Read this before trying again.
+			// PLANTS: TRIED TWICE, REVERTED TWICE. The reason is below and it is not the
+			// one either attempt assumed.
 			//
 			// A duplicant sowed a Wheezewort during a run: the host ended with 19
 			// ColdBreathers and the client with 18, the missing one exactly the cell that
@@ -1880,12 +1881,51 @@ namespace ONI_Together.Networking.Components
 			// the exception here is thrown by Unity's own LateUpdate, so nothing at the
 			// call site would ever see it.
 			//
-			// The marker used was Uprootable, from the host's own registration line. The
-			// marker was not the problem; announcing at all was. Replicating a sown plant
-			// needs the client to end up with a working plant, and instantiating the prefab
-			// there does not produce one - so the answer is somewhere else, most likely in
-			// the preview the client already holds at that cell becoming the plant, the way
-			// the host's does.
+			// What changed since: the client's leftover planting ghost is now removed before
+			// the plant is built - see InstantiationsPacket.RemovePlantingGhost. Re-reading
+			// the failed run supports that being the fault rather than the plant itself:
+			// the client DID create ColdBreather(Clone) under the host's id at 04:05:48, its
+			// own dump still listed ColdBreather_preview at that cell at 04:09:09, the
+			// plant's id read UNRESOLVED at 04:09:10, and the exception storm began at
+			// 04:09:12. The plant was built, then destroyed, and the teardown threw - which
+			// is also exactly what spawn-probe measured when it destroyed what it built, and
+			// what it measured as harmless when it did not.
+			//
+			// So two objects in one cell was the fault, not building a plant.
+			//
+			// THE SECOND ATTEMPT AND WHAT IT SETTLED
+			//
+			// The theory was that the client's leftover planting ghost collided with the new
+			// plant in one cell, so the ghost was removed first. It never fired -
+			// ghostsCleared read 0 across four runs, first because the layer was guessed and
+			// then because every layer was walked and the object still was not found.
+			//
+			// cell-dump on the client answered it: cell 53105 holds ZERO objects on ZERO
+			// layers, while that same client has registered "ColdBreather_preview at cell
+			// 53105". The ghost exists as a GameObject and is not in Grid.Objects at all, so
+			// there was never a collision to remove. Both attempts were aimed at a state
+			// that does not exist.
+			//
+			// What is actually wrong is one line in InstantiationsPacket:
+			//
+			//     GameObject obj = Object.Instantiate(prefab, e.Position, e.Rotation);
+			//
+			// That makes a GameObject. It does not put it in Grid.Objects, which is what the
+			// game's own placement does and what everything downstream reads - the circuit
+			// walk, the state dump, the plant scans. So the client ends up with a plant that
+			// is not anywhere, invisible to every check, and whatever later collects it is
+			// the teardown that threw 159 errors on the first attempt.
+			//
+			// This also retires the first probe's answer. "spawn-probe ColdBreather keep"
+			// threw nothing, and that was read as "a plant can be built here". It only
+			// showed that instantiating does not throw - not that the result is a working
+			// plant, which it is not.
+			//
+			// A third attempt needs the game's own plant placement rather than
+			// Object.Instantiate, and that path has to be read out of the assembly rather
+			// than guessed. Until then plants stay unreplicated, which costs one plant a
+			// session and no errors, against an attempt that has twice produced objects the
+			// client cannot use.
 		}
 
 		/// <summary>

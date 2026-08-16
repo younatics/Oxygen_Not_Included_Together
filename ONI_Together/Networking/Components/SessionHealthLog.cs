@@ -389,6 +389,16 @@ namespace ONI_Together.Networking.Components
 				// mark CLEARED because a duplicant collected the debris is not a tool action
 				// at all, which is why the client kept showing work the host had finished.
 				$"|censusSweep={IdCensus.SweepMarksCorrected}" +
+				// Planting ghosts removed before the plant that replaced them was built.
+				// Zero here beside a plant announcement means the ghost was not found and
+				// this peer is about to hold two objects in one cell - the state that killed
+				// the client on the first attempt at replicating plants.
+				$"|ghostsCleared={Packets.InstantiationsPacket.PlantingGhostsCleared}" +
+				// Entries that reached Instantiate before any branch could decline them.
+				// Against the host's annSent this says whether announcements are lost on the
+				// way or declined on arrival - every other counter here sits after a
+				// decision and cannot tell those apart.
+				$"|instArrived={Packets.InstantiationsPacket.ArrivedAtInstantiate}" +
 				// Wires joined because a neighbour they touch was already on a network.
 				// Judge against the state dump's one-sided wire count, not on its own - the
 				// previous attempt reported 3,160 repairs and fixed nothing.

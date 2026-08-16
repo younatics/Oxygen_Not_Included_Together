@@ -539,6 +539,42 @@ namespace ONI_Together.DebugTools
                 // the two peers do not hold identical debris - gas and liquid piles merge
                 // differently, measured, 47 of 50 persistent id absences. A replayed drag
                 // marks whatever is at that cell on the peer that receives it.
+                // Everything standing on one cell, layer by layer, with the two names that
+                // are easy to confuse.
+                //
+                // The planting-ghost removal has now failed twice for the same reason in
+                // different clothes: first it looked on two guessed layers, then on all of
+                // them, and both times ghostsCleared read 0 while the client's dump plainly
+                // listed "ColdBreather_preview" at that cell. So the cell is right and the
+                // NAME is wrong - the dump prints one name and Grid.Objects holds an object
+                // whose PrefabID is another.
+                //
+                // Rather than guess a third time, print both: the GameObject's name and its
+                // PrefabID, for every layer. One command ends the question.
+                case "cell-dump":
+                {
+                    if (parts.Length < 2) throw new InvalidOperationException("cell-dump <cell>");
+                    int target = int.Parse(parts[1]);
+                    if (!Grid.IsValidCell(target)) throw new InvalidOperationException("bad cell");
+
+                    int found = 0;
+                    for (int layer = 0; layer < (int)ObjectLayer.NumLayers; layer++)
+                    {
+                        var occupant = Grid.Objects[target, layer];
+                        if (occupant == null || occupant.IsNullOrDestroyed()) continue;
+
+                        string prefabId = occupant.TryGetComponent<KPrefabID>(out var kpid)
+                            ? kpid.PrefabTag.Name : "(no KPrefabID)";
+
+                        DebugConsole.Log(
+                            $"{Tag} CELL {target}|layer={(ObjectLayer)layer}|name={occupant.name}|prefabId={prefabId}");
+                        found++;
+                    }
+
+                    DebugConsole.Log($"{Tag} OK cell-dump :: {found} object(s) on cell {target}");
+                    break;
+                }
+
                 case "sweep":
                 {
                     int want = parts.Length > 1 ? int.Parse(parts[1]) : 10;
@@ -611,12 +647,32 @@ namespace ONI_Together.DebugTools
                         if (type == null || type.IsAbstract) continue;
                         if (!typeof(DragTool).IsAssignableFrom(type)) continue;
 
-                        byType.TryGetValue(type.Name, out var hooks);
-                        bool any = hooks != null && hooks.Count > 0;
+                        // The base chain too, because a patch on a base method covers every
+                        // subclass that does not override it.
+                        //
+                        // The version before this reported PlaceTool, UtilityBuildTool and
+                        // WireBuildTool as having no patch, which is true of their own
+                        // declared methods and says nothing about whether their orders
+                        // replicate - BaseUtilityBuildTool.BuildPath is patched, and a
+                        // subclass that inherits it is covered by it. Reporting the
+                        // declaring type alone would have sent somebody after three tools
+                        // that already work.
+                        var hooksHere = new System.Collections.Generic.List<string>();
+                        for (var t = type; t != null && typeof(DragTool).IsAssignableFrom(t); t = t.BaseType)
+                        {
+                            if (!byType.TryGetValue(t.Name, out var names)) continue;
+                            foreach (var n in names)
+                            {
+                                string label = t == type ? n : t.Name + "." + n + "(inherited)";
+                                if (!hooksHere.Contains(label)) hooksHere.Add(label);
+                            }
+                        }
+
+                        bool any = hooksHere.Count > 0;
                         if (any) covered++; else bare++;
 
                         DebugConsole.Log(
-                            $"{Tag} TOOL {type.Name}|{(any ? string.Join(",", hooks) : "NONE")}");
+                            $"{Tag} TOOL {type.Name}|{(any ? string.Join(",", hooksHere) : "NONE")}");
                     }
 
                     DebugConsole.Log(
