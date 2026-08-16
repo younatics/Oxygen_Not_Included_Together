@@ -372,6 +372,18 @@ namespace ONI_Together.Networking.Components
 				// worth doing; a small one means it is bookkeeping and stays parked.
 				$"|failsRetired={NetworkIdentityRegistry.FailsOnRetired}" +
 				$"|censusCycles={IdCensus.CyclesCompleted}" +
+				// Priorities the census corrected on this peer. Buildings were already
+				// covered by the structure path; this is what it takes to cover an item,
+				// which is where the suit-checkpoint report came from - the host held a
+				// suit at priority 8 and the client at the default 5, and no event was ever
+				// going to tell it.
+				$"|censusPrio={IdCensus.PrioritiesCorrected}" +
+				// The control for the line above. censusPrio read 0 across 37,846 ids on its
+				// first run, and that has two readings that look the same from the client:
+				// the peers agree about every priority, or nothing was sampled and the check
+				// could not fire. A large censusPrioSent beside a zero censusPrio is
+				// agreement; a zero here makes the client's zero meaningless.
+				$"|censusPrioSent={IdCensus.PrioritiesSent}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//
 				// WireNetworkRepair swept the wire layer on the client every five seconds

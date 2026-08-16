@@ -55,13 +55,42 @@ namespace ONI_Together.Networking.Packets.Core
 
         public int[] NetIds;
 
+        /// <summary>
+        /// The player-set priority of each id, packed as class*100+value, or -1 for an
+        /// object that has no Prioritizable.
+        ///
+        /// Riding along here rather than getting its own mechanism, because the walk is
+        /// already happening and the field is two bytes.
+        ///
+        /// The gap it closes was reported from real play and took a while to place. An
+        /// atmo suit checkpoint "did not match" between the peers - and the three
+        /// checkpoints themselves agree, at the same cells with the same ids, in every run.
+        /// The suits inside them do not: the host holds Atmo_Suit#1776225776 at priority 8
+        /// and the client holds it at 5, which is the default, so the client never heard
+        /// about the change. A waiting-chore difference follows from that, and the two
+        /// together are what a player sees as a building out of sync.
+        ///
+        /// Priority is sampled periodically for structures - AddCommonState, inside
+        /// StructureSyncerBase - and a suit is a Pickupable, so nothing sampled it. Its
+        /// only path was event interception, and the client's own counter reads
+        /// prioritiesDropped=89: changes discarded because the object had no id yet. There
+        /// is nothing to re-send a dropped one, which is the same shape as every other
+        /// defect this project has had to chase by hand.
+        /// </summary>
+        public short[] Priorities;
+
+        private const short NoPriority = -1;
+
         public void Serialize(BinaryWriter writer)
         {
             writer.Write(Cycle);
-            writer.Write(NetIds?.Length ?? 0);
-            if (NetIds != null)
-                foreach (int id in NetIds)
-                    writer.Write(id);
+            int n = NetIds?.Length ?? 0;
+            writer.Write(n);
+            for (int i = 0; i < n; i++)
+            {
+                writer.Write(NetIds[i]);
+                writer.Write(Priorities != null && i < Priorities.Length ? Priorities[i] : NoPriority);
+            }
         }
 
         public void Deserialize(BinaryReader reader)
@@ -73,17 +102,21 @@ namespace ONI_Together.Networking.Packets.Core
             // ever comes from our own sender, but the packet-robustness tests feed
             // handlers deliberate rubbish, and a bad count here would ask for an array of
             // whatever integer the fuzzer picked.
-            if (count < 0 || count > 4096) { NetIds = new int[0]; return; }
+            if (count < 0 || count > 4096) { NetIds = new int[0]; Priorities = new short[0]; return; }
 
             NetIds = new int[count];
+            Priorities = new short[count];
             for (int i = 0; i < count; i++)
+            {
                 NetIds[i] = reader.ReadInt32();
+                Priorities[i] = reader.ReadInt16();
+            }
         }
 
         public void OnDispatched()
         {
             if (MultiplayerSession.IsHost) return;
-            IdCensus.Receive(Cycle, NetIds);
+            IdCensus.Receive(Cycle, NetIds, Priorities);
         }
     }
 }

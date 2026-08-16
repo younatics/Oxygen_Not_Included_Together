@@ -149,6 +149,8 @@ namespace ONI_Together.Networking.Components
             MissingAfterRetire = 0;
             MissingNeverSeen = 0;
             CyclesCompleted = 0;
+            PrioritiesCorrected = 0;
+            PrioritiesSent = 0;
         }
 
         private void Update()
@@ -183,13 +185,34 @@ namespace ONI_Together.Networking.Components
             _snapshot.CopyTo(_position, batch, 0, take);
             _position += take;
 
+            // Priority alongside the id, for the reason on IdCensusPacket.Priorities: it is
+            // sampled periodically for buildings and for nothing else, so a suit in a
+            // checkpoint keeps whatever the client last guessed.
+            var priorities = new short[take];
+            for (int i = 0; i < take; i++)
+            {
+                priorities[i] = SamplePriority(batch[i]);
+                if (priorities[i] >= 0) PrioritiesSent++;
+            }
+
             PacketSender.SendToAllClients(
-                new IdCensusPacket { Cycle = _cycle, NetIds = batch },
+                new IdCensusPacket { Cycle = _cycle, NetIds = batch, Priorities = priorities },
                 PacketSendMode.Reliable);
         }
 
+        private static short SamplePriority(int netId)
+        {
+            if (!NetworkIdentityRegistry.TryGet(netId, out var identity)
+                || identity.IsNullOrDestroyed()
+                || !identity.TryGetComponent<Prioritizable>(out var prioritizable))
+                return -1;
+
+            var p = prioritizable.GetMasterPriority();
+            return (short)(((int)p.priority_class * 100) + p.priority_value);
+        }
+
         /// <summary>Client side: look each id up, and remember what was not there.</summary>
-        internal static void Receive(int cycle, int[] netIds)
+        internal static void Receive(int cycle, int[] netIds, short[] priorities)
         {
             if (netIds == null) return;
 
@@ -208,13 +231,18 @@ namespace ONI_Together.Networking.Components
                 _cycleSeen = cycle;
             }
 
-            foreach (int id in netIds)
+            for (int i = 0; i < netIds.Length; i++)
             {
+                int id = netIds[i];
                 if (id == 0) continue;
                 Checked++;
 
                 if (NetworkIdentityRegistry.TryGet(id, out var identity) && !identity.IsNullOrDestroyed())
+                {
+                    if (priorities != null && i < priorities.Length)
+                        ApplyPriority(identity, priorities[i]);
                     continue;
+                }
 
                 _missingThisCycle.Add(id);
                 MissingNow++;
@@ -236,6 +264,52 @@ namespace ONI_Together.Networking.Components
                         $"({MissingAfterRetire} retired, {MissingNeverSeen} never seen)");
                 }
             }
+        }
+
+        /// <summary>Priorities this peer had to correct because no event carried them.</summary>
+        public static int PrioritiesCorrected { get; private set; }
+
+        /// <summary>
+        /// Priorities the host actually put on the wire - the control for the number above.
+        ///
+        /// The first run of the priority field read censusPrio=0 across 37,846 ids, and a
+        /// zero like that has two readings that look identical: the two peers agree about
+        /// every priority, or nothing was ever sampled and the check could not fire. This
+        /// project has been caught by the second four times, so the sender counts what it
+        /// sent and the two are read together. A large number here beside a zero above is
+        /// agreement; a zero here means the sampler is broken and the client's zero means
+        /// nothing at all.
+        /// </summary>
+        public static int PrioritiesSent { get; private set; }
+
+        private static void ApplyPriority(NetworkIdentity identity, short packed)
+        {
+            if (packed < 0) return;
+            if (!identity.TryGetComponent<Prioritizable>(out var prioritizable)) return;
+
+            int cls = packed / 100;
+            int val = packed % 100;
+
+            var current = prioritizable.GetMasterPriority();
+            if ((int)current.priority_class == cls && current.priority_value == val) return;
+
+            // Under the flag the dedicated priority packet uses. PrioritizablePatch hooks
+            // SetMasterPriority and broadcasts from it, so an unguarded correction would go
+            // straight back to the sender and the two peers would trade the same value for
+            // as long as they disagreed. The structure path does exactly this already.
+            bool wasApplying = Packets.World.PrioritizeStatePacket.IsApplying;
+            Packets.World.PrioritizeStatePacket.IsApplying = true;
+            try
+            {
+                prioritizable.SetMasterPriority(
+                    new PrioritySetting((PriorityScreen.PriorityClass)cls, val));
+            }
+            finally
+            {
+                Packets.World.PrioritizeStatePacket.IsApplying = wasApplying;
+            }
+
+            PrioritiesCorrected++;
         }
     }
 }
