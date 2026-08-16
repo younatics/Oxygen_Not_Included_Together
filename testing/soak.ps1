@@ -128,7 +128,17 @@ $deconstructs = @(0, 0, 3)
 # Both names are ones this colony's own logs have printed, rather than names that look
 # right - Assets.GetBuildingDef takes the PrefabID and a wrong one costs a whole run.
 # Tile stays in the rotation so the case that already passes keeps being checked.
-$buildWhat = @('Wire', 'Tile', 'InsulatedLiquidConduit')
+# Wire, Tile and InsulatedLiquidConduit were the whole rotation, and that is why a
+# live evening found three defects the suite never had: an art piece that finishes on
+# one peer only, a Checkpoint that disagrees, an oxygen building whose contents drift.
+# None of those building classes had ever been placed by a test.
+#
+# CanvasWide carries an Artable, Checkpoint is the building the player reported, and
+# Electrolyzer is an oxygen producer that consumes from its own storage - the three
+# shapes the rotation could not reach. Names taken from this colony's own logs rather
+# than guessed at, since Assets.GetBuildingDef takes the PrefabID and a wrong one costs
+# a whole run.
+$buildWhat = @('Wire', 'Tile', 'InsulatedLiquidConduit', 'CanvasWide', 'Checkpoint', 'Electrolyzer')
 
 # Which run drops the client and rejoins.
 #

@@ -508,6 +508,25 @@ namespace ONI_Together.Networking.Components
 				// Critters the host announced as it made them, and spawn announcements
 				// this peer already had. The second is duplicates that used to be built.
 				$"|critterSent={Patches.Critters.CreatureSpawnPatch.CrittersAnnounced}" +
+					// Suits changing hands. suitSent is what the host announced, suitApplied
+					// is what the client replayed through the game's own EquipTo/UnequipFrom,
+					// and the rest are the reasons either side declined. A suit the host
+					// wears and the client still has docked is the last checkpoint mismatch,
+					// and these say whether the event ever reached the other peer at all.
+					$"|suitSent={Patches.World.Suits.SuitLockerPatches.Announced}" +
+					$"|suitNoLockerId={Patches.World.Suits.SuitLockerPatches.NoLockerId}" +
+					$"|suitNoMinionId={Patches.World.Suits.SuitLockerPatches.NoMinionId}" +
+					$"|suitApplied={Packets.World.SuitEquipPacket.Applied}" +
+					$"|suitNoLocker={Packets.World.SuitEquipPacket.NoLocker}" +
+					$"|suitNoEquip={Packets.World.SuitEquipPacket.NoEquipment}" +
+					// Plants appearing mid-session, by the path they took. The scenario never
+					// sows, so plant DIFFERENT 0 says nothing about the case that is broken;
+					// these do. plantNotWild being non-zero names the gap outright.
+					$"|plantPlot={Patches.World.Plants.PlantLifecyclePatches.PlotSpawns}" +
+					$"|plantWild={Patches.World.Plants.PlantLifecyclePatches.WildSpawns}" +
+					$"|plantSeen={Patches.World.Plants.PlantLifecyclePatches.GrowingSeen}" +
+					$"|plantNotWild={Patches.World.Plants.PlantLifecyclePatches.DeclinedNotWild}" +
+					$"|plantNotBcast={Patches.World.Plants.PlantLifecyclePatches.DeclinedNotBroadcasting}" +
 				// Prefabs that were addressed late and then converged onto the id both
 				// peers compute. The repair, beside the warning it answers.
 				$"|lazyFixed={NetworkIdentity.LazyAttachmentsRepaired}" +
