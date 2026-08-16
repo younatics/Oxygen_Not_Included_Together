@@ -366,6 +366,11 @@ namespace ONI_Together.Networking.Components
 				// them apart.
 				$"|censusRetired={IdCensus.MissingAfterRetire}" +
 				$"|censusNeverSeen={IdCensus.MissingNeverSeen}" +
+				// Failed lookups for an id this peer once held. Read as a share of
+				// lookupFails: a large share means the merge divergence the census found is
+				// producing traffic that can never resolve, and the loose-matter work is
+				// worth doing; a small one means it is bookkeeping and stays parked.
+				$"|failsRetired={NetworkIdentityRegistry.FailsOnRetired}" +
 				$"|censusCycles={IdCensus.CyclesCompleted}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//

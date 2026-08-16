@@ -201,6 +201,14 @@ namespace ONI_Together.Networking
 
 		public static int RetiredIdCount => _retired.Count;
 
+		/// <summary>
+		/// Failed lookups for an id this peer once held and let go, as against ids it never
+		/// had. See the comment at the counting site for why the two are worth separating.
+		/// </summary>
+		public static int FailsOnRetired => _failsOnRetired;
+		private static int _failsOnRetired;
+
+
 		/// <summary>Whether this id is in use or was used earlier in this session.</summary>
 		public static bool ExistsOrRetired(int netId) =>
 			identities.ContainsKey(netId) || _retired.Contains(netId);
@@ -577,12 +585,53 @@ namespace ONI_Together.Networking
 			{
 				_everFailed.Add(netId);
 				_lookupFailCount++;
+
+				// Of the failures, the ones for an id this peer once held.
+				//
+				// The census established that 47 of 50 persistent absences are objects the
+				// client had and retired - gas piles it merged where the host did not.
+				// That is a real divergence, but whether it is a divergence worth fixing
+				// depends on what it costs, and nothing measured the cost: lookupFails
+				// mixes "an id I never had" with "an id I merged away", and those are a
+				// missing object and a bookkeeping difference respectively.
+				//
+				// If most failures are retired ids, the merge divergence is producing real
+				// traffic that can never resolve, and the loose-matter work earns its
+				// place. If they are not, it is cosmetic and stays where it is. Deciding
+				// that from the split rather than from the row count is the whole point.
+				//
+				// Measured: 896 of 1,248 failures in a run, 72%.
+				if (_retired.Contains(netId)) _failsOnRetired++;
+
 				Blame(_failuresByCaller, caller, callerFile);
 
 				// The same signal that counts the divergence can also close it.
 				// A id that keeps arriving and resolves to nothing is an object
 				// this peer is missing, and the host can send it. Bounded and
 				// rate limited on the other side; this only names the id.
+				//
+				// Asked for retired ids too, and that is deliberate after trying the
+				// opposite.
+				//
+				// 896 of 1,248 failed lookups in a run were for ids this peer had held and
+				// released - for loose matter, piles it merged into a neighbour. The
+				// reasoning was that the mass is already here inside another pile, so
+				// asking the host to send the object back is wasted at best. Skipping
+				// those requests was measured over three runs against five without:
+				//
+				//   suppression on    HOST-ONLY 108, 107, 117
+				//   suppression off   HOST-ONLY  74,  68,  76,  89,  80
+				//
+				// No overlap. It cost about thirty ids the client ends the session without,
+				// to save 1,862 requests and sixty spawns. The requests were not wasted
+				// after all: some meaningful share of them was recovering objects this peer
+				// genuinely needed, and "it retired the id" did not mean "it still has the
+				// thing" as often as the argument assumed.
+				//
+				// The counters stay. failsRetired is what made the trade measurable, and it
+				// is the number to watch if this is ever attempted again - the useful
+				// version would tell apart a pile merged into a neighbour from an object
+				// destroyed outright, which the retired set does not.
 				Components.MissingEntityResolver.Report(netId);
 				if (_lookupFailCount <= 3 || _lookupFailCount % 500 == 0 || Time.unscaledTime - _lastFailLogTime > 1f)
 				{
