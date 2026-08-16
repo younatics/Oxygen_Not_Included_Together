@@ -79,6 +79,28 @@ namespace ONI_Together.Networking.Packets.Core
         /// </summary>
         public short[] Priorities;
 
+        /// <summary>
+        /// Per id: bit 0 says this object can be swept, bit 1 says it is marked for it.
+        ///
+        /// Sweep marks are replicated by replaying the Clear tool at the same cell on the
+        /// far peer, and nothing else. Measured: 45 items marked on the host against 37 on
+        /// the client, 8 marked on the host and on neither the other way round, after marks
+        /// were set through MarkForClear rather than through a drag.
+        ///
+        /// That gap matters in ordinary play for a reason the drag path cannot cover: a
+        /// mark is also CLEARED when a duplicant picks the item up, and that is not a tool
+        /// action at all. The client's duplicants never pick anything up, so a mark it
+        /// received stays on screen after the host's colony has collected the debris - which
+        /// is what "sweep does not work" looks like from the client's side.
+        ///
+        /// One byte per id on a walk that is already happening, and it covers marks made or
+        /// cleared by any path rather than by the one path somebody remembered to patch.
+        /// </summary>
+        public byte[] Flags;
+
+        internal const byte FlagClearable = 1;
+        internal const byte FlagMarkedForClear = 2;
+
         private const short NoPriority = -1;
 
         public void Serialize(BinaryWriter writer)
@@ -90,6 +112,7 @@ namespace ONI_Together.Networking.Packets.Core
             {
                 writer.Write(NetIds[i]);
                 writer.Write(Priorities != null && i < Priorities.Length ? Priorities[i] : NoPriority);
+                writer.Write(Flags != null && i < Flags.Length ? Flags[i] : (byte)0);
             }
         }
 
@@ -102,21 +125,27 @@ namespace ONI_Together.Networking.Packets.Core
             // ever comes from our own sender, but the packet-robustness tests feed
             // handlers deliberate rubbish, and a bad count here would ask for an array of
             // whatever integer the fuzzer picked.
-            if (count < 0 || count > 4096) { NetIds = new int[0]; Priorities = new short[0]; return; }
+            if (count < 0 || count > 4096)
+            {
+                NetIds = new int[0]; Priorities = new short[0]; Flags = new byte[0];
+                return;
+            }
 
             NetIds = new int[count];
             Priorities = new short[count];
+            Flags = new byte[count];
             for (int i = 0; i < count; i++)
             {
                 NetIds[i] = reader.ReadInt32();
                 Priorities[i] = reader.ReadInt16();
+                Flags[i] = reader.ReadByte();
             }
         }
 
         public void OnDispatched()
         {
             if (MultiplayerSession.IsHost) return;
-            IdCensus.Receive(Cycle, NetIds, Priorities);
+            IdCensus.Receive(Cycle, NetIds, Priorities, Flags);
         }
     }
 }

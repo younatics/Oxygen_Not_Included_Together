@@ -384,6 +384,11 @@ namespace ONI_Together.Networking.Components
 				// could not fire. A large censusPrioSent beside a zero censusPrio is
 				// agreement; a zero here makes the client's zero meaningless.
 				$"|censusPrioSent={IdCensus.PrioritiesSent}" +
+				// Sweep marks set or cleared to match the host. Marks travelled only by
+				// replaying the Clear tool, so one made any other way never arrived - and a
+				// mark CLEARED because a duplicant collected the debris is not a tool action
+				// at all, which is why the client kept showing work the host had finished.
+				$"|censusSweep={IdCensus.SweepMarksCorrected}" +
 				// Wires joined because a neighbour they touch was already on a network.
 				// Judge against the state dump's one-sided wire count, not on its own - the
 				// previous attempt reported 3,160 repairs and fixed nothing.

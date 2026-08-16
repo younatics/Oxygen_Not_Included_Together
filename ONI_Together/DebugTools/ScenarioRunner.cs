@@ -519,6 +519,111 @@ namespace ONI_Together.DebugTools
                 // believes its neighbours are. If the bits agree and the NetworkIDs do
                 // not, the fault is in how the network is walked; if the bits differ, it
                 // is in the grid underneath.
+                // Which of the game's tools this mod actually intercepts, asked of the
+                // running game rather than of the source tree.
+                //
+                // "Is sweep replicated?" was answered for a long time by finding
+                // ClearToolPatch.cs and saying yes. That answers whether a file exists, not
+                // whether a patch applied - and this mod applies patch classes one at a
+                // time precisely because one that fails should not take the rest with it,
+                // which means a tool can be silently unpatched in a build that compiles.
+                //
+                // So: every DragTool the game has, against the set Harmony reports it
+                // actually patched. A tool with no patch is a tool whose orders never leave
+                // this peer.
+                // Mark loose items for sweeping, the way a player drags the Clear tool.
+                //
+                // The suite has never exercised sweep, which is why "sweep does not work"
+                // arrived from play rather than from a run. It matters because sweep
+                // replicates by replaying the tool at the same cell on the far peer, and
+                // the two peers do not hold identical debris - gas and liquid piles merge
+                // differently, measured, 47 of 50 persistent id absences. A replayed drag
+                // marks whatever is at that cell on the peer that receives it.
+                case "sweep":
+                {
+                    int want = parts.Length > 1 ? int.Parse(parts[1]) : 10;
+                    int marked = 0;
+
+                    foreach (var clearable in UnityEngine.Object.FindObjectsByType<Clearable>(
+                                 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                    {
+                        if (marked >= want) break;
+                        if (clearable.IsNullOrDestroyed() || clearable.gameObject.IsNullOrDestroyed()) continue;
+                        if (clearable.isMarkedForClear) continue;
+
+                        clearable.MarkForClear();
+                        marked++;
+                    }
+
+                    DebugConsole.Log($"{Tag} OK sweep :: marked {marked} of {want} item(s) for clearing");
+                    break;
+                }
+
+                // What each peer believes is marked for sweeping, one row per item, so the
+                // two lists can be diffed rather than argued about.
+                //
+                // Keyed by cell and prefab rather than by NetId on purpose: the question is
+                // whether the same physical debris is marked on both sides, and the ids for
+                // loose matter are exactly what the peers are known to disagree about. A
+                // key that uses them would report the known id problem a second time and
+                // hide the sweep answer inside it.
+                case "sweep-dump":
+                {
+                    int rows = 0;
+                    foreach (var clearable in UnityEngine.Object.FindObjectsByType<Clearable>(
+                                 FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                    {
+                        if (clearable.IsNullOrDestroyed() || clearable.gameObject.IsNullOrDestroyed()) continue;
+                        if (!clearable.isMarkedForClear) continue;
+
+                        int cell = Grid.PosToCell(clearable.gameObject);
+                        DebugConsole.Log($"{Tag} SWEEP {cell}|{clearable.gameObject.PrefabID()}");
+                        rows++;
+                    }
+                    DebugConsole.Log($"{Tag} OK sweep-dump :: {rows} item(s) marked for clearing");
+                    break;
+                }
+
+                case "tool-audit":
+                {
+                    // Every patched method, grouped by the type it sits on.
+                    //
+                    // The first version of this asked only about OnDragTool and
+                    // OnDragComplete, and reported nine tools with "no patch at all" -
+                    // including DigTool and BuildTool, which are plainly replicated. They
+                    // are hooked somewhere else: DigTool.PlaceDig and BuildTool.TryBuild.
+                    // Asking about two method names and reporting the answer as coverage
+                    // was the same mistake this project keeps paying for, so it now prints
+                    // what is actually patched and lets the reader see the entry point.
+                    var byType = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>>();
+                    foreach (var m in HarmonyLib.Harmony.GetAllPatchedMethods())
+                    {
+                        if (m == null || m.DeclaringType == null) continue;
+                        string t = m.DeclaringType.Name;
+                        if (!byType.TryGetValue(t, out var names))
+                            byType[t] = names = new System.Collections.Generic.List<string>();
+                        if (!names.Contains(m.Name)) names.Add(m.Name);
+                    }
+
+                    int covered = 0, bare = 0;
+                    foreach (var type in typeof(DragTool).Assembly.GetTypes())
+                    {
+                        if (type == null || type.IsAbstract) continue;
+                        if (!typeof(DragTool).IsAssignableFrom(type)) continue;
+
+                        byType.TryGetValue(type.Name, out var hooks);
+                        bool any = hooks != null && hooks.Count > 0;
+                        if (any) covered++; else bare++;
+
+                        DebugConsole.Log(
+                            $"{Tag} TOOL {type.Name}|{(any ? string.Join(",", hooks) : "NONE")}");
+                    }
+
+                    DebugConsole.Log(
+                        $"{Tag} OK tool-audit :: {covered} tool(s) with a patch, {bare} with none");
+                    break;
+                }
+
                 case "wire-dump":
                 {
                     if (Game.Instance == null) throw new InvalidOperationException("no game");

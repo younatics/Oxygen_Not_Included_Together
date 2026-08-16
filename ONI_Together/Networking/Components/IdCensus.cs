@@ -151,6 +151,7 @@ namespace ONI_Together.Networking.Components
             CyclesCompleted = 0;
             PrioritiesCorrected = 0;
             PrioritiesSent = 0;
+            SweepMarksCorrected = 0;
         }
 
         private void Update()
@@ -189,15 +190,29 @@ namespace ONI_Together.Networking.Components
             // sampled periodically for buildings and for nothing else, so a suit in a
             // checkpoint keeps whatever the client last guessed.
             var priorities = new short[take];
+            var flags = new byte[take];
             for (int i = 0; i < take; i++)
             {
                 priorities[i] = SamplePriority(batch[i]);
                 if (priorities[i] >= 0) PrioritiesSent++;
+                flags[i] = SampleFlags(batch[i]);
             }
 
             PacketSender.SendToAllClients(
-                new IdCensusPacket { Cycle = _cycle, NetIds = batch, Priorities = priorities },
+                new IdCensusPacket { Cycle = _cycle, NetIds = batch, Priorities = priorities, Flags = flags },
                 PacketSendMode.Reliable);
+        }
+
+        private static byte SampleFlags(int netId)
+        {
+            if (!NetworkIdentityRegistry.TryGet(netId, out var identity)
+                || identity.IsNullOrDestroyed()
+                || !identity.TryGetComponent<Clearable>(out var clearable))
+                return 0;
+
+            byte f = IdCensusPacket.FlagClearable;
+            if (clearable.isMarkedForClear) f |= IdCensusPacket.FlagMarkedForClear;
+            return f;
         }
 
         private static short SamplePriority(int netId)
@@ -212,7 +227,7 @@ namespace ONI_Together.Networking.Components
         }
 
         /// <summary>Client side: look each id up, and remember what was not there.</summary>
-        internal static void Receive(int cycle, int[] netIds, short[] priorities)
+        internal static void Receive(int cycle, int[] netIds, short[] priorities, byte[] flags)
         {
             if (netIds == null) return;
 
@@ -241,6 +256,8 @@ namespace ONI_Together.Networking.Components
                 {
                     if (priorities != null && i < priorities.Length)
                         ApplyPriority(identity, priorities[i]);
+                    if (flags != null && i < flags.Length)
+                        ApplySweepMark(identity, flags[i]);
                     continue;
                 }
 
@@ -268,6 +285,33 @@ namespace ONI_Together.Networking.Components
 
         /// <summary>Priorities this peer had to correct because no event carried them.</summary>
         public static int PrioritiesCorrected { get; private set; }
+
+        /// <summary>
+        /// Sweep marks set or cleared here to match the host.
+        ///
+        /// Measured before this existed: 45 items marked on the host, 37 on the client, 8
+        /// on the host and on neither the other way. Marks travel only by replaying the
+        /// Clear tool, so one set any other way never arrives - and, more to the point in
+        /// ordinary play, a mark CLEARED when a duplicant collects the debris is not a tool
+        /// action either, so the client keeps showing work the host has finished.
+        /// </summary>
+        public static int SweepMarksCorrected { get; private set; }
+
+        private static void ApplySweepMark(NetworkIdentity identity, byte flags)
+        {
+            if ((flags & IdCensusPacket.FlagClearable) == 0) return;
+            if (!identity.TryGetComponent<Clearable>(out var clearable)) return;
+
+            bool wanted = (flags & IdCensusPacket.FlagMarkedForClear) != 0;
+            if (clearable.isMarkedForClear == wanted) return;
+
+            // The game's own entry points, so the sweep errand and the marker on screen
+            // change together. Writing the field would move a boolean and leave the chore
+            // and the overlay where they were.
+            if (wanted) clearable.MarkForClear(); else clearable.CancelClearing();
+
+            SweepMarksCorrected++;
+        }
 
         /// <summary>
         /// Priorities the host actually put on the wire - the control for the number above.
