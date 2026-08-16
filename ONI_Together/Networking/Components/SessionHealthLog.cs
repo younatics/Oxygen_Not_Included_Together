@@ -384,6 +384,11 @@ namespace ONI_Together.Networking.Components
 				// could not fire. A large censusPrioSent beside a zero censusPrio is
 				// agreement; a zero here makes the client's zero meaningless.
 				$"|censusPrioSent={IdCensus.PrioritiesSent}" +
+				// Wires joined because a neighbour they touch was already on a network.
+				// Judge against the state dump's one-sided wire count, not on its own - the
+				// previous attempt reported 3,160 repairs and fixed nothing.
+				$"|wireRejoined={WireRejoin.Rejoined}" +
+				$"|wireRejoinSweeps={WireRejoin.RejoinSweeps}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//
 				// WireNetworkRepair swept the wire layer on the client every five seconds
