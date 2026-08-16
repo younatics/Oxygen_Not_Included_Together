@@ -93,6 +93,48 @@ namespace ONI_Together.Networking.Components
         /// </summary>
         public static int MissingPersistent { get; private set; }
 
+        /// <summary>
+        /// Of those, the ones this peer once held and let go.
+        ///
+        /// Splitting them was forced by an over-claim. The first run found 44 persistent
+        /// absences, mostly Oxygen, DirtyWater and CarbonDioxide, and the host had
+        /// announced every one of them - so it was reported as "the announcement was sent
+        /// and the object never appeared". The evidence did not support that. "The client
+        /// log never mentions this id" is equally consistent with the client having held
+        /// the object and destroyed it afterwards, which is ordinary for gas piles: they
+        /// merge constantly, and the two peers' simulations do not have to merge them the
+        /// same way.
+        ///
+        /// Those two need opposite fixes. Never arrived means the announcement path is
+        /// losing entries. Arrived and went means the peers' own simulations diverged
+        /// about a pile, and no amount of delivery would help.
+        ///
+        /// The registry already keeps retired ids, so the question costs one lookup.
+        /// </summary>
+        public static int MissingAfterRetire { get; private set; }
+
+        /// <summary>
+        /// Persistent absences for ids this peer has no record of ever holding.
+        ///
+        /// Read this as "the two peers do not agree about this number", NOT as "this peer
+        /// does not have the object". They are not the same thing and the first run of this
+        /// counter proved it: id 1228387309 came up as never seen, the host has it as a
+        /// Tile at cell 48770, and the client's own dump has a Tile at cell 48770 too. The
+        /// tile is there. The number is not.
+        ///
+        /// This census walks ids, so an object present under a different id is
+        /// indistinguishable from an object that is absent. That limit is inherent to
+        /// asking the question this cheaply - 640 bytes a second buys id agreement and
+        /// nothing else - and the run before this one was reported without it, which turned
+        /// "the peers disagree about some numbers" into "the announcement never arrived".
+        ///
+        /// Answering the object question needs cell and prefab on the wire rather than a
+        /// bare id, which is what the harness's state_compare does offline and what makes
+        /// it five times the size. Worth doing if this number ever matters; so far it is
+        /// 3 against 47 of the other kind.
+        /// </summary>
+        public static int MissingNeverSeen { get; private set; }
+
         /// <summary>Passes the host has completed, so a zero above can be told from "never ran".</summary>
         public static int CyclesCompleted { get; private set; }
 
@@ -104,6 +146,8 @@ namespace ONI_Together.Networking.Components
             Checked = 0;
             MissingNow = 0;
             MissingPersistent = 0;
+            MissingAfterRetire = 0;
+            MissingNeverSeen = 0;
             CyclesCompleted = 0;
         }
 
@@ -180,10 +224,16 @@ namespace ONI_Together.Networking.Components
                 if (_missingLastCycle.Contains(id))
                 {
                     MissingPersistent++;
+
+                    // Held once and let go, or never held at all - see MissingAfterRetire.
+                    bool wasHere = NetworkIdentityRegistry.ExistsOrRetired(id);
+                    if (wasHere) MissingAfterRetire++; else MissingNeverSeen++;
+
                     DebugTools.ThrottledLog.Warn(
                         $"[Census] the host holds NetId {id} and this peer does not, on two " +
-                        "consecutive passes - grep the host log for that id to see what it is " +
-                        $"({MissingPersistent} so far)");
+                        $"consecutive passes; this peer {(wasHere ? "had it and retired it" : "has no record of ever holding it")} " +
+                        $"- grep the host log for that id to see what it is " +
+                        $"({MissingAfterRetire} retired, {MissingNeverSeen} never seen)");
                 }
             }
         }

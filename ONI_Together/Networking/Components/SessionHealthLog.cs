@@ -358,6 +358,14 @@ namespace ONI_Together.Networking.Components
 				$"|censusChecked={IdCensus.Checked}" +
 				$"|censusMissing1={IdCensus.MissingNow}" +
 				$"|censusMissing2={IdCensus.MissingPersistent}" +
+				// And the split that says which defect it is. Retired means this peer held
+				// the object and let it go - the two simulations disagreed about a pile,
+				// and delivery was never the problem. NeverSeen means the announcement did
+				// not land, which is a transport or handler fault. The first run reported
+				// all 44 as if they were the second kind, on evidence that could not tell
+				// them apart.
+				$"|censusRetired={IdCensus.MissingAfterRetire}" +
+				$"|censusNeverSeen={IdCensus.MissingNeverSeen}" +
 				$"|censusCycles={IdCensus.CyclesCompleted}" +
 				// There was a wireFixed counter here and the change it measured is gone.
 				//
