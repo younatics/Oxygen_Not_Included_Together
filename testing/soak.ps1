@@ -202,7 +202,7 @@ for ($i = 1; $i -le $Runs; $i++) {
     & (Join-Path $root 'run-scenario.ps1') -Label $label -Save $Save `
         -DigCells $dig -SettleSeconds $settle -Share $Share `
         -BuildCells $hostBuild -PeerBuildCells $peerBuild -DeconstructCells $tearDown `
-        -HatchEggs 3 -FabricateOrders 2 -FinishBuilds 4 -DamageBuildings 3 `
+        -HatchEggs 3 -FabricateOrders 2 -FinishBuilds 4 -DamageBuildings 3 -PlantSeeds 2 `
         -BuildWhat $buildWhat[($i - 1) % $buildWhat.Count] `
         -Reconnect:$reconnects[($i - 1) % $reconnects.Count] `
         -AskApi $AskApi | Out-Null

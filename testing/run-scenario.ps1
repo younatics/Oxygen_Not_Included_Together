@@ -41,6 +41,16 @@ param(
     # Eggs to bring to term before unpausing, so the client-side hatch block is
     # actually exercised instead of reporting zero for want of an event.
     [int]$HatchEggs = 0,
+    # Plants to sow on the host, so the plant comparison has something to compare.
+    #
+    # Without this the run compares only the 458 plants that were in the save before the
+    # session began and reports plant DIFFERENT 0 - about a case it cannot see. Four runs
+    # of the plant counters read plantSeen=0, which is the counters saying exactly that.
+    #
+    # Host only, deliberately. The reported defect is "the host sows and the client never
+    # gets it"; sowing on the client as well would create the object locally and hide the
+    # gap, the way forcing the host's eggs alone once proved nothing about the client.
+    [int]$PlantSeeds = 0,
     # Products to ask the peer's fabricators for, so the client-side product guard
     # is exercised instead of reporting zero for want of a duplicant to work them.
     [int]$FabricateOrders = 0,
@@ -280,6 +290,22 @@ if ($HatchEggs -gt 0) {
     Send-Peer "hatch $HatchEggs"
     Start-Sleep -Seconds 4
     Ok 'peer eggs brought to term'
+}
+
+# Sowing, on the host only.
+#
+# The one event this harness has never produced, and the reason two plant fixes were
+# written, deployed and reverted without ever being judged. The verb reports how many
+# plots it saw and why it skipped them, so "sowed 0" can be told from "there was
+# nowhere to sow" - a run that sows nothing proves nothing about plants, and saying so
+# is cheaper than reading plantSeen=0 as a pass again.
+if ($PlantSeeds -gt 0) {
+    Step "sowing $PlantSeeds plant(s) on the host"
+    $mark = HostLogLines
+    Send-Host "plant $PlantSeeds"
+    $sowed = Wait-HostLog '\[SCENARIO\] OK plant' 60 $mark
+    if ($sowed) { Ok $sowed.Substring($sowed.IndexOf('[SCENARIO]')) }
+    else { Write-Host '    WARN plant did not report' -ForegroundColor Yellow }
 }
 
 # The fabricator guard, exercised on the peer that has it.

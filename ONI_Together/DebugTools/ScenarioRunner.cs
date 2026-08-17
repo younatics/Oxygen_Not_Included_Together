@@ -287,6 +287,17 @@ namespace ONI_Together.DebugTools
                     break;
                 }
 
+                // Sowing, which no scenario has ever done - so the plant comparison has
+                // only ever looked at plants that predate the session, and reported
+                // DIFFERENT 0 about a case it could not see.
+                case "plant":
+                {
+                    int count = parts.Length > 1 ? int.Parse(parts[1]) : 2;
+                    int sown = SowPlants(count);
+                    DebugConsole.Log($"{Tag} OK plant :: sowed {sown} of {count}");
+                    break;
+                }
+
                 // Answer, on this peer, the question the replication filter refuses to
                 // guess at: does building this prefab from its name survive?
                 //
@@ -1099,6 +1110,145 @@ namespace ONI_Together.DebugTools
 				DebugConsole.LogWarning($"{Tag} hatch: this colony has no eggs, so the hatch block cannot be exercised");
 
 			return forced;
+		}
+
+		/// <summary>
+		/// Sow a plant into a farm tile, so the plant-replication case can be judged at all.
+		///
+		/// Four runs of the new plant counters read plantSeen=0 - not "plants replicate"
+		/// but "nothing was ever sown". The scenario digs, builds, deconstructs, hatches,
+		/// fabricates and damages; it has never planted, and the plant comparison has
+		/// therefore only ever looked at the 458 plants that were in the save before the
+		/// session started. That is the same shape as the scaffold counters that could
+		/// never be true, and it is why two attempted fixes could not be judged and were
+		/// reverted.
+		///
+		/// ForceDeposit is the game's own entry point, read out of Assembly-CSharp rather
+		/// than guessed: it clears any occupant, calls SpawnOccupyingObject - which is the
+		/// host path this mod patches - configures and positions the result, and destroys
+		/// the seed. Sowing by hand instead would be the mistake this repository has paid
+		/// for repeatedly; every attempt that placed an object itself has been reverted.
+		///
+		/// The seed is a real object for the frame it exists, exactly as it is in play when
+		/// a duplicant carries one to the tile. The tag comes from the plot: what it has
+		/// already ordered if it has ordered something, otherwise the first seed it accepts.
+		/// Neither is invented, which matters here - a tool passing an argument it made up
+		/// is what sent three days after an electrical bug that did not exist.
+		/// </summary>
+		private static int SowPlants(int count)
+		{
+			if (Game.Instance == null) throw new InvalidOperationException("no game loaded");
+
+			int sown = 0;
+			int plots = 0;
+			int occupied = 0;
+			int noSeedTag = 0;
+			int noPrefab = 0;
+			int noOccupant = 0;
+
+			foreach (var plot in UnityEngine.Object.FindObjectsByType<PlantablePlot>(FindObjectsSortMode.None))
+			{
+				if (sown >= count) break;
+				if (plot.IsNullOrDestroyed() || plot.gameObject.IsNullOrDestroyed()) continue;
+
+				plots++;
+
+				// Only empty tiles. Replacing a growing plant would destroy an object both
+				// peers already agree about, which is a different event from sowing one.
+				if (plot.Occupant != null)
+				{
+					occupied++;
+					continue;
+				}
+
+				// global:: because this class has a string constant called Tag, and the
+				// game's type by that name is shadowed inside it.
+				global::Tag seedTag = plot.requestedEntityTag;
+				if (!seedTag.IsValid)
+				{
+					seedTag = global::Tag.Invalid;
+					foreach (var candidate in plot.possibleDepositTagsList)
+					{
+						var candidatePrefab = Assets.GetPrefab(candidate);
+						if (candidatePrefab == null) continue;
+						if (candidatePrefab.GetComponent<PlantableSeed>() == null) continue;
+						seedTag = candidate;
+						break;
+					}
+				}
+
+				if (!seedTag.IsValid)
+				{
+					noSeedTag++;
+					continue;
+				}
+
+				var prefab = Assets.GetPrefab(seedTag);
+				if (prefab == null)
+				{
+					noPrefab++;
+					continue;
+				}
+
+				try
+				{
+					// GameUtil.KInstantiate + SetActive, which is what SpawnOccupyingObject
+					// itself uses two lines further on. Object.Instantiate is the call that
+					// does not register in Grid.Objects and left the client holding a plant
+					// that was nowhere; it is not used here.
+					var seed = GameUtil.KInstantiate(
+						prefab,
+						Grid.CellToPosCBC(Grid.PosToCell(plot), Grid.SceneLayer.Ore),
+						Grid.SceneLayer.Ore);
+					seed.SetActive(true);
+
+					plot.ForceDeposit(seed);
+
+					// The outcome, not the call.
+					//
+					// The first version counted a ForceDeposit that did not throw, printed
+					// "sowed 1 of 2", and the run then reported plantSeen=0 - which reads
+					// as "the plant was not replicated" when it may equally mean "no plant
+					// was ever made". That is the same fault this session found in the suit
+					// packet hours earlier: Applied was counting "did not throw" while the
+					// game's method was quietly doing nothing. Repeating it in the tool
+					// built to judge the fix would have made the judgement worthless.
+					//
+					// Occupant is the receptacle's own answer to "is something planted in
+					// me", so it cannot disagree with the game.
+					var occupant = plot.Occupant;
+					if (occupant == null)
+					{
+						noOccupant++;
+						DebugConsole.LogWarning(
+							$"{Tag} plant: deposited '{seedTag.Name}' into {plot.name} at cell " +
+							$"{Grid.PosToCell(plot)} and the plot is still empty - nothing was planted");
+						continue;
+					}
+
+					sown++;
+					DebugConsole.Log(
+						$"{Tag} plant: sowed '{seedTag.Name}' into {plot.name} at cell {Grid.PosToCell(plot)} " +
+						$"- occupant '{occupant.name}' at cell {Grid.PosToCell(occupant.transform.GetPosition())} " +
+						$"growing={(occupant.GetComponent<Growing>() != null)}");
+				}
+				catch (Exception ex)
+				{
+					DebugConsole.LogWarning(
+						$"{Tag} plant: could not sow '{seedTag.Name}' into {plot.name}: {ex}");
+				}
+			}
+
+			// Said out loud, because "sowed 0" has to be tellable from "there was nowhere
+			// to sow". The first is a defect in this verb; the second is a colony without
+			// a free farm tile, and the run that follows would prove nothing either way.
+			if (sown < count)
+				DebugConsole.LogWarning(
+					$"{Tag} plant: sowed {sown} of {count} - {plots} plot(s) seen, {occupied} already occupied, " +
+					$"{noSeedTag} with no seed they accept, {noPrefab} whose seed has no prefab, " +
+					$"{noOccupant} that took the seed and stayed empty");
+
+			return sown;
 		}
 
 		/// <summary>
