@@ -60,7 +60,11 @@ param(
     # variance. Running the scenario directly in a loop is not a substitute: soak
     # restarts ONI between runs, and without that the logs accumulate and every count
     # taken from them is the sum of every run so far.
-    [switch]$AlwaysReconnect
+    [switch]$AlwaysReconnect,
+    # Passed through to the scenario: build a plant on the client at this cell and leave
+    # it standing, so the run's client error count answers whether the client can hold
+    # one. Zero for normal runs. See run-scenario.ps1 for why the cell is named.
+    [int]$ProbePlantCell = 0
 )
 
 $ErrorActionPreference = 'Continue'
@@ -203,6 +207,7 @@ for ($i = 1; $i -le $Runs; $i++) {
         -DigCells $dig -SettleSeconds $settle -Share $Share `
         -BuildCells $hostBuild -PeerBuildCells $peerBuild -DeconstructCells $tearDown `
         -HatchEggs 3 -FabricateOrders 2 -FinishBuilds 4 -DamageBuildings 3 -PlantSeeds 2 `
+        -ProbePlantCell $ProbePlantCell `
         -BuildWhat $buildWhat[($i - 1) % $buildWhat.Count] `
         -Reconnect:$reconnects[($i - 1) % $reconnects.Count] `
         -AskApi $AskApi | Out-Null

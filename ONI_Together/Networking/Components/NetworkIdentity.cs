@@ -1423,6 +1423,12 @@ namespace ONI_Together.Networking.Components
 		public static int AnnounceSkippedNoId { get; private set; }
 		public static int AnnounceSkippedNotHost { get; private set; }
 		public static int AnnounceSkippedNotReplicated { get; private set; }
+
+		/// <summary>
+		/// How many of those refusals were plants, by GameTags.Plant - the tag the game's
+		/// own plant template always adds, unlike Growing, which only crops get.
+		/// </summary>
+		public static int AnnounceSkippedPlant { get; private set; }
 		public static int AnnounceSent { get; private set; }
 
 		/// <summary>
@@ -1466,6 +1472,24 @@ namespace ONI_Together.Networking.Components
 			if (!NeedsReplication())
 			{
 				AnnounceSkippedNotReplicated++;
+
+				// Plants, separately, because the three instruments that would have shown
+				// this one are all blind to it.
+				//
+				// Growing.OnSpawn, the PlantablePlot postfix and PlantTracker.AllPlants -
+				// which is the health row's plants= - every one of them requires a Growing
+				// component, and the plant that actually diverges is a Wheezewort, which
+				// has none: EntityTemplates.ExtendEntityToBasicPlant adds GameTags.Plant to
+				// every plant and adds Growing only to the ones that grow a crop. So a run
+				// reported plantSeen=0, plantPlot=0 and plants=458 while the host was
+				// refusing to replicate a plant, and all three numbers were consistent with
+				// nothing being wrong.
+				//
+				// GameTags.Plant is the game's own answer to "is this a plant", taken from
+				// the template rather than picked. This counter is what makes the next
+				// attempt at replicating plants judgeable at all: it is the size of the gap
+				// now, and it has to fall to zero when the filter changes.
+				if (gameObject.HasTag(GameTags.Plant)) AnnounceSkippedPlant++;
 				// Sixty rather than ten. Ten was enough to see that the first ones were
 				// buildings and placers, and that reading turned out to be a sample of
 				// the head rather than a description of the set - the loose items that

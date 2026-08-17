@@ -694,6 +694,10 @@ namespace ONI_Together.Networking.Components
 				$"|annNoId={NetworkIdentity.AnnounceSkippedNoId}" +
 				$"|annNotHost={NetworkIdentity.AnnounceSkippedNotHost}" +
 				$"|annNotRepl={NetworkIdentity.AnnounceSkippedNotReplicated}" +
+				// The plants inside that refusal, by GameTags.Plant rather than by Growing.
+				// plants= above cannot see a Wheezewort; this can, and it is the number any
+				// attempt at replicating plants has to drive to zero.
+				$"|annNotReplPlant={NetworkIdentity.AnnounceSkippedPlant}" +
 				$"|assignRefused={Packets.World.AssignmentPacket.CellFallbackRefused}" +
 				$"|resolvePrefab={Packets.World.EntityResolveRequestPacket.ResolvedByPrefab}" +
 				$"|resolveElement={Packets.World.EntityResolveRequestPacket.ResolvedByElement}" +

@@ -336,9 +336,10 @@ namespace ONI_Together.DebugTools
                 // means two things.
                 case "spawn-probe":
                 {
-                    if (parts.Length < 2) throw new InvalidOperationException("spawn-probe <prefabName> [keep]");
+                    if (parts.Length < 2) throw new InvalidOperationException("spawn-probe <prefabName> [keep] [cell]");
                     string prefabName = parts[1];
                     bool keep = parts.Length > 2 && parts[2] == "keep";
+                    int probeCell = parts.Length > 3 && int.TryParse(parts[3], out int pc) ? pc : 0;
 
                     var prefab = Assets.GetPrefab(prefabName);
                     if (prefab == null)
@@ -350,11 +351,35 @@ namespace ONI_Together.DebugTools
                     GameObject built = null;
                     try
                     {
-                        built = UnityEngine.Object.Instantiate(prefab);
-                        built.SetActive(true);
-                        DebugConsole.Log(
-                            $"{Tag} OK spawn-probe :: '{prefabName}' instantiated and spawned " +
-                            $"without throwing (keep={keep})");
+                        // With a cell, the probe builds where the object would actually go.
+                        //
+                        // Without one it called Object.Instantiate(prefab) with no position
+                        // at all, which puts the thing at the world origin - off the grid,
+                        // on no scene layer, in no cell. Whatever that measured, it was not
+                        // "can this peer hold this object where replication would put it",
+                        // and the answer it gave was used to justify a change that then
+                        // produced 159 client errors.
+                        //
+                        // BuildingFront is the layer ColdBreatherConfig itself passes to
+                        // CreatePlacedEntity, and it is logged so a species that wants a
+                        // different one is told apart from a species that failed.
+                        if (probeCell > 0)
+                        {
+                            var layer = Grid.SceneLayer.BuildingFront;
+                            built = GameUtil.KInstantiate(prefab, Grid.CellToPosCBC(probeCell, layer), layer);
+                            built.SetActive(true);
+                            DebugConsole.Log(
+                                $"{Tag} OK spawn-probe :: '{prefabName}' built at cell {probeCell} layer {layer} " +
+                                $"without throwing (keep={keep})");
+                        }
+                        else
+                        {
+                            built = UnityEngine.Object.Instantiate(prefab);
+                            built.SetActive(true);
+                            DebugConsole.Log(
+                                $"{Tag} OK spawn-probe :: '{prefabName}' instantiated and spawned " +
+                                $"without throwing at no cell (keep={keep})");
+                        }
                     }
                     catch (Exception ex)
                     {

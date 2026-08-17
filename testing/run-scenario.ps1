@@ -51,6 +51,21 @@ param(
     # gets it"; sowing on the client as well would create the object locally and hide the
     # gap, the way forcing the host's eggs alone once proved nothing about the client.
     [int]$PlantSeeds = 0,
+    # Build a plant on the CLIENT at this cell and leave it standing, to answer the one
+    # question two reverted plant attempts never asked correctly.
+    #
+    # NetworkIdentity.cs writes the prescription itself: "probe on the client, leave the
+    # object standing for several minutes, and watch the error count rather than the
+    # return value - the exception here is thrown by Unity's own LateUpdate, so nothing at
+    # the call site would ever see it." The earlier probe ran on the host, and at no cell
+    # at all, so it answered neither half.
+    #
+    # 53105 for this colony: the cell the plant verb's sow lands in, host-side, every run,
+    # and the cell a cell-dump measured as holding zero objects on the client. The verb
+    # logs the cell it actually used, so a save where that moves is visible rather than
+    # silently probing the wrong place.
+    [int]$ProbePlantCell = 0,
+    [string]$ProbePlantPrefab = 'ColdBreather',
     # Products to ask the peer's fabricators for, so the client-side product guard
     # is exercised instead of reporting zero for want of a duplicant to work them.
     [int]$FabricateOrders = 0,
@@ -308,6 +323,31 @@ if ($PlantSeeds -gt 0) {
     else { Write-Host '    WARN plant did not report' -ForegroundColor Yellow }
 }
 
+# The plant probe, on the client, kept.
+#
+# Judged by the run's client error count, not by this command's reply. The reply cannot
+# be the answer: the failure mode on record throws from Unity's LateUpdate, several
+# frames after the call site has already returned success.
+if ($ProbePlantCell -gt 0) {
+    Step "building a $ProbePlantPrefab on the CLIENT at cell $ProbePlantCell and leaving it there"
+    Send-Peer "spawn-probe $ProbePlantPrefab keep $ProbePlantCell"
+    Start-Sleep -Seconds 4
+    Ok 'client plant probe sent - the verdict is the client error count after the settle'
+
+    # Both peers dump the cell, because "no errors" is only half the question.
+    #
+    # The first probe run built the plant, kept it, and logged no errors - and the
+    # client's state dump still showed 18 ColdBreather cells against the host's 19, with
+    # nothing at the probed cell. Either the object is not in Grid.Objects or the dump
+    # cannot see it, and those call for opposite next moves. cell-dump reads Grid.Objects
+    # directly, so putting the two peers' answers side by side settles it before a pass
+    # condition is written around the cell count.
+    Send-Host "cell-dump $ProbePlantCell"
+    Send-Peer "cell-dump $ProbePlantCell"
+    Start-Sleep -Seconds 4
+    Ok "cell $ProbePlantCell dumped on both peers"
+}
+
 # The fabricator guard, exercised on the peer that has it.
 #
 # A fabricator needs a duplicant to work it and the client's AI is off, so the
@@ -349,6 +389,22 @@ Ok $played.Substring($played.IndexOf('[SCENARIO]'))
 Step "letting duplicants work for ${SettleSeconds}s"
 $mark = HostLogLines
 Start-Sleep -Seconds $SettleSeconds
+
+# The probe cell again, now that the settle has run.
+#
+# The first pair of dumps was taken four seconds after the build and found the plant on
+# both peers, while the state dump five minutes later listed it on the host only. Those
+# two are not in conflict - they are different moments, and reading the pair as one
+# answer would have produced "the client cannot see its own object" when the real
+# question is whether the object is still there. Same command, after the wait, so the
+# difference between the two dumps is time and nothing else.
+if ($ProbePlantCell -gt 0) {
+    Step "dumping cell $ProbePlantCell again, after the settle"
+    Send-Host "cell-dump $ProbePlantCell"
+    Send-Peer "cell-dump $ProbePlantCell"
+    Start-Sleep -Seconds 4
+    Ok "cell $ProbePlantCell dumped on both peers, post-settle"
+}
 
 # The run used to be called a success once the dig order was placed. Placing an
 # order proves nothing: every scenario so far reported OK while paused, with
