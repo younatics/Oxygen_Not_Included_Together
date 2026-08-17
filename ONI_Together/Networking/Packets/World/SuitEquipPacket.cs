@@ -79,6 +79,30 @@ namespace ONI_Together.Networking.Packets.World
 		public static int NoWornSuit { get; private set; }
 		public static int NoStoredSuit { get; private set; }
 
+		/// <summary>
+		/// Suit errands re-reconciled after a replay, because the client made one before
+		/// the suit arrived and nothing asked again afterwards.
+		///
+		/// The last visible difference between the peers was one row -
+		/// "chore|Atmo_Suit#...|waiting host=0 client=1" - and a probe on
+		/// Prioritizable.AddRef named the caller instead of another guess:
+		///
+		///     AddRef &lt;- EquipChore..ctor &lt;- EquippableWorkable.CreateChore
+		///            &lt;- EquippableWorkable.RefreshChore &lt;- Assignable...
+		///
+		/// It is the suit ITEM's own errand, not the locker's - an earlier fix cancelled
+		/// the locker's ReturnSuitWorkable, fired every run, and moved nothing, because
+		/// those are two different objects.
+		///
+		/// RefreshChore reads as the whole story: it cancels any existing chore, then makes
+		/// a new one only when the owner is not already wearing the item. The assignment
+		/// replicates before the suit does, so on the client it runs while the duplicant is
+		/// still empty-handed, creates the errand, and is never called again once the replay
+		/// puts the suit on. Calling the game's own reconciler a second time - after the
+		/// suit has moved - lets it reach the answer it would have reached on the host.
+		/// </summary>
+		public static int ChoresReconciled { get; private set; }
+
 		public void Serialize(BinaryWriter writer)
 		{
 			using var _ = Profiler.Scope();
@@ -144,6 +168,12 @@ namespace ONI_Together.Networking.Packets.World
 				return;
 			}
 
+			// Read before the call, because equipping empties the locker: after EquipTo
+			// the suit is on the duplicant and GetStoredOutfit answers null.
+			var suit = Equip
+				? locker.GetStoredOutfit()?.gameObject
+				: equipment.GetAssignable(Db.Get().AssignableSlots.Suit)?.gameObject;
+
 			IsApplying = true;
 			try
 			{
@@ -153,6 +183,15 @@ namespace ONI_Together.Networking.Packets.World
 					locker.UnequipFrom(equipment);
 
 				Applied++;
+
+				// The item's errand, asked again now that the item has moved.
+				if (suit != null
+					&& suit.TryGetComponent<EquippableWorkable>(out var workable)
+					&& workable != null)
+				{
+					workable.RefreshChore(workable.currentTarget);
+					ChoresReconciled++;
+				}
 			}
 			catch (System.Exception e)
 			{

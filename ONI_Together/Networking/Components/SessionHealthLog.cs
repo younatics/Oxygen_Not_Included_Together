@@ -705,6 +705,11 @@ namespace ONI_Together.Networking.Components
 				// plants= above cannot see a Wheezewort; this can, and it is the number any
 				// attempt at replicating plants has to drive to zero.
 				$"|annNotReplPlant={NetworkIdentity.AnnounceSkippedPlant}" +
+				// The suit errand: the probe that named the caller, kept beside the
+				// reconcile that acts on it. suitRefAdd above suitRefDel is a leftover.
+				$"|suitRefAdd={Patches.World.Items.SuitChoreProbePatches.SuitRefsAdded}" +
+				$"|suitRefDel={Patches.World.Items.SuitChoreProbePatches.SuitRefsRemoved}" +
+				$"|suitChoreFixed={Packets.World.SuitEquipPacket.ChoresReconciled}" +
 				// How a client's building got healed back to the host's number. The
 				// game's own Repair fires the triggers that end the repair errand; the
 				// reflection write moves the number and leaves the job on screen.
