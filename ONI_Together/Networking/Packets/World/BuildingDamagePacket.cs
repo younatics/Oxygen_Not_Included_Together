@@ -62,6 +62,7 @@ namespace ONI_Together.Networking.Packets.World
         public static void ResetForNewSession()
         {
             Received = Unresolved = NoHitPoints = Applied = AlreadyEqual = Ineffective = Forced = 0;
+            RepairedThroughGame = 0;
         }
 
         public static string Describe() =>
@@ -117,6 +118,13 @@ namespace ONI_Together.Networking.Packets.World
             else
                 Applied++;
         }
+
+        /// <summary>
+        /// Repairs put through the game's own BuildingHP.Repair, which fires the triggers
+        /// that end the repair errand. The pair to Forced: if this rises and Forced stays
+        /// at zero, the reflection write is no longer how buildings get healed here.
+        /// </summary>
+        public static int RepairedThroughGame { get; private set; }
 
         /// <summary>Repairs applied by writing the value, because the event declined them.</summary>
         public static int Forced { get; private set; }
@@ -257,6 +265,29 @@ namespace ONI_Together.Networking.Packets.World
             // moved nothing. The event is still the right first choice because it
             // updates Damaged, queues the repair errand and sets the overlay; this
             // only steps in when it demonstrably did nothing.
+            //
+            // BuildingHP.Repair before reflection, and that ordering is the fix.
+            //
+            // Writing the field moved the number and told nothing. Read out of
+            // Assembly-CSharp, Repair raises the hit points and then fires two
+            // triggers - one for the change and, when the building is whole again, a
+            // second one - and those are what end the repair errand. A field write
+            // fires neither, so on the client the wire came back to full health and
+            // kept its repair job forever: state_compare reported
+            // "chore|Wire@38797|waiting host=0 client=1" every run while hp DIFFERENT
+            // stayed 0, which is precisely "both peers agree it is fixed, one of them
+            // is still showing the work".
+            //
+            // That is not cosmetic. A player on the client sees an errand the host has
+            // finished, and acts on what they see.
+            if (buildingHP.HitPoints < hostHp)
+            {
+                buildingHP.Repair(hostHp - buildingHP.HitPoints);
+                RepairedThroughGame++;
+            }
+
+            // Reflection stays, as the last resort it already was, and it now says
+            // something when it runs: Repair could not get there.
             if (buildingHP.HitPoints != hostHp)
                 ForceHitPoints(buildingHP, hostHp);
         }

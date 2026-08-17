@@ -705,6 +705,11 @@ namespace ONI_Together.Networking.Components
 				// plants= above cannot see a Wheezewort; this can, and it is the number any
 				// attempt at replicating plants has to drive to zero.
 				$"|annNotReplPlant={NetworkIdentity.AnnounceSkippedPlant}" +
+				// How a client's building got healed back to the host's number. The
+				// game's own Repair fires the triggers that end the repair errand; the
+				// reflection write moves the number and leaves the job on screen.
+				$"|hpRepaired={Packets.World.BuildingDamagePacket.RepairedThroughGame}" +
+				$"|hpForced={Packets.World.BuildingDamagePacket.Forced}" +
 				// The client end of the same change: plants it built from a lifecycle
 				// event that have no Growing. Zero here means the widened path never
 				// fired, whatever the other plant numbers say.
