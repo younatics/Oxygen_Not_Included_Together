@@ -85,12 +85,43 @@ EquipTo:      var s = GetStoredOutfit();
 `plant DIFFERENT 0` 은 복제된다는 뜻이 아니었다. 시나리오가 **아무것도 심지 않아서** 세션 전부터
 있던 458그루만 비교한 것이다. 고장난 경우는 한 번도 검사된 적이 없다.
 
-게이트 **앞**에 카운터를 달았다(`plantSeen`·`plantNotWild`·`plantNotBcast`·`plantWild`·`plantPlot`).
-그리고 4회 실행에서 **`plantSeen` 이 전부 0** 이었다 — 카운터가 "이 시나리오는 심지 않는다" 를
-증명했다.
+게이트 **앞**에 카운터를 달았고, 4회 실행에서 `plantSeen` 이 전부 0 이었다. 그래서 `plant` verb 를
+만들어 시나리오가 실제로 심게 했다. **첫 실행에서 원인이 나왔다.**
 
-**다음 수는 코드 수정이 아니다.** `ScenarioRunner` 의 verb 목록에 `plant` 가 없어서 이 검사는
-구조적으로 발동할 수 없다. verb 를 먼저 만든다.
+```
+sowed 'ColdBreatherSeed' into PlanterBoxComplete at cell 52849
+  - occupant 'ColdBreather' at cell 53105 growing=False
+```
+
+**어긋나는 식물에는 `Growing` 컴포넌트가 없다.** 그리고 그것을 복제하거나 재는 경로가 전부
+`Growing` 을 요구한다:
+
+| 경로 | 요구 |
+|---|---|
+| `Growing.OnSpawn` 패치 | `Growing` 자체를 패치 |
+| `PlantablePlot` 후처리 | `__result` 에 `Growing` 없으면 반환 |
+| `PlantTracker.AllPlants` | `HashSet<Growing>` — HEALTH 행의 `plants=` 가 이것 |
+
+그러므로 `plantSeen=0`·`plantPlot=0`·`plants=458` 은 이 식물에 대한 증거가 아니다.
+**이 종을 볼 수 없는 계기 세 개**다. 양쪽이 독립적으로 내는 축인 셀로 세면:
+
+```
+호스트 ColdBreather 19셀 / 클라 18셀 — 없는 것이 매번 53105
+```
+
+호스트는 사유를 처음부터 적고 있었다:
+
+```
+[Announce] not replicating 'ColdBreather' (NetId -2145270536)
+  - building=False minion=False pickupable=False navigator=False
+```
+
+그 NetId 가 매 실행 `state_compare` 의 host-only 3줄(`sync:BuildingFlagsSyncer|-2145270536|*`)과
+`flag|ColdBreather@53105`, `chore|ColdBreather@53105` 전부다.
+
+**아직 안 고쳤다.** 이전 두 시도는 `Grid.Objects` 등록을 겨눴는데, 이 식물을 막은 것은 그게
+아니었다. 다음 수는 `NeedsReplication` 이 식물을 받아들이게 하는 것이고, 그 전에
+**`Growing` 없는 식물도 세는 카운터**가 있어야 판정할 수 있다 — 지금 셋 다 눈이 멀어 있다.
 
 ### 3. 잡동사니 병합 — 화면에 안 보임
 `state_compare` 행의 과반(약 20행)이 이것. 인구조사가 성격을 확정했다: 연속 두 바퀴 부재
