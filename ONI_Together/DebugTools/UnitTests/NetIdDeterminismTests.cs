@@ -477,11 +477,21 @@ namespace ONI_Together.DebugTools.UnitTests
             int persistent = resolver.IsNullOrDestroyed() ? -1 : resolver.GaveUpOn;
             int fails = NetworkIdentityRegistry.LookupFailCount;
 
-            if (persistent > 0)
+            // Sorted before it is judged. This used to fail on the whole given-up count,
+            // and measurement of two runs showed 59 of the 80 were Pickupable gas and
+            // liquid piles this peer had received and then merged away itself - the debris
+            // item, already known, already judged not worth forcing - while 7 were objects
+            // that had arrived by the time anyone looked. Failing on all of it every run is
+            // how a real gap would go unnoticed.
+            if (!resolver.IsNullOrDestroyed()) resolver.ClassifyGaveUp();
+
+            if (persistent > 0 && resolver.GaveUpNeverHeld > 0)
             {
                 problems.Add(
-                    $"{persistent} NetIds could not be resolved even after asking the host - these are " +
-                    $"objects this peer is genuinely missing ({fails} misses in total)" +
+                    $"{resolver.GaveUpNeverHeld} NetIds could not be resolved even after asking the host, and " +
+                    $"this peer has never held them - these are objects it is genuinely missing " +
+                    $"({fails} misses in total, {resolver.GaveUpAfterRetiring} more that it held and let go, " +
+                    $"{resolver.GaveUpButPresent} that have since arrived)" +
                     Blame(NetworkIdentityRegistry.FailuresByCaller));
             }
             else if (persistent < 0 && fails > 0)
@@ -496,7 +506,15 @@ namespace ONI_Together.DebugTools.UnitTests
                 return UnitTestResult.Fail(string.Join(" ;; ", problems));
 
             string transient = fails > 0 ? $", {fails} transient misses that resolved on their own" : "";
-            return UnitTestResult.Pass($"no unresolved ids; registry holds {NetworkIdentityRegistry.Count}{transient}");
+
+            // A pass that stays quiet about the sorted-out ids would be the same mistake in
+            // the other direction - the number would stop being reported and the debris
+            // item would lose its only continuous measurement.
+            string sorted = resolver.IsNullOrDestroyed() || persistent <= 0
+                ? ""
+                : $", {resolver.GaveUpAfterRetiring} held-then-released and {resolver.GaveUpButPresent} late arrivals set aside";
+
+            return UnitTestResult.Pass($"no unresolved ids; registry holds {NetworkIdentityRegistry.Count}{transient}{sorted}");
         }
 
         /// <summary>

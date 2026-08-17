@@ -203,6 +203,12 @@ namespace ONI_Together.Networking.Components
 			var watcher = ClientDamageWatcher.Instance;
 			var resolver = MissingEntityResolver.Instance;
 
+			// Sorted here as well as in the test, because the row must not print whatever
+			// the last test run happened to leave behind. A number that is only correct
+			// when something else ran first is the shape of several wrong readings in this
+			// project's history.
+			if (!resolver.IsNullOrDestroyed()) resolver.ClassifyGaveUp();
+
 			DebugConsole.Log(
 				$"[HEALTH] row={++_rows}" +
 				$"|role={(!MultiplayerSession.InSession ? "solo" : MultiplayerSession.IsHost ? "host" : "client")}" +
@@ -236,6 +242,14 @@ namespace ONI_Together.Networking.Components
 				// Distinct objects currently unaccounted for. Events say how loudly the
 				// packets complain; this says how many things they are complaining about.
 				$"|unresolvedIds={NetworkIdentityRegistry.UnresolvedIdCount}" +
+				// The given-up ids, sorted. gaveUpNever is the only one that means an
+				// object is missing; gaveUpRetired is this peer having received the object
+				// and merged it away, which is the debris item and was failing the NetId
+				// gate every run under the wrong name. Reported here so the split survives
+				// into the summary rather than living only inside a test message.
+				$"|gaveUpNever={(resolver.IsNullOrDestroyed() ? -1 : resolver.GaveUpNeverHeld)}" +
+				$"|gaveUpRetired={(resolver.IsNullOrDestroyed() ? -1 : resolver.GaveUpAfterRetiring)}" +
+				$"|gaveUpPresent={(resolver.IsNullOrDestroyed() ? -1 : resolver.GaveUpButPresent)}" +
 				// Misses the design expects - removal notices for items this peer was
 				// never told about. Separated so they stop inflating the number above.
 				$"|expectedMisses={NetworkIdentityRegistry.ExpectedMisses}" +

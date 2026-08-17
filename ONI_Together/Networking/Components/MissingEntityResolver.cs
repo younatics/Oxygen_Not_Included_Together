@@ -62,6 +62,57 @@ namespace ONI_Together.Networking.Components
         /// <summary>Ids already counted as given up on, so the count can be corrected if the host later answers.</summary>
         private readonly HashSet<int> _gaveUpIds = new HashSet<int>();
 
+        /// <summary>
+        /// What the given-up ids turned out to be, asked of the registry at the moment the
+        /// number is read rather than when the question went out.
+        ///
+        /// GaveUpOn was one number covering three unrelated situations, and the gate called
+        /// all of it "objects this peer is genuinely missing". Split by hand across the two
+        /// runs of build 10DC528F, from the two peers' id dumps:
+        ///
+        ///     run 1   39 given up   2 present here   29 held by the host   8 on neither
+        ///     run 2   41 given up   5 present here   30 held by the host   6 on neither
+        ///
+        /// and every one of the 59 the host held was a Pickupable gas, liquid or dirt pile -
+        /// Oxygen, DirtyWater, Water, Methane, CarbonDioxide, Hydrogen, Dirt. No building,
+        /// no duplicant, no item a player could point at. The client's own census had
+        /// already named the case correctly on the same ids: "this peer had it and retired
+        /// it". The two simulations merge loose gas differently, which is a known and
+        /// deliberately unfixed item, and this gate was reporting it under another name and
+        /// failing every single run for it.
+        ///
+        /// A gate that is red every run for a benign reason is worse than no gate: a
+        /// building that really did fail to replicate would land in the same number and
+        /// nobody would look. So the three are separated here, and only the third one is a
+        /// gap. Nothing is hidden - all three are reported.
+        ///
+        /// Present is asked of the registry because the resolver never learns that an id
+        /// arrived: the correction path exists only for the host's "gone" and "held"
+        /// answers, and an id answered with an actual spawn stayed counted as given up
+        /// forever. That is the 2 and the 5 above.
+        /// </summary>
+        public int GaveUpButPresent { get; private set; }
+        public int GaveUpAfterRetiring { get; private set; }
+        public int GaveUpNeverHeld { get; private set; }
+
+        /// <summary>
+        /// Sorts the given-up ids into the three cases above. Called before the numbers are
+        /// read, so they describe the registry as it is now and not as it was mid-flight.
+        /// </summary>
+        public void ClassifyGaveUp()
+        {
+            GaveUpButPresent = 0;
+            GaveUpAfterRetiring = 0;
+            GaveUpNeverHeld = 0;
+
+            foreach (int netId in _gaveUpIds)
+            {
+                if (NetworkIdentityRegistry.Exists(netId)) GaveUpButPresent++;
+                else if (NetworkIdentityRegistry.ExistsOrRetired(netId)) GaveUpAfterRetiring++;
+                else GaveUpNeverHeld++;
+            }
+        }
+
         /// <summary>Called when the host reports that an id does not exist on its side.</summary>
         public static void NoteConfirmedGone(int netId)
         {
