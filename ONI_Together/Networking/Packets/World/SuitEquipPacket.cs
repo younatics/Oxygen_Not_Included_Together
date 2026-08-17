@@ -80,28 +80,41 @@ namespace ONI_Together.Networking.Packets.World
 		public static int NoStoredSuit { get; private set; }
 
 		/// <summary>
-		/// Suit errands re-reconciled after a replay, because the client made one before
-		/// the suit arrived and nothing asked again afterwards.
+		/// THE ERRAND THAT STAYS ON A CLIENT. Measured, attempted twice, reverted twice -
+		/// the state of it, so a third attempt starts where the second stopped.
 		///
-		/// The last visible difference between the peers was one row -
-		/// "chore|Atmo_Suit#...|waiting host=0 client=1" - and a probe on
-		/// Prioritizable.AddRef named the caller instead of another guess:
+		/// One row survives every run: "chore|Atmo_Suit#...|waiting host=0 client=1".
+		/// waiting is Prioritizable.IsPrioritizable(), refCount > 0, so the client holds an
+		/// errand against a suit that the host's duplicant has already taken. A player on
+		/// the client sees work the host has finished.
+		///
+		/// A probe on Prioritizable.AddRef named the caller rather than a third guess:
 		///
 		///     AddRef &lt;- EquipChore..ctor &lt;- EquippableWorkable.CreateChore
 		///            &lt;- EquippableWorkable.RefreshChore &lt;- Assignable...
 		///
-		/// It is the suit ITEM's own errand, not the locker's - an earlier fix cancelled
-		/// the locker's ReturnSuitWorkable, fired every run, and moved nothing, because
-		/// those are two different objects.
+		/// It is the suit ITEM's own errand. The first attempt cancelled the LOCKER's
+		/// ReturnSuitWorkable, fired every run and moved nothing, because those are two
+		/// different objects.
 		///
-		/// RefreshChore reads as the whole story: it cancels any existing chore, then makes
-		/// a new one only when the owner is not already wearing the item. The assignment
-		/// replicates before the suit does, so on the client it runs while the duplicant is
-		/// still empty-handed, creates the errand, and is never called again once the replay
-		/// puts the suit on. Calling the game's own reconciler a second time - after the
-		/// suit has moved - lets it reach the answer it would have reached on the host.
+		/// RefreshChore cancels any chore and creates one only when the owner is not
+		/// already wearing the item, and the assignment replicates before the suit does -
+		/// so on a client it runs while the duplicant is empty-handed, makes the errand,
+		/// and is never asked again once the replay puts the suit on. Calling it a second
+		/// time from here was the second attempt, and three runs say why it failed:
+		///
+		///     suitChoreFixed   1, 2, 2      it fired
+		///     refAdd/refDel    2/1, 4/2, 5/3    leftovers 1, 2, 2
+		///     chore DIFFERENT  2, 2, 2      exactly the leftovers
+		///
+		/// refAdd rises with the reconcile, so the second call cancelled the chore and made
+		/// a new one - meaning IsEquipped was still false at that instant. The shape is
+		/// right and the moment is wrong: the equip has not landed when the replay returns.
+		///
+		/// A third attempt reconciles a frame later, or off whatever event reports the
+		/// equipment changed, and proves the timing before the fix - the counter to watch
+		/// is refAdd, which must NOT rise when the reconcile runs.
 		/// </summary>
-		public static int ChoresReconciled { get; private set; }
 
 		public void Serialize(BinaryWriter writer)
 		{
@@ -168,12 +181,6 @@ namespace ONI_Together.Networking.Packets.World
 				return;
 			}
 
-			// Read before the call, because equipping empties the locker: after EquipTo
-			// the suit is on the duplicant and GetStoredOutfit answers null.
-			var suit = Equip
-				? locker.GetStoredOutfit()?.gameObject
-				: equipment.GetAssignable(Db.Get().AssignableSlots.Suit)?.gameObject;
-
 			IsApplying = true;
 			try
 			{
@@ -183,15 +190,6 @@ namespace ONI_Together.Networking.Packets.World
 					locker.UnequipFrom(equipment);
 
 				Applied++;
-
-				// The item's errand, asked again now that the item has moved.
-				if (suit != null
-					&& suit.TryGetComponent<EquippableWorkable>(out var workable)
-					&& workable != null)
-				{
-					workable.RefreshChore(workable.currentTarget);
-					ChoresReconciled++;
-				}
 			}
 			catch (System.Exception e)
 			{
