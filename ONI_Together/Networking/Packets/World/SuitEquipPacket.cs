@@ -1,4 +1,4 @@
-using ONI_Together.DebugTools;
+﻿using ONI_Together.DebugTools;
 using ONI_Together.Networking.Components;
 using ONI_Together.Networking.Packets.Architecture;
 using Shared.Profiling;
@@ -80,40 +80,52 @@ namespace ONI_Together.Networking.Packets.World
 		public static int NoStoredSuit { get; private set; }
 
 		/// <summary>
-		/// THE ERRAND THAT STAYS ON A CLIENT. Measured, attempted twice, reverted twice -
-		/// the state of it, so a third attempt starts where the second stopped.
+		/// THE ERRAND THAT STAYS ON A CLIENT. Three hypotheses, three measurements, three
+		/// refutations - written down so a fourth attempt does not repeat any of them.
 		///
-		/// One row survives every run: "chore|Atmo_Suit#...|waiting host=0 client=1".
-		/// waiting is Prioritizable.IsPrioritizable(), refCount > 0, so the client holds an
-		/// errand against a suit that the host's duplicant has already taken. A player on
-		/// the client sees work the host has finished.
+		/// One row appears in most runs: "chore|Atmo_Suit#...|waiting host=0 client=1".
+		/// waiting is Prioritizable.IsPrioritizable(), refCount > 0, so the client shows an
+		/// errand against a suit the host is not showing. A player acts on what they see, so
+		/// it is worth closing - but nothing below closed it.
 		///
-		/// A probe on Prioritizable.AddRef named the caller rather than a third guess:
+		/// 1. "It is the locker's return-suit errand." A probe on Prioritizable.AddRef named
+		///    the caller instead of a guess:
 		///
-		///     AddRef &lt;- EquipChore..ctor &lt;- EquippableWorkable.CreateChore
-		///            &lt;- EquippableWorkable.RefreshChore &lt;- Assignable...
+		///        AddRef &lt;- EquipChore..ctor &lt;- EquippableWorkable.CreateChore
+		///               &lt;- EquippableWorkable.RefreshChore &lt;- Assignable...
 		///
-		/// It is the suit ITEM's own errand. The first attempt cancelled the LOCKER's
-		/// ReturnSuitWorkable, fired every run and moved nothing, because those are two
-		/// different objects.
+		///    The suit ITEM's errand, not the locker's. Cancelling the locker's fired every
+		///    run and moved nothing.
 		///
-		/// RefreshChore cancels any chore and creates one only when the owner is not
-		/// already wearing the item, and the assignment replicates before the suit does -
-		/// so on a client it runs while the duplicant is empty-handed, makes the errand,
-		/// and is never asked again once the replay puts the suit on. Calling it a second
-		/// time from here was the second attempt, and three runs say why it failed:
+		/// 2. "The reconcile runs a frame too early." Calling RefreshChore again after the
+		///    replay fired 1, 2, 2 times over three runs and left the row alone, and refAdd
+		///    rose with it - so it cancelled and immediately recreated. That looked like
+		///    "not equipped yet", and a diagnostic printed the four values RefreshChore
+		///    tests, at that exact moment:
 		///
-		///     suitChoreFixed   1, 2, 2      it fired
-		///     refAdd/refDel    2/1, 4/2, 5/3    leftovers 1, 2, 2
-		///     chore DIFFERENT  2, 2, 2      exactly the leftovers
+		///        chore=null assignee=니콜라 isEquipped=True sameEquipment=True IsEquipped=True
 		///
-		/// refAdd rises with the reconcile, so the second call cancelled the chore and made
-		/// a new one - meaning IsEquipped was still false at that instant. The shape is
-		/// right and the moment is wrong: the equip has not landed when the replay returns.
+		///    Everything correct, and NO chore. Equipment.Equip is synchronous, so the equip
+		///    had landed. The leftover errand belongs to a suit this replay never touched.
 		///
-		/// A third attempt reconciles a frame later, or off whatever event reports the
-		/// equipment changed, and proves the timing before the fix - the counter to watch
-		/// is refAdd, which must NOT rise when the reconcile runs.
+		/// 3. "The client missed an equip that happened outside the event window." A 15
+		///    second keyframe restating who wears what, applied through the same EquipTo:
+		///
+		///        wornSent 65 -> wornRecv 56 -> wornWorn 56, wornApplied 0
+		///        with -AlwaysReconnect:  wornWorn 62 and 54, wornApplied 0
+		///
+		///    The client already agreed at every check, reconnects included. It is not
+		///    missing equips either. Reverted; suitNoWorn fell from 2-4 to 0-2 across those
+		///    runs and that cannot be claimed, because the counter that would prove the
+		///    mechanism read zero.
+		///
+		/// What is left for a fourth attempt: the row is intermittent, it is on a suit no
+		/// event in the session touched, and the client both wears the right suits and holds
+		/// no chore on the ones it replays. So the errand belongs to a suit that is ASSIGNED
+		/// and not worn on both peers, where only the host has resolved it - which points at
+		/// assignment replication rather than at equipping. Start by dumping, on both peers,
+		/// every suit's assignee together with its refCount, and find a suit whose numbers
+		/// differ while its assignee does not.
 		/// </summary>
 
 		public void Serialize(BinaryWriter writer)
