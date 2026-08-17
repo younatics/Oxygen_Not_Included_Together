@@ -478,3 +478,38 @@ What is still open, with what is known about each:
    The size is now measured every run without any of this: `mergeBothNamed` is
    gone with the revert, but `gaveUpRetired` in the health row is the same
    population seen from the other end.
+
+6. **The suit errand a client keeps showing. Three attempts, three refutations.**
+
+   `chore|Atmo_Suit#...|waiting host=0 client=1`, intermittently 0 to 2 rows a run.
+   `waiting` is `Prioritizable.IsPrioritizable()` - refCount > 0 - so the client
+   displays an errand against a suit the host is not displaying. Worth closing
+   because a player acts on what they see, and it is now the only player-visible
+   divergence left.
+
+   Every hypothesis was killed by measurement rather than argument:
+
+   - *The locker's return-suit errand.* A probe on `Prioritizable.AddRef` printed
+     the caller: `EquipChore..ctor <- EquippableWorkable.CreateChore <-
+     EquippableWorkable.RefreshChore <- Assignable...`. It is the suit ITEM's
+     errand. Cancelling the locker's `ReturnSuitWorkable` fired every run and
+     moved nothing.
+   - *The replay reconciles a frame too early.* Calling `RefreshChore` again after
+     the replay fired 1, 2, 2 over three runs and left the rows alone, and refAdd
+     rose with it. A diagnostic then printed, at that exact instant:
+     `chore=null assignee=... isEquipped=True sameEquipment=True IsEquipped=True`.
+     Everything correct and no chore - `Equipment.Equip` is synchronous, so there
+     was nothing to wait for. The leftover errand is on a suit the replay never
+     touched.
+   - *An equip from outside the event window.* A 15 second keyframe restating who
+     wears what, applied through the same `EquipTo`: `wornWorn` 56, 62, 54 and
+     `wornApplied` **0**, reconnect runs included. The client is not missing
+     equips. `suitNoWorn` did fall from 2-4 to 0-2 and that is not claimable,
+     because the counter that would prove the mechanism read zero.
+
+   **Where a fourth attempt starts.** The row survives on a suit that is assigned
+   and unworn on both peers, and the client both wears the right suits and holds no
+   chore on the ones it replays. That points at assignment replication, not at
+   equipping. Dump, on both peers, every suit's `assignee` beside its `refCount`,
+   and find one whose numbers differ while its assignee does not. The three
+   refutations are in `SuitEquipPacket`'s own comment.
