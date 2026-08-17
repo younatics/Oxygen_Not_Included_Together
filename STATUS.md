@@ -5,8 +5,8 @@
 
 ## 한 줄 요약
 
-세션을 끊거나 화면이 크게 어긋나는 문제는 닫혔다. 대기복도 닫혔다. 남은 둘은 화면에 거의
-안 보이거나, 아직 **검사 자체가 없어서** 판정을 못 한 것이다. 성능은 모드가 아니라 콜로니가 무겁다.
+세션을 끊거나 화면이 크게 어긋나는 문제는 닫혔다. 대기복과 식물도 닫혔다. 남은 하나는
+잡동사니 병합이고, 화면에 안 보이며 고치지 않기로 한 것이다. 성능은 모드가 아니라 콜로니가 무겁다.
 
 ## 게이트 (최근 실행 기준)
 
@@ -77,7 +77,39 @@ EquipTo:      var s = GetStoredOutfit();
 결과: `Atmo_Suit` 불일치 행 **직전 9회 실행 11행 → 4회 실행 0행**, 클라 `errors=0`,
 `suitSent = suitApplied + suitNoWorn` 이 두 실행 다 **정확히** 맞는다.
 
-### 2. 식물 복제 — 고치기 전에, 검사가 없다는 것을 먼저 발견했다
+### 2. 식물 복제 ✅ 닫힘 (2026-08-17, 3차 시도)
+
+```
+plantPlot        0 → 1, 1          호스트 분기 발동
+plantNoGrow      0 → 1, 1          클라가 Growing 없는 식물을 지음
+ColdBreather 셀  호스트 19 / 클라 18  →  19 / 19  (2회 실행 다)
+클라 errors      0                 1차 시도는 여기서 159 로 끝났다
+ColdBreather@53105 host-only 행, -2145270536 3줄:  사라짐
+diff_logs        exit 0 clean      2회 다
+```
+
+**`NeedsReplication` 은 건드리지 않았다.** 일반 announce 경로로 보내면 아무 데도 붙지 않은 식물이
+생기고, 클라 프로브가 그 결말을 측정했다 — 4초 뒤엔 셀에 있고 3분 뒤엔 없다. 식물 전용 사건
+경로는 `plot.ReplacePlant` + `SetReceptacle` 로 붙인다.
+
+**주기 sweep 은 일부러 안 건드렸다.** 그것은 부재로 정리하고 과거에 클라 식물 294그루를 지웠으며,
+`HashSet<Growing>` 을 훑는다. `Growing` 없는 식물은 그 walk 에 나타날 수 없으므로 지워질 수도
+없다. 사건 경로는 더하기만 한다.
+
+"무엇이 식물인가"를 **두 번 틀렸고, 두 번 다 카운터가 한 실행에 이름을 댔다:**
+
+| 축 | 결과 |
+|---|---|
+| `Growing` | Wheezewort 제외 — 원래 결함 |
+| `GameTags.Plant` | `plotSeen=1 plotNoTag=1` — `ColdBreatherConfig` 는 `CreatePlacedEntity` 만 쓰고 `ExtendEntityToBasicPlant` 를 안 부른다. 태그가 아예 없다 |
+
+정답은 `SpawnOccupyingObject` 본문에 있었다: 씨앗이면 식물을 만들어 **그것을** 돌려주고, 아니면
+넣은 것을 그대로 돌려준다. **반환값이 다르면 심긴 것이다.** 종·태그·컴포넌트를 하나도 안 고른다.
+
+`plants=` 는 458 그대로이고 `plantSeen` 도 0 이다. 둘 다 `Growing` 파생이라 이 종을 못 본다 —
+증거가 아니다.
+
+### 2b. 그전에: 검사가 없다는 것을 먼저 발견했다
 
 **배관은 양쪽 다 이미 옳다.** 클라 생성은 `Util.KInstantiate` + `SetActive` 로 `Grid.Objects` 에
 등록되는 경로이고(실패했던 `Object.Instantiate` 가 아니다), 호스트도 화분용·야생용 패치가 둘 다 있다.
@@ -119,9 +151,9 @@ sowed 'ColdBreatherSeed' into PlanterBoxComplete at cell 52849
 그 NetId 가 매 실행 `state_compare` 의 host-only 3줄(`sync:BuildingFlagsSyncer|-2145270536|*`)과
 `flag|ColdBreather@53105`, `chore|ColdBreather@53105` 전부다.
 
-**아직 안 고쳤다.** 이전 두 시도는 `Grid.Objects` 등록을 겨눴는데, 이 식물을 막은 것은 그게
-아니었다. 다음 수는 `NeedsReplication` 이 식물을 받아들이게 하는 것이고, 그 전에
-**`Growing` 없는 식물도 세는 카운터**가 있어야 판정할 수 있다 — 지금 셋 다 눈이 멀어 있다.
+이전 두 시도는 `Grid.Objects` 등록을 겨눴는데, **그 전제는 측정으로 반증됐다** — 클라 프로브가
+지은 식물이 양쪽 `Grid.Objects` 에 다 들어간다. `Util.KInstantiate` 는 모드가 손으로 하던 것과
+같은 일을 하고(등록은 활성화 후 `OccupyArea.OnSpawn` 이 한다), 차이는 씬 레이어 Z 하나였다.
 
 ### 3. 잡동사니 병합 — 화면에 안 보임
 `state_compare` 행의 과반(약 20행)이 이것. 인구조사가 성격을 확정했다: 연속 두 바퀴 부재
