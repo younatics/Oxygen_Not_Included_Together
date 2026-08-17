@@ -51,3 +51,57 @@ chore|Wire@38796|waiting  host=0 client=1
 - `chore PEER-ONLY` 는 **안 줄어든다.** 그건 잡동사니 병합이고 이 변경과 무관하다.
   줄지 않는 것을 실패로 읽지 않는다.
 - `hp DIFFERENT` 는 전부터 0 이었다. 0 이 유지되는 것은 성공 근거가 아니라 **회귀가 없다는 것**뿐이다.
+
+---
+
+# 2단계 — 수트 반납 errand (같은 모양, 다른 대상)
+
+전선은 닫혔다. 남은 `chore DIFFERENT` 행은 이것이다:
+
+```
+chore|Atmo_Suit#1776225778|waiting  host=0 client=1
+chore|Atmo_Suit#1776225777|waiting  host=0 client=1
+```
+
+`suitApplied=2` 인 실행에만 나오고 `suitApplied=0` 인 실행엔 안 나온다 — **우리 재생이 만든다.**
+`SuitLocker.EquipTo` 마지막 줄이 `returnSuitWorkable.CreateChore()` 이고, 클라는 그 errand 를
+영영 수행할 수 없다. 호스트는 듀플이 집어서 0 이 되고, 클라는 1 로 남는다.
+
+재생 직후 `returnSuitWorkable.CancelChore()` 를 부른다. 락커의 상태기계 자신이 쓰는 호출이라
+errand 와 화면 표시가 같이 사라진다. 클라는 그것이 필요 없다 — 호스트 듀플이 수트를 반납하면
+호스트가 unequip 을 보내고 이 패킷이 재생한다.
+
+| # | 조건 | 뜻 |
+|---|---|---|
+| 1 | `suitChoreCancelled > 0` | 발동했다. **0 이면 판정 불가** |
+| 2 | `Atmo_Suit#…\|waiting host=0 client=1` 행 소멸 | 표시가 일치한다 |
+| 3 | `suitApplied > 0` 유지 | 취소가 적용 자체를 막지 않았다 |
+| 4 | `suitSent = suitApplied + suitNoWorn` 회계 유지 | 오늘 세운 서명 |
+| 5 | 클라 `errors = 0` | |
+
+**`suitApplied = 0` 인 실행은 판정 불가로 적는다.** 그 실행엔 수트가 안 움직였으므로 2번이
+저절로 맞는다 — 오늘 첫 배치에서 이미 겪은 함정이다.
+
+상태기계가 errand 를 **다시 만들 수 있다.** 그러면 행이 돌아오고, 그건 취소 지점이 틀렸다는 뜻이지
+접근이 틀렸다는 뜻은 아니다. 그 경우 SM 쪽을 봐야 한다.
+
+## 2단계 결과 — 실패, 되돌림
+
+3회 실행:
+
+```
+suitChoreCancelled   1, 1, 1     매 실행 발동
+suitApplied          1, 1, 1     적용은 유지
+Atmo_Suit#1776225778|waiting host=0 client=1   남음, 남음, 없음
+클라 errors          0, 0, 0
+```
+
+**조건 2 실패.** 취소는 발동했는데 행이 그대로다. 이유는 행의 키에 있었다 — `Atmo_Suit#…` 는
+**수트 아이템**이고, 내가 취소한 것은 **락커의** `returnSuitWorkable` 이다. 다른 객체의 errand 를 껐다.
+
+`EquipTo` 본문을 읽고 "마지막 줄이 `CreateChore()` 니 그것이 원인"이라고 이었는데, 그 chore 가
+어느 객체의 `Prioritizable` 을 올리는지는 확인하지 않았다. 오늘 `GameTags.Plant` 에서 한 것과 같은
+종류의 비약이다.
+
+**다음 사람에게:** 고칠 대상은 수트 아이템에 붙은 errand 다. 무엇이 그 `refCount` 를 올리는지부터
+잰다 — `Prioritizable.AddRef` 호출자를 세거나, 그 객체의 chore 목록을 덤프한다. 락커 쪽이 아니다.
