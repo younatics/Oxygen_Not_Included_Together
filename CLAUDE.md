@@ -519,6 +519,7 @@ cd testing
   **이걸 잡은 것은 라이브 재접속 시나리오뿐이다.** 원인에 대한 단위 테스트(`ReconnectTests`)는
   있었고 통과하고 있었다 — 주소만 확인했고 그 뒤에 무슨 일이 나는지는 아무도 안 봤다.
   이제 `RegistryPopulationTests` 가 **레지스트리를 세계와 비교**해서 한 대에서 잡는다.
-- **로딩 중 끊기면 LAN 은 메인 메뉴로 강퇴된다.** Steam 경로(`SteamworksClient.cs:240-244`)에는
-  `LoadingWorld` 가드가 있는데 Riptide 에는 없다.
+- ~~**로딩 중 끊기면 LAN 은 메인 메뉴로 강퇴된다.**~~ **고쳐졌다.** `RiptideClient.OnDisconnectedFromServer`
+  가 이제 끊긴 시점의 상태를 **핸들러가 상태를 덮기 전에** 읽고, `LoadingWorld` 면 강퇴하지 않고
+  재접속한다. 첫 판은 상태를 나중에 읽어 죽은 코드였다는 것도 그 주석에 남아 있다.
 - **TCP 8081 이 막히면 조용히 UDP 청크 폴백으로 떨어진다** — 그게 버그 밀집 경로다. 방화벽 먼저.
