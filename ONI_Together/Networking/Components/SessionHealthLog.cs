@@ -547,6 +547,13 @@ namespace ONI_Together.Networking.Components
 					// sows, so plant DIFFERENT 0 says nothing about the case that is broken;
 					// these do. plantNotWild being non-zero names the gap outright.
 					$"|plantPlot={Patches.World.Plants.PlantLifecyclePatches.PlotSpawns}" +
+					// The plot branch gate by gate, so plantPlot=0 names its own reason
+					// instead of needing a round of reasoning about four conditions.
+					$"|plotSeen={Patches.World.Plants.PlantLifecyclePatches.PlotSeen}" +
+					$"|plotNotHost={Patches.World.Plants.PlantLifecyclePatches.PlotDeclinedNotHost}" +
+					$"|plotNotBcast={Patches.World.Plants.PlantLifecyclePatches.PlotDeclinedNotBroadcasting}" +
+					$"|plotNoResult={Patches.World.Plants.PlantLifecyclePatches.PlotDeclinedNoResult}" +
+					$"|plotNotPlanted={Patches.World.Plants.PlantLifecyclePatches.PlotDeclinedNotPlanted}" +
 					$"|plantWild={Patches.World.Plants.PlantLifecyclePatches.WildSpawns}" +
 					$"|plantSeen={Patches.World.Plants.PlantLifecyclePatches.GrowingSeen}" +
 					$"|plantNotWild={Patches.World.Plants.PlantLifecyclePatches.DeclinedNotWild}" +
@@ -698,6 +705,10 @@ namespace ONI_Together.Networking.Components
 				// plants= above cannot see a Wheezewort; this can, and it is the number any
 				// attempt at replicating plants has to drive to zero.
 				$"|annNotReplPlant={NetworkIdentity.AnnounceSkippedPlant}" +
+				// The client end of the same change: plants it built from a lifecycle
+				// event that have no Growing. Zero here means the widened path never
+				// fired, whatever the other plant numbers say.
+				$"|plantNoGrow={PlantGrowthSyncer.PlantsWithoutGrowing}" +
 				$"|assignRefused={Packets.World.AssignmentPacket.CellFallbackRefused}" +
 				$"|resolvePrefab={Packets.World.EntityResolveRequestPacket.ResolvedByPrefab}" +
 				$"|resolveElement={Packets.World.EntityResolveRequestPacket.ResolvedByElement}" +

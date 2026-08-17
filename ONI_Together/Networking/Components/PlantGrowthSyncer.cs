@@ -22,6 +22,16 @@ namespace ONI_Together.Networking.Components
 		private float _lastSyncTime;
 
 		// A plant snapshot is split across packets when the colony is large.
+		/// <summary>
+		/// Plants this peer built from a lifecycle event that have no Growing component.
+		///
+		/// Its own counter because it is the whole of the change: every other plant number
+		/// in this mod is derived from Growing and reads zero while this case happens. If
+		/// this stays zero the widened path never fired and any verdict about plants would
+		/// be about nothing, which is how the last two attempts were judged.
+		/// </summary>
+		public static int PlantsWithoutGrowing { get; private set; }
+
 		private int _plantSweepId;
 		private readonly SweepAssembler<PlantData> _plantSweep = new SweepAssembler<PlantData>("Plants");
 		private bool _initialized;
@@ -74,10 +84,41 @@ namespace ONI_Together.Networking.Components
 		{
 			using var _ = Profiler.Scope();
 
+			if (growing == null) return;
+			BroadcastPlantLifecycle(operation, growing.gameObject, receptacleOverride);
+		}
+
+		/// <summary>
+		/// The same event for a plant that has no Growing component.
+		///
+		/// Growing is not what makes something a plant. EntityTemplates.
+		/// ExtendEntityToBasicPlant adds GameTags.Plant to every plant and adds Growing
+		/// only to the ones that grow a crop, so a Wheezewort is a plant with no Growing -
+		/// and a Wheezewort is exactly the plant that diverges. Sowing one during a run
+		/// leaves the host with 19 and the client with 18 every time.
+		///
+		/// Every path that would have carried it required Growing: this broadcast, the
+		/// PlantablePlot postfix, PlantTracker.AllPlants. Two earlier attempts at plants
+		/// were aimed at Object.Instantiate and Grid.Objects registration, and a client
+		/// probe has since shown both peers hold the object in Grid.Objects - that was not
+		/// what stopped this.
+		///
+		/// The periodic sweep is deliberately NOT widened with it. That sweep reconciles
+		/// by absence - it destroys any plant it holds that the packet does not list, and
+		/// it once deleted 294 of a client's plants - and it walks PlantTracker.AllPlants,
+		/// which is a HashSet&lt;Growing&gt;. Leaving it alone means a plant with no Growing
+		/// can never appear in that walk and therefore can never be destroyed by it. The
+		/// event path adds plants; only the sweep removes them by absence, and it still
+		/// cannot see these.
+		/// </summary>
+		public static void BroadcastPlantLifecycle(PlantLifecycleOperation operation, GameObject plant, SingleEntityReceptacle receptacleOverride = null)
+		{
+			using var _ = Profiler.Scope();
+
 			if (!CanBroadcastLifecycleEvents)
 				return;
 
-			if (!TryBuildPlantData(growing, out var data, receptacleOverride))
+			if (!TryBuildPlantData(plant, out var data, receptacleOverride))
 				return;
 
 			PacketSender.SendToAllClients(new PlantLifecyclePacket
@@ -89,26 +130,38 @@ namespace ONI_Together.Networking.Components
 
 		public static bool TryBuildPlantData(Growing growing, out PlantData data, SingleEntityReceptacle receptacleOverride = null)
 		{
+			data = default;
+			if (growing == null) return false;
+			return TryBuildPlantData(growing.gameObject, out data, receptacleOverride);
+		}
+
+		public static bool TryBuildPlantData(GameObject plant, out PlantData data, SingleEntityReceptacle receptacleOverride = null)
+		{
 			using var _ = Profiler.Scope();
 
 			data = default;
 
-			if (growing == null || growing.gameObject == null)
+			if (plant == null)
 				return false;
 
-			int cell = Grid.PosToCell(growing.gameObject);
+			int cell = Grid.PosToCell(plant);
 			if (!Grid.IsValidCell(cell))
 				return false;
 
-			if (!growing.TryGetComponent<KPrefabID>(out var kpid) || kpid == null)
+			if (!plant.TryGetComponent<KPrefabID>(out var kpid) || kpid == null)
 				return false;
 
-			int plantNetId = EnsureIdentity(growing.gameObject, 0);
+			// Growing is optional from here down. Where it is absent the growth fields
+			// carry their defaults, which is the truth about a plant that does not grow -
+			// not a gap in the data.
+			plant.TryGetComponent<Growing>(out var growing);
+
+			int plantNetId = EnsureIdentity(plant, 0);
 			int receptacleNetId = 0;
-			bool isWild = growing.IsWildPlanted();
+			bool isWild = growing != null && growing.IsWildPlanted();
 
 			var receptacle = receptacleOverride;
-			if (receptacle == null)
+			if (receptacle == null && growing != null)
 			{
 				TryGetReceptacle(growing, out receptacle);
 			}
@@ -120,13 +173,13 @@ namespace ONI_Together.Networking.Components
 			}
 
 			bool isWilting = false;
-			if (growing.TryGetComponent<WiltCondition>(out var wiltCondition) && wiltCondition != null)
+			if (plant.TryGetComponent<WiltCondition>(out var wiltCondition) && wiltCondition != null)
 			{
 				isWilting = wiltCondition.IsWilting();
 			}
 
 			bool isHarvestReady = false;
-			if (growing.TryGetComponent<HarvestDesignatable>(out var harvestDesignatable) && harvestDesignatable != null)
+			if (plant.TryGetComponent<HarvestDesignatable>(out var harvestDesignatable) && harvestDesignatable != null)
 			{
 				isHarvestReady = harvestDesignatable.CanBeHarvested();
 			}
@@ -137,7 +190,7 @@ namespace ONI_Together.Networking.Components
 				ReceptacleNetId = receptacleNetId,
 				Cell = cell,
 				PlantPrefabTag = kpid.PrefabTag.Name,
-				Maturity = growing.PercentGrown(),
+				Maturity = growing != null ? growing.PercentGrown() : 0f,
 				IsWilting = isWilting,
 				IsHarvestReady = isHarvestReady,
 				IsWild = isWild
@@ -438,13 +491,27 @@ namespace ONI_Together.Networking.Components
 				spawnedPlant = plantGo.GetComponent<Growing>();
 			}
 
-			if (spawnedPlant == null)
+			if (spawnedPlant != null)
 			{
-				DebugConsole.LogWarning($"[PlantGrowthSyncer] Spawned plant '{data.PlantPrefabTag}' but could not resolve Growing at cell {data.Cell}");
-				return false;
+				ApplyPlantState(spawnedPlant, data);
 			}
-
-			ApplyPlantState(spawnedPlant, data);
+			else
+			{
+				// A plant with no Growing is finished at this point, not failed.
+				//
+				// This used to return false and log "could not resolve Growing", throwing
+				// away a plant that was already built and already attached to its plot two
+				// statements above. There is no growth state to apply to a Wheezewort: it
+				// does not grow, does not mature and cannot be harvested, so the fields the
+				// apply would write are the defaults it already has.
+				//
+				// No tag test guards this. GameTags.Plant was tried and is not universal -
+				// ColdBreatherConfig builds its prefab with CreatePlacedEntity and never
+				// calls ExtendEntityToBasicPlant, so it carries no plant tag at all. The
+				// host only sends this packet for a plot's own occupant, which is the same
+				// question asked where it can be answered exactly.
+				PlantsWithoutGrowing++;
+			}
 
 			DebugConsole.Log(receptacle != null
 				? $"[PlantGrowthSyncer] Spawned planted crop '{data.PlantPrefabTag}' at cell {data.Cell} for receptacle {data.ReceptacleNetId}"

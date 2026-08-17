@@ -27,6 +27,17 @@ namespace ONI_Together.Patches.World.Plants
 		/// outright instead of another round of reasoning about which branch it took.
 		/// </summary>
 		public static int PlotSpawns { get; private set; }
+
+		/// <summary>
+		/// The plot branch, gate by gate. PlotSeen sits above all of them, so a zero in
+		/// PlotSpawns can be read as "never reached" or "reached and declined here" rather
+		/// than being one number that means both.
+		/// </summary>
+		public static int PlotSeen { get; private set; }
+		public static int PlotDeclinedNotHost { get; private set; }
+		public static int PlotDeclinedNotBroadcasting { get; private set; }
+		public static int PlotDeclinedNoResult { get; private set; }
+		public static int PlotDeclinedNotPlanted { get; private set; }
 		public static int WildSpawns { get; private set; }
 		public static int GrowingSeen { get; private set; }
 		public static int DeclinedNotWild { get; private set; }
@@ -35,21 +46,58 @@ namespace ONI_Together.Patches.World.Plants
 		[HarmonyPatch(typeof(PlantablePlot), nameof(PlantablePlot.SpawnOccupyingObject))]
 		private static class PlantablePlot_SpawnOccupyingObject_Patch
 		{
-			private static void Postfix(PlantablePlot __instance, GameObject __result)
+			private static void Postfix(PlantablePlot __instance, GameObject depositedEntity, GameObject __result)
 			{
 				using var _ = Profiler.Scope();
 
+				// Counted before every gate, for the reason the file already gives about
+				// the other branch: a run widened this check from Growing to GameTags.Plant
+				// and PlotSpawns still read 0, which cannot tell "the postfix never ran"
+				// from "it ran and one of four conditions turned it down". Four conditions
+				// and no way to name which is the same position the plant work has been
+				// stuck in twice.
+				PlotSeen++;
+
 				if (!MultiplayerSession.IsHostInSession)
+				{
+					PlotDeclinedNotHost++;
 					return;
+				}
 				if (!PlantGrowthSyncer.CanBroadcastLifecycleEvents)
+				{
+					PlotDeclinedNotBroadcasting++;
 					return;
+				}
 				if (__result == null || PlantGrowthSyncer.IsApplyingState)
+				{
+					PlotDeclinedNoResult++;
 					return;
-				if (!__result.TryGetComponent<Growing>(out var growing) || growing == null)
+				}
+
+				// The plot's own distinction, not a marker component and not a tag.
+				//
+				// Two guesses failed here and the counters named both. Growing excluded the
+				// Wheezewort, which is the one plant that diverges. GameTags.Plant looked
+				// like the game's own answer - ExtendEntityToBasicPlant adds it to every
+				// plant it builds - but ColdBreatherConfig never calls that helper: it goes
+				// through CreatePlacedEntity and assembles the rest by hand, so it carries
+				// no such tag. plotSeen=1 with plotNoTag=1 is what said so, in one run,
+				// instead of another round of reasoning about which condition fired.
+				//
+				// SpawnOccupyingObject answers the question itself. Read from the body: if
+				// the deposited entity is a PlantableSeed it instantiates the plant and
+				// returns that; otherwise it sets destroyEntityOnDeposit false and returns
+				// the deposited object unchanged. So a new object means something was
+				// planted, and the same object back means it was not. That holds for every
+				// species without naming any of them.
+				if (ReferenceEquals(__result, depositedEntity))
+				{
+					PlotDeclinedNotPlanted++;
 					return;
+				}
 
 				PlotSpawns++;
-				PlantGrowthSyncer.BroadcastPlantLifecycle(PlantLifecycleOperation.Spawn, growing, __instance);
+				PlantGrowthSyncer.BroadcastPlantLifecycle(PlantLifecycleOperation.Spawn, __result, __instance);
 			}
 		}
 
