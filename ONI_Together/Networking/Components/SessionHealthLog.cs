@@ -519,6 +519,16 @@ namespace ONI_Together.Networking.Components
 					$"|suitApplied={Packets.World.SuitEquipPacket.Applied}" +
 					$"|suitNoLocker={Packets.World.SuitEquipPacket.NoLocker}" +
 					$"|suitNoEquip={Packets.World.SuitEquipPacket.NoEquipment}" +
+					// The call arrived, was accepted, and the game's own method threw.
+					// Without this the row shows suitApplied flat and every decline at
+					// zero, which reads as "nothing was sent" - the exact opposite of
+					// what happened.
+					$"|suitThrew={Packets.World.SuitEquipPacket.Threw}" +
+					// The game's own preconditions, asked before calling it. suitNoWorn is
+					// the unequip that used to throw; suitNoStored is the equip that used
+					// to be counted as applied while moving nothing.
+					$"|suitNoWorn={Packets.World.SuitEquipPacket.NoWornSuit}" +
+					$"|suitNoStored={Packets.World.SuitEquipPacket.NoStoredSuit}" +
 					// Plants appearing mid-session, by the path they took. The scenario never
 					// sows, so plant DIFFERENT 0 says nothing about the case that is broken;
 					// these do. plantNotWild being non-zero names the gap outright.

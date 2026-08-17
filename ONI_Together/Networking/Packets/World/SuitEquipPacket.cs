@@ -46,6 +46,39 @@ namespace ONI_Together.Networking.Packets.World
 		public static int NoLocker { get; private set; }
 		public static int NoEquipment { get; private set; }
 
+		/// <summary>
+		/// Times the game's own call threw. Measured: the first run of this packet sent 7
+		/// events, every one of them arrived (sent=7 recv=7, no loss), EquipTo applied 2
+		/// for 2, and UnequipFrom threw 5 for 5. None of that was visible in the health
+		/// row - Applied simply stopped rising, which reads the same as "the host never
+		/// sent anything", and the only trace was a warning line. A failure that is not a
+		/// counter is a failure the summary cannot report.
+		/// </summary>
+		public static int Threw { get; private set; }
+
+		/// <summary>
+		/// The two preconditions the game's own methods have, asked before calling them.
+		///
+		/// Read out of Assembly-CSharp rather than reasoned about. UnequipFrom opens with
+		///
+		///     Assignable assignable = equipment.GetAssignable(Db.Get().AssignableSlots.Suit);
+		///     assignable.Unassign();
+		///
+		/// and has no null check, because the game only reaches it when a duplicant is
+		/// actually wearing the suit. On a client that never ran the chore that put it on,
+		/// the first line returns null and the second throws - measured, five times out of
+		/// five, in two runs. EquipTo has the opposite shape: it starts with
+		/// GetStoredOutfit() and returns quietly when the locker is empty, so calling it
+		/// blind does no damage but also does nothing, and counting that as Applied
+		/// reported a suit moving that never moved.
+		///
+		/// Neither of these forces a state. They ask what the game asks and decline where
+		/// the game would have declined - the difference is that one of the two declines
+		/// by crashing.
+		/// </summary>
+		public static int NoWornSuit { get; private set; }
+		public static int NoStoredSuit { get; private set; }
+
 		public void Serialize(BinaryWriter writer)
 		{
 			using var _ = Profiler.Scope();
@@ -97,6 +130,20 @@ namespace ONI_Together.Networking.Packets.World
 				return;
 			}
 
+			if (Equip)
+			{
+				if (locker.GetStoredOutfit() == null)
+				{
+					NoStoredSuit++;
+					return;
+				}
+			}
+			else if (equipment.GetAssignable(Db.Get().AssignableSlots.Suit) == null)
+			{
+				NoWornSuit++;
+				return;
+			}
+
 			IsApplying = true;
 			try
 			{
@@ -109,10 +156,15 @@ namespace ONI_Together.Networking.Packets.World
 			}
 			catch (System.Exception e)
 			{
-				// Counted rather than swallowed. A suit that cannot be moved is the defect
-				// this packet exists to close, and a silent catch would leave it looking
-				// closed. The session survives either way; the number does not lie about it.
-				DebugConsole.LogWarning($"[SuitEquipPacket] {(Equip ? "EquipTo" : "UnequipFrom")} threw for locker {LockerNetId}: {e.Message}");
+				Threw++;
+
+				// The whole exception, not e.Message. "Object reference not set to an
+				// instance of an object" names nothing: it was logged five times for five
+				// failures and did not say which dereference inside the game's method was
+				// null, so the next step would have been a guess. This file already carries
+				// the cost of guessing at game APIs. ToString() carries the stack, and the
+				// frame below UnequipFrom is the answer.
+				DebugConsole.LogWarning($"[SuitEquipPacket] {(Equip ? "EquipTo" : "UnequipFrom")} threw for locker {LockerNetId} minion {MinionNetId}: {e}");
 			}
 			finally
 			{
