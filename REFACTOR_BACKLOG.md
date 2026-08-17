@@ -434,3 +434,47 @@ What is still open, with what is known about each:
    chores. It is reported under its own category now rather than as a priority
    disagreement. Closing it would mean replicating chore assignment, which is a
    different project.
+
+5. **Loose gas and liquid: the surviving pile disagrees. Tried, measured, reverted.**
+
+   The last divergence category. Both peers merge nearby piles and do not always
+   keep the same object: mass and temperature agree, the survivor does not. Of
+   the ids a client gave up on, 30 of 41 and 29 of 39 were exactly this - Oxygen,
+   DirtyWater, Water, Methane, CarbonDioxide, Hydrogen, Dirt - and the client's
+   own census already labelled them "this peer had it and retired it".
+
+   The resolver cannot close it. The host answers those requests (207 element
+   answers a run), the client names a pile with the host's id, and its own
+   simulation merges that pile away again.
+
+   **What was tried:** a prefix on `Pickupable.Absorb`, which has both objects in
+   hand - `this` survives, the argument is deleted on the next line - moving the
+   NetId across when the survivor had none. Deliberately narrow: overriding a
+   living owner is what `PlantGrowthSyncer.EnsureIdentity` records as going from
+   4 id swaps a minute to a flat 430.
+
+   **Measured, 2 runs, and it is why this is reverted rather than kept:**
+
+   ```
+   mergeIdMoved      2,  2      the case the rule handles
+   mergeBothNamed   51, 47      both piles already had a number
+   gaveUpRetired    42, 37      unchanged from 37, 37
+   client errors     0          netid_compare exit 0, idMoves 392 - safe, just useless
+   ```
+
+   The skipped case is twenty-five times the size of the handled one, so the
+   change was safe and did nothing. Reverted under the rule this repository
+   already uses: measured cost against unmeasured benefit.
+
+   **Why a local rule cannot fix the rest.** When both piles carry a number, a
+   deterministic tie-break - keep the lower id, say - still does not converge,
+   because the peers are not merging the same *pairs*: the host merges A+B while
+   the client merges B+C. Agreement on the winner of a pair nobody agrees on buys
+   nothing. Closing this needs the host to drive the merge - announce "X absorbed
+   into Y" and have the client apply it - which is a new packet on a path that
+   fires about fifty times a run. That is affordable, and it is a design change
+   rather than a patch.
+
+   The size is now measured every run without any of this: `mergeBothNamed` is
+   gone with the revert, but `gaveUpRetired` in the health row is the same
+   population seen from the other end.
